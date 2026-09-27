@@ -420,7 +420,7 @@ namespace AgeOfJarls.Settlement
             _nview.GetZDO().Set(Keys.ZdoSettlementId, Keys.NewId());
             Write(data);
             Log.Info(Module, $"Settlement founded by {founder.GetPlayerName()}");
-            Chronicle.Add(_nview, "$aoj_chr_founded", founder.GetPlayerName());
+            Chronicle.Add(_nview, "$aoj_chr_founded", TextUtil.SanitizeName(founder.GetPlayerName(), 32));
             Recruitment.Castaways.OnSettlementFounded(this);
         }
 
@@ -729,9 +729,11 @@ namespace AgeOfJarls.Settlement
             Player requester = Peers.FindPlayer(sender);
             long requesterId = requester != null ? requester.GetPlayerID() : 0L;
             SettlementRole role = requesterId != 0L ? data.RoleOf(requesterId) : SettlementRole.Guest;
+            // For the chronicle ("who did it"); player names go into texts others read, so they are cleaned.
+            string actor = requester != null ? TextUtil.SanitizeName(requester.GetPlayerName(), 32) : "";
             try
             {
-                if (Apply(data, requesterId, role, sender, package))
+                if (Apply(data, requesterId, role, actor, sender, package))
                 {
                     Write(data);
                 }
@@ -742,7 +744,7 @@ namespace AgeOfJarls.Settlement
             }
         }
 
-        private bool Apply(SettlementData data, long requesterId, SettlementRole role, long sender, ZPackage package)
+        private bool Apply(SettlementData data, long requesterId, SettlementRole role, string actor, long sender, ZPackage package)
         {
             var action = (SettlementAction)package.ReadInt();
             switch (action)
@@ -761,7 +763,14 @@ namespace AgeOfJarls.Settlement
                     string shown = data.Members.Find(m => m.PlayerId == target)?.Name ?? TextUtil.SanitizeName(name, 32);
                     data.SetRank(target, name, rank);
                     Log.Info(Module, $"{shown} is now {rank} in {DisplayName(data)} ({data.Members.Count} member(s))");
-                    Chronicle.Add(_nview, rank == SettlementRole.Guest ? "$aoj_chr_member_left" : "$aoj_chr_rank", shown, Permissions.Token(rank));
+                    if (target == requesterId)
+                    {
+                        Chronicle.Add(_nview, rank == SettlementRole.Guest ? "$aoj_chr_member_left" : "$aoj_chr_rank", shown, Permissions.Token(rank));
+                    }
+                    else
+                    {
+                        Chronicle.Add(_nview, rank == SettlementRole.Guest ? "$aoj_chr_member_left_by" : "$aoj_chr_rank_by", shown, Permissions.Token(rank), actor);
+                    }
                     return true;
                 }
                 case SettlementAction.AddSettlers:
@@ -786,7 +795,7 @@ namespace AgeOfJarls.Settlement
                         {
                             changed = true;
                             Log.Info(Module, $"{name} joined {DisplayName(data)} ({data.Settlers.Count}/{capacity})");
-                            Chronicle.Add(_nview, "$aoj_chr_joined", name);
+                            Chronicle.Add(_nview, "$aoj_chr_joined_by", data.FindSettler(uid).Name, actor);
                         }
                     }
                     return changed;
@@ -810,7 +819,14 @@ namespace AgeOfJarls.Settlement
                     {
                         Log.Info(Module, $"{entry.Name} left {DisplayName(data)}");
                         bool dismissed = role.Allows(SettlementRight.Manage) && settler != null && !settler.GetComponent<Character>().IsDead();
-                        Chronicle.Add(_nview, dismissed ? "$aoj_chr_dismissed" : "$aoj_chr_lost", entry.Name);
+                        if (dismissed)
+                        {
+                            Chronicle.Add(_nview, "$aoj_chr_dismissed_by", entry.Name, actor);
+                        }
+                        else
+                        {
+                            Chronicle.Add(_nview, "$aoj_chr_lost", entry.Name);
+                        }
                         if (!dismissed)
                         {
                             Mourn();
@@ -829,7 +845,7 @@ namespace AgeOfJarls.Settlement
                     }
                     string shown = data.Members.Find(m => m.PlayerId == target)?.Name ?? name;
                     Log.Info(Module, $"{shown} is the new Jarl of {DisplayName(data)}");
-                    Chronicle.Add(_nview, "$aoj_chr_rank", shown, Permissions.Token(SettlementRole.Jarl));
+                    Chronicle.Add(_nview, "$aoj_chr_handover", shown, actor);
                     return true;
                 }
                 case SettlementAction.Rename:
@@ -844,6 +860,7 @@ namespace AgeOfJarls.Settlement
                     if (changed)
                     {
                         Log.Info(Module, $"Settlement renamed to '{DisplayName(data)}'");
+                        Chronicle.Add(_nview, "$aoj_chr_renamed_by", DisplayName(data), actor);
                     }
                     return changed;
                 }
@@ -859,7 +876,7 @@ namespace AgeOfJarls.Settlement
                     }
                     data.Tier = target;
                     Log.Info(Module, $"{DisplayName(data)} reached tier {target}");
-                    Chronicle.Add(_nview, "$aoj_chr_tier", "$aoj_tier_" + target);
+                    Chronicle.Add(_nview, "$aoj_chr_tier_by", "$aoj_tier_" + target, actor);
                     return true;
                 }
                 case SettlementAction.SetAlarm:
@@ -870,7 +887,7 @@ namespace AgeOfJarls.Settlement
                         Log.Warning(Module, $"Peer {sender} tried to sound the alarm without the rank for it");
                         return false;
                     }
-                    Army.Alarm.Set(this, on, manual: true);
+                    Army.Alarm.Set(this, on, manual: true, by: actor);
                     return false;
                 }
                 case SettlementAction.Feast:
@@ -882,7 +899,7 @@ namespace AgeOfJarls.Settlement
                     }
                     // The requester already paid the mead and the food from its own inventory.
                     WorldClock.Set(_nview.GetZDO(), Keys.ZdoSettlementFeastUntil, WorldClock.Now + FeastDays * WorldClock.DayLength);
-                    Chronicle.Add(_nview, "$aoj_chr_feast");
+                    Chronicle.Add(_nview, "$aoj_chr_feast_by", actor);
                     Log.Info(Module, $"A feast in {DisplayName(data)}");
                     return false;
                 }

@@ -18,8 +18,8 @@ namespace AgeOfJarls.Army
 
         private static readonly Dictionary<long, float> s_lastThreat = new Dictionary<long, float>();
 
-        /// <summary>Owner of the table only (RPC action or the automatic check).</summary>
-        internal static void Set(JarlTable table, bool on, bool manual)
+        /// <summary>Owner of the table only (RPC action or the automatic check); <paramref name="by"/> names the player who sounded or ended it.</summary>
+        internal static void Set(JarlTable table, bool on, bool manual, string by = "")
         {
             ZNetView view = table.NetView;
             if (view == null || !view.IsValid() || !view.IsOwner())
@@ -36,11 +36,19 @@ namespace AgeOfJarls.Army
             }
             SettlementData data = table.Data;
             string name = data != null ? JarlTable.DisplayName(data) : "";
-            Chronicle.Add(view, on ? "$aoj_chr_alarm" : "$aoj_chr_alarm_over");
+            if (by.Length > 0)
+            {
+                Chronicle.Add(view, on ? "$aoj_chr_alarm_by" : "$aoj_chr_alarm_over_by", by);
+            }
+            else
+            {
+                Chronicle.Add(view, on ? "$aoj_chr_alarm" : "$aoj_chr_alarm_over");
+            }
             if (MessageHud.instance != null)
             {
                 MessageHud.instance.MessageAll(MessageHud.MessageType.Center, on ? $"$aoj_msg_alarm {name}" : $"$aoj_msg_alarm_over {name}");
             }
+            AlarmPins.Broadcast(table.SettlementId, table.transform.position, name, on);
             Log.Info(Module, on ? $"Alarm in {name}{(manual ? " (sounded by a player)" : "")}" : $"Alarm over in {name}");
         }
 

@@ -234,7 +234,8 @@ namespace AgeOfJarls.Settlement
             {
                 return false;
             }
-            Settlers.Add(new RosterEntry { Uid = uid, Name = name ?? "" });
+            // The name comes from a client's request: cleaned like every name shown to other players.
+            Settlers.Add(new RosterEntry { Uid = uid, Name = TextUtil.SanitizeName(name, MaxNameLength) });
             return true;
         }
 

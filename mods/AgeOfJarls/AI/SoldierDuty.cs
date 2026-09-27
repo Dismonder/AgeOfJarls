@@ -131,14 +131,20 @@ namespace AgeOfJarls.AI
                 return true;
             }
 
+            // Worn-out weapons go back to the Armory, where a player can take them to be repaired.
+            Inventory bag = _body.GetInventory();
+            foreach (ItemDrop.ItemData broken in bag.GetAllItems().Where(Posts.IsBroken).ToList())
+            {
+                _armory.Container.GetInventory().MoveItemToThis(bag, broken);
+            }
             System.Predicate<ItemDrop.ItemData> want = Wanted(role);
             if (want != null)
             {
-                SettlementStorage.TakeFrom(_armory.Container, _body.GetInventory(), want, role == CombatRole.Archer ? Arrows : 1);
-                EquipBest(role);
-                _settler.MarkInventoryDirty();
-                _settler.FlushInventory();
+                SettlementStorage.TakeFrom(_armory.Container, bag, item => want(item) && !Posts.IsBroken(item), role == CombatRole.Archer ? Arrows : 1);
             }
+            EquipBest(role);
+            _settler.MarkInventoryDirty();
+            _settler.FlushInventory();
             _armory = null;
             _gearTimer = 0f;
             return true;
@@ -148,8 +154,9 @@ namespace AgeOfJarls.AI
         private System.Predicate<ItemDrop.ItemData> Wanted(CombatRole role)
         {
             List<ItemDrop.ItemData> bag = _body.GetInventory().GetAllItems();
-            ItemDrop.ItemData bow = bag.FirstOrDefault(Posts.IsBow);
-            System.Func<ItemDrop.ItemData, bool> weaponFits = Posts.WeaponFor(role);
+            System.Func<ItemDrop.ItemData, bool> roleWeapon = Posts.WeaponFor(role);
+            System.Func<ItemDrop.ItemData, bool> weaponFits = item => roleWeapon(item) && !Posts.IsBroken(item);
+            ItemDrop.ItemData bow = bag.FirstOrDefault(item => Posts.IsBow(item) && !Posts.IsBroken(item));
             bool needWeapon = !bag.Any(weaponFits);
             bool needShield = role == CombatRole.Shieldbearer && !bag.Exists(Posts.IsShield);
             bool needArrows = role == CombatRole.Archer && bow != null && bag.Where(i => Posts.IsArrowFor(i, bow)).Sum(i => i.m_stack) < 10;
@@ -161,11 +168,12 @@ namespace AgeOfJarls.AI
             {
                 return null;
             }
-            return item =>
+            // Worn-out gear in the Armory waits for a player to repair it.
+            return item => !Posts.IsBroken(item) && (
                 (needWeapon && weaponFits(item)) ||
                 (needShield && Posts.IsShield(item)) ||
                 (needArrows && Posts.IsArrowFor(item, bow)) ||
-                (Posts.IsArmor(item) && missingArmor.Contains(item.m_shared.m_itemType));
+                (Posts.IsArmor(item) && missingArmor.Contains(item.m_shared.m_itemType)));
         }
 
         private Armory NearestArmoryWith(JarlTable table, System.Predicate<ItemDrop.ItemData> wanted)
@@ -182,7 +190,8 @@ namespace AgeOfJarls.AI
         private void EquipBest(CombatRole role)
         {
             List<ItemDrop.ItemData> bag = _body.GetInventory().GetAllItems();
-            ItemDrop.ItemData weapon = bag.Where(Posts.WeaponFor(role)).OrderByDescending(i => i.GetDamage().GetTotalDamage()).FirstOrDefault();
+            System.Func<ItemDrop.ItemData, bool> roleWeapon = Posts.WeaponFor(role);
+            ItemDrop.ItemData weapon = bag.Where(i => roleWeapon(i) && !Posts.IsBroken(i)).OrderByDescending(i => i.GetDamage().GetTotalDamage()).FirstOrDefault();
             if (weapon != null && !weapon.m_equipped)
             {
                 _body.EquipItem(weapon, triggerEquipEffects: false);

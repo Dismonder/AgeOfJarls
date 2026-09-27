@@ -58,6 +58,8 @@ namespace AgeOfJarls.Core
         internal static ConfigEntry<float> SiegeStrength;
         internal static ConfigEntry<float> SiegePerPlayer;
 
+        internal static ConfigEntry<float> GearWear;
+
         internal static void Bind(ConfigFile config)
         {
             DebugLogging = config.BindConfig("General", "DebugLogging", false,
@@ -185,6 +187,11 @@ namespace AgeOfJarls.Core
             SiegePerPlayer = config.BindConfig("Sieges", "PerPlayer", 0.25f,
                 "Extra attackers for each player at home beyond the first, as a share of the wave (more defenders, bigger sieges).",
                 synced: true, acceptableValues: new AcceptableValueRange<float>(0f, 2f));
+
+            GearWear = config.BindConfig("Army", "GearWear", 0.5f,
+                "How fast soldiers wear out their weapons, as a share of a player's rate (0 = never). A worn-out weapon goes " +
+                "back to the Armory for a player to repair, and the soldier takes a working one.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0f, 2f));
         }
     }
 }

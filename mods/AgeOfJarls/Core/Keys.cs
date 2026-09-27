@@ -25,6 +25,8 @@ namespace AgeOfJarls.Core
         internal const string RpcBannerConfig = "AoJ_BannerConfig";
         internal const string RpcSettlerFree = "AoJ_SettlerFree";
         internal const string RpcSettlerFeed = "AoJ_SettlerFeed";
+        /// <summary>Routed to everybody: a settlement's alarm started or ended (Army.AlarmPins).</summary>
+        internal const string RpcAlarmPin = "AoJ_AlarmPin";
 
         internal const string SettlerPrefab = "AoJ_Settler";
         internal const string JarlTablePrefab = "AoJ_JarlTable";

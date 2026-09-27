@@ -72,6 +72,10 @@ namespace AgeOfJarls.Army
             }
         }
 
+        /// <summary>Worn out: the game will not equip it again until a player repairs it.</summary>
+        internal static bool IsBroken(ItemDrop.ItemData item) =>
+            item != null && item.m_shared.m_useDurability && item.m_durability <= 0f;
+
         /// <summary>A shieldbearer always carries a shield; others do when their weapon leaves a hand free (not archers, not berserkers).</summary>
         internal static bool UsesShield(CombatRole role, ItemDrop.ItemData weapon) =>
             role == CombatRole.Shieldbearer ||
