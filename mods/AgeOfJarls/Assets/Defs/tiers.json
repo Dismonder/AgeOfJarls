@@ -11,8 +11,8 @@
     "cost": [ { "item": "Silver", "amount": 10 }, { "item": "WolfPelt", "amount": 10 }, { "item": "Obsidian", "amount": 20 } ] },
   { "level": 5, "requiredGlobalKey": "defeated_goblinking", "maxSettlers": 25, "radius": 55, "unlocks": ["berserker"],
     "cost": [ { "item": "BlackMetal", "amount": 10 }, { "item": "LinenThread", "amount": 20 }, { "item": "Tar", "amount": 10 } ] },
-  { "level": 6, "requiredGlobalKey": "defeated_queen",      "maxSettlers": 30, "radius": 60, "unlocks": [],
+  { "level": 6, "requiredGlobalKey": "defeated_queen",      "maxSettlers": 30, "radius": 60, "unlocks": ["totem_slot"],
     "cost": [ { "item": "YggdrasilWood", "amount": 30 }, { "item": "Carapace", "amount": 10 }, { "item": "Sap", "amount": 10 } ] },
-  { "level": 7, "requiredGlobalKey": "defeated_fader",      "maxSettlers": 30, "radius": 60, "unlocks": [],
+  { "level": 7, "requiredGlobalKey": "defeated_fader",      "maxSettlers": 30, "radius": 60, "unlocks": ["fast_healing"],
     "cost": [ { "item": "Blackwood", "amount": 30 }, { "item": "FlametalNew", "amount": 10 } ] }
 ]

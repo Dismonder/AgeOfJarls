@@ -7,16 +7,24 @@ namespace AgeOfJarls.Army
         Warrior = 1,
         Archer = 2,
         Shieldbearer = 3,
+        /// <summary>Spear or atgeir, fighting from behind the shieldbearers at the gate (tier 4).</summary>
+        Spearman = 4,
+        /// <summary>Two-handed weapon, no shield, hits harder (tier 5).</summary>
+        Berserker = 5,
     }
 
     internal static class CombatRoles
     {
-        internal static readonly CombatRole[] All = { CombatRole.Warrior, CombatRole.Archer, CombatRole.Shieldbearer };
+        internal static readonly CombatRole[] All =
+            { CombatRole.Warrior, CombatRole.Archer, CombatRole.Shieldbearer, CombatRole.Spearman, CombatRole.Berserker };
+
+        /// <summary>Berserkers' melee hits deal this much more.</summary>
+        internal const float BerserkerDamage = 0.15f;
 
         internal static string Token(CombatRole role) => "$aoj_role_" + role.ToString().ToLowerInvariant();
 
         /// <summary>The id in tiers.json "unlocks".</summary>
-        internal static string UnlockId(CombatRole role) => role == CombatRole.Shieldbearer ? "shieldbearer" : role.ToString().ToLowerInvariant();
+        internal static string UnlockId(CombatRole role) => role.ToString().ToLowerInvariant();
 
         internal static bool IsUnlocked(CombatRole role, int tier)
         {
@@ -32,8 +40,19 @@ namespace AgeOfJarls.Army
         }
 
         /// <summary>The banner kind a role stands at by default.</summary>
-        internal static BannerKind PostKind(CombatRole role) =>
-            role == CombatRole.Archer ? BannerKind.Wall : role == CombatRole.Shieldbearer ? BannerKind.Gate : BannerKind.Rally;
+        internal static BannerKind PostKind(CombatRole role)
+        {
+            switch (role)
+            {
+                case CombatRole.Archer:
+                    return BannerKind.Wall;
+                case CombatRole.Shieldbearer:
+                case CombatRole.Spearman:
+                    return BannerKind.Gate;
+                default:
+                    return BannerKind.Rally;
+            }
+        }
     }
 
     /// <summary>What a war banner is for. Values are saved in ZDOs: only append.</summary>

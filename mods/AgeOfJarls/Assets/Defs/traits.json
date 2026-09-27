@@ -1,8 +1,15 @@
 [
-  { "id": "diligent", "positive": true,  "weight": 1, "origins": ["Meadows"],  "excludes": ["lazy"],     "modifiers": { "workSpeed": 0.15 } },
-  { "id": "lazy",     "positive": false, "weight": 1, "origins": [],           "excludes": ["diligent"], "modifiers": { "workSpeed": -0.15, "moraleRecovery": 0.25 } },
-  { "id": "strong",   "positive": true,  "weight": 1, "origins": ["Mountain"], "excludes": [],           "modifiers": { "carryWeight": 0.5, "meleeDamage": 0.1 } },
-  { "id": "frugal",   "positive": true,  "weight": 1, "origins": ["Swamp"],    "excludes": ["glutton"],  "modifiers": { "foodConsumption": -0.2 } },
-  { "id": "glutton",  "positive": false, "weight": 1, "origins": [],           "excludes": ["frugal"],   "modifiers": { "foodConsumption": 0.3, "maxHealth": 0.1 } },
-  { "id": "brave",    "positive": true,  "weight": 1, "origins": ["Plains"],   "excludes": [],           "modifiers": { "fleeThreshold": -1 } }
+  { "id": "diligent",   "positive": true,  "weight": 1, "origins": ["Meadows"],     "excludes": ["lazy"],                "modifiers": { "workSpeed": 0.15 } },
+  { "id": "lazy",       "positive": false, "weight": 1, "origins": [],              "excludes": ["diligent"],            "modifiers": { "workSpeed": -0.15, "moraleRecovery": 0.25 } },
+  { "id": "strong",     "positive": true,  "weight": 1, "origins": ["Mountain"],    "excludes": [],                      "modifiers": { "carryWeight": 0.5, "meleeDamage": 0.1 } },
+  { "id": "frugal",     "positive": true,  "weight": 1, "origins": ["Swamp"],       "excludes": ["glutton"],             "modifiers": { "foodConsumption": -0.2 } },
+  { "id": "glutton",    "positive": false, "weight": 1, "origins": [],              "excludes": ["frugal"],              "modifiers": { "foodConsumption": 0.3, "maxHealth": 0.1 } },
+  { "id": "brave",      "positive": true,  "weight": 1, "origins": ["Plains"],      "excludes": ["cowardly"],            "modifiers": { "fleeThreshold": -1 } },
+  { "id": "nimble",     "positive": true,  "weight": 1, "origins": [],              "excludes": [],                      "modifiers": { "moveSpeed": 0.2 } },
+  { "id": "cowardly",   "positive": false, "weight": 1, "origins": [],              "excludes": ["brave", "veteran"],    "modifiers": { "fleeThreshold": 0.2, "meleeDamage": -0.2, "rangedDamage": -0.2 } },
+  { "id": "hawkeye",    "positive": true,  "weight": 1, "origins": ["BlackForest"], "excludes": [],                      "modifiers": { "rangedDamage": 0.15 } },
+  { "id": "greenthumb", "positive": true,  "weight": 1, "origins": ["Meadows"],     "excludes": [],                      "modifiers": { "cropYield": 0.2 } },
+  { "id": "nightowl",   "positive": true,  "weight": 1, "origins": ["Mistlands"],   "excludes": [],                      "modifiers": { "nightWork": 1 } },
+  { "id": "hardened",   "positive": true,  "weight": 1, "origins": ["Plains"],      "excludes": [],                      "modifiers": { "damageTaken": -0.2, "moraleRecovery": 0.15 } },
+  { "id": "veteran",    "positive": true,  "weight": 1, "origins": ["AshLands"],    "excludes": ["cowardly"],            "modifiers": { "combatStart": 30 } }
 ]

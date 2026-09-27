@@ -115,14 +115,17 @@ namespace AgeOfJarls.Settlers
                 return;
             }
             PinToBed();
-            // Rest heals: 1% of health per second in bed, on top of vanilla regeneration.
+            // Rest heals: 1% of health per second in bed (more in a settlement with healers), on top of vanilla regeneration.
             if (GetHealth() < GetMaxHealth())
             {
-                Heal(GetMaxHealth() * BedHealPerSecond * fixedDeltaTime, false);
+                Heal(GetMaxHealth() * BedHealPerSecond * BedHealing * fixedDeltaTime, false);
             }
         }
 
         private const float BedHealPerSecond = 0.01f;
+
+        /// <summary>Multiplier for healing in bed; set by the settler each second from its settlement's perks.</summary>
+        internal float BedHealing { get; set; } = 1f;
 
         private void PinToBed()
         {

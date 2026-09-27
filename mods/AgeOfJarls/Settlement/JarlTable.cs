@@ -171,6 +171,27 @@ namespace AgeOfJarls.Settlement
         internal static bool IsUnlocked(TierDef tier) =>
             tier.RequiredGlobalKey.Length == 0 || (ZoneSystem.instance != null && ZoneSystem.instance.GetGlobalKey(tier.RequiredGlobalKey));
 
+        /// <summary>Unlock ids in tiers.json for perks with no job or role behind them.</summary>
+        internal const string UnlockTotemSlot = "totem_slot";
+        internal const string UnlockFastHealing = "fast_healing";
+
+        /// <summary>Whether a tier up to the settlement's lists this unlock id (a perk, a job, a role...).</summary>
+        internal static bool HasUnlock(SettlementData data, string id)
+        {
+            if (data == null)
+            {
+                return false;
+            }
+            foreach (TierDef def in DefsRegistry.Current.Tiers)
+            {
+                if (def.Level <= data.Tier && def.Unlocks.Contains(id))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         internal static JarlTable FindNearest(Vector3 position, float maxDistance)
         {
             JarlTable best = null;
@@ -945,7 +966,12 @@ namespace AgeOfJarls.Settlement
             TierDef next = TierAt(data.Tier + 1);
             if (next != null)
             {
-                text.Append("\n<color=#b0b0b0>$aoj_next_tier: $aoj_tier_").Append(next.Level).Append(" (").Append(RequirementText(next)).Append(")</color>");
+                text.Append("\n<color=#b0b0b0>$aoj_next_tier: $aoj_tier_").Append(next.Level).Append(" (").Append(RequirementText(next)).Append(')');
+                if (next.Unlocks.Count > 0)
+                {
+                    text.Append("\n$aoj_unlocks: ").Append(string.Join(", ", next.Unlocks.Select(u => "$aoj_unlock_" + u)));
+                }
+                text.Append("</color>");
             }
             return text.ToString();
         }

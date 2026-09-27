@@ -137,7 +137,8 @@ namespace AgeOfJarls.UI
             }
         }
 
-        // None -> warrior -> archer -> shieldbearer -> none, skipping roles the settlement has not unlocked yet.
+        // None -> warrior -> archer -> shieldbearer -> spearman -> berserker -> none, skipping roles the settlement has
+        // not unlocked yet.
         private static void NextRole(Settler settler)
         {
             if (!Allowed(settler, SettlementRight.Military))
@@ -147,9 +148,10 @@ namespace AgeOfJarls.UI
             JarlTable table = settler.HomeTable;
             int tier = table != null && table.Data != null ? table.Data.Tier : 0;
             Army.CombatRole role = settler.Role;
-            for (int step = 0; step < 4; step++)
+            int count = Army.CombatRoles.All.Length + 1;
+            for (int step = 0; step < count; step++)
             {
-                role = (Army.CombatRole)(((int)role + 1) % 4);
+                role = (Army.CombatRole)(((int)role + 1) % count);
                 if (role == Army.CombatRole.None || Army.CombatRoles.IsUnlocked(role, tier))
                 {
                     break;

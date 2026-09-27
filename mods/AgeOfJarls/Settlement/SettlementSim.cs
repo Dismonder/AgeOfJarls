@@ -12,11 +12,13 @@ namespace AgeOfJarls.Settlement
     /// <summary>
     /// The settlement's clock and its catch-up. The game only simulates what is near a player, so a settlement nobody
     /// visits stands still. The table's owner keeps the last simulated moment in the table's ZDO; when a settlement
-    /// wakes up after a while, it credits the work of the absence analytically:
-    /// for each Woodcutter and Miner totem, its workers' measured pace (or the configured default) times the time away
-    /// (at most <c>CatchUp.MaxDays</c>), limited by what grows or lies in the zone and by how long the food lasted,
-    /// is put into the settlement's chests; settlers eat from the cauldrons for the days they were alone. The result
-    /// and the new clock are written together, so a relog never credits the same time twice.
+    /// wakes up after a while, it credits the work of the absence (at most <c>CatchUp.MaxDays</c>), scaled by how long
+    /// the food lasted - settlers eat from the cauldrons for the days they were alone:
+    /// Woodcutters and Miners deliver their measured pace (or the configured default), limited by what grows or lies in
+    /// the zone; Smelter hands and Cooks put the ore, fuel and raw food from the chests through their stations at the
+    /// stations' own pace; Farmers bring in the crops that ripened meanwhile (the game grows them by the clock) and
+    /// replant them from the seeds in the chests. Only chests this machine owns take part. The result and the new clock
+    /// are written together, so a relog never credits the same time twice.
     /// </summary>
     internal static class SettlementSim
     {
@@ -76,38 +78,32 @@ namespace AgeOfJarls.Settlement
             float fedShare = Feed(residents, table, radius);
 
             var credited = new Dictionary<string, int>();
+            Vector3 from = table.transform.position;
             foreach (WorkTotem totem in WorkTotem.Loaded.Where(t => t != null && t.Settlement == table))
             {
-                string item;
-                int pool;
-                if (totem.Job == JobType.Woodcutter)
-                {
-                    item = "Wood";
-                    pool = WorkScanner.Find<TreeBase>(totem).Count * WoodPerTree;
-                }
-                else if (totem.Job == JobType.Miner)
-                {
-                    item = "Stone";
-                    pool = (WorkScanner.Find<MineRock5>(totem).Count + WorkScanner.Find<MineRock>(totem).Count) * StonePerRock;
-                }
-                else
+                List<Settler> workers = residents.Where(r => r.JobId == totem.Id).ToList();
+                if (workers.Count == 0)
                 {
                     continue;
                 }
-
-                float amount = 0f;
-                foreach (Settler worker in residents.Where(r => r.JobId == totem.Id))
+                switch (totem.Job)
                 {
-                    amount += PerSecond(worker) * (float)window * Needs.WorkPace(worker.Zdo);
-                }
-                int produced = Mathf.Min(Mathf.FloorToInt(amount * fedShare), pool);
-                if (produced > 0)
-                {
-                    int stored = Deposit(item, produced, table.transform.position);
-                    if (stored > 0)
-                    {
-                        credited[item] = (credited.TryGetValue(item, out int sum) ? sum : 0) + stored;
-                    }
+                    case JobType.Woodcutter:
+                        Gather("Wood", WorkScanner.Find<TreeBase>(totem).Count * WoodPerTree, workers, window, fedShare, from, credited);
+                        break;
+                    case JobType.Miner:
+                        Gather("Stone", (WorkScanner.Find<MineRock5>(totem).Count + WorkScanner.Find<MineRock>(totem).Count) * StonePerRock,
+                            workers, window, fedShare, from, credited);
+                        break;
+                    case JobType.Smelter:
+                        Smelt(totem, window * fedShare, from, credited);
+                        break;
+                    case JobType.Cook:
+                        Cook(totem, window * fedShare, from, credited);
+                        break;
+                    case JobType.Farmer:
+                        Harvest(totem, workers.Average(w => w.TraitSum(Core.Defs.TraitStat.CropYield)), from, credited);
+                        break;
                 }
             }
 
@@ -124,6 +120,213 @@ namespace AgeOfJarls.Settlement
             }
         }
 
+        // Woodcutters and Miners: each worker's pace times the time away, no more than the zone holds.
+        private static void Gather(string item, int pool, List<Settler> workers, double window, float fedShare, Vector3 from,
+            Dictionary<string, int> credited)
+        {
+            float amount = 0f;
+            foreach (Settler worker in workers)
+            {
+                amount += PerSecond(worker) * (float)window * Needs.WorkPace(worker.Zdo);
+            }
+            int produced = Mathf.Min(Mathf.FloorToInt(amount * fedShare), pool);
+            if (produced > 0)
+            {
+                Credit(credited, item, Deposit(item, produced, from));
+            }
+        }
+
+        // Smelter hands: every station in the zone works through ore and fuel from the chests at its own pace
+        // (vanilla also finishes whatever was already loaded when it wakes up).
+        private static void Smelt(WorkTotem totem, double seconds, Vector3 from, Dictionary<string, int> credited)
+        {
+            foreach (Component component in WorkScanner.Find<Smelter>(totem))
+            {
+                if (!(component is Smelter station) || station == null || station.m_secPerProduct <= 0f)
+                {
+                    continue;
+                }
+                string fuel = station.m_fuelItem != null && station.m_fuelPerProduct > 0 ? station.m_fuelItem.m_itemData.m_shared.m_name : null;
+                int capacity = (int)(seconds / station.m_secPerProduct);
+                foreach (Smelter.ItemConversion conversion in station.m_conversion)
+                {
+                    if (capacity <= 0)
+                    {
+                        break;
+                    }
+                    if (conversion.m_from == null || conversion.m_to == null)
+                    {
+                        continue;
+                    }
+                    string input = conversion.m_from.m_itemData.m_shared.m_name;
+                    int count = Math.Min(capacity, CountInChests(input));
+                    if (fuel != null)
+                    {
+                        count = Math.Min(count, CountInChests(fuel) / station.m_fuelPerProduct);
+                    }
+                    // Products first: only what found room is paid for.
+                    int made = count > 0 ? Deposit(conversion.m_to.gameObject.name, count, from) : 0;
+                    if (made <= 0)
+                    {
+                        continue;
+                    }
+                    RemoveFromChests(input, made);
+                    if (fuel != null)
+                    {
+                        RemoveFromChests(fuel, made * station.m_fuelPerProduct);
+                    }
+                    capacity -= made;
+                    Credit(credited, conversion.m_to.gameObject.name, made);
+                }
+            }
+        }
+
+        // Cooks: raw food from the chests goes through every slot of the stations in the zone at its cooking time; an
+        // oven also burns its fuel meanwhile. Cooked food is stored like any food: the Settlement Cauldron first.
+        private static void Cook(WorkTotem totem, double seconds, Vector3 from, Dictionary<string, int> credited)
+        {
+            foreach (Component component in WorkScanner.Find<CookingStation>(totem))
+            {
+                if (!(component is CookingStation station) || station == null)
+                {
+                    continue;
+                }
+                int slots = Math.Max(1, station.m_slots != null ? station.m_slots.Length : 1);
+                string fuel = station.m_useFuel && station.m_fuelItem != null && station.m_secPerFuel > 0 ? station.m_fuelItem.m_itemData.m_shared.m_name : null;
+                double slotSeconds = seconds * slots;
+                if (fuel != null)
+                {
+                    slotSeconds = Math.Min(slotSeconds, (double)CountInChests(fuel) * station.m_secPerFuel * slots);
+                }
+                double burned = 0.0;
+                foreach (CookingStation.ItemConversion conversion in station.m_conversion)
+                {
+                    if (conversion.m_from == null || conversion.m_to == null || conversion.m_cookTime <= 0f || slotSeconds < conversion.m_cookTime)
+                    {
+                        continue;
+                    }
+                    string input = conversion.m_from.m_itemData.m_shared.m_name;
+                    int count = Math.Min((int)(slotSeconds / conversion.m_cookTime), CountInChests(input));
+                    int made = count > 0 ? Deposit(conversion.m_to.gameObject.name, count, from) : 0;
+                    if (made <= 0)
+                    {
+                        continue;
+                    }
+                    RemoveFromChests(input, made);
+                    slotSeconds -= made * conversion.m_cookTime;
+                    burned += made * conversion.m_cookTime / slots;
+                    Credit(credited, conversion.m_to.gameObject.name, made);
+                }
+                if (fuel != null && burned > 0.0)
+                {
+                    RemoveFromChests(fuel, Mathf.CeilToInt((float)(burned / station.m_secPerFuel)));
+                }
+            }
+        }
+
+        // Farmers: crops that ripened while nobody was there (the game grows them by the clock) are brought in and
+        // their spots replanted from the seeds in the chests, as the farmer would have done (green-thumbed farmers
+        // bring in more). Only crops this machine owns, and only while the chests have room.
+        private static void Harvest(WorkTotem totem, float bonus, Vector3 from, Dictionary<string, int> credited)
+        {
+            float extra = 0f;
+            Dictionary<string, (GameObject sapling, string seed)> crops = AI.Jobs.FarmerJob.Crops();
+            foreach (Component component in WorkScanner.Find<Pickable>(totem).ToList())
+            {
+                if (!(component is Pickable crop) || crop == null || crop.m_itemPrefab == null || !crop.CanBePicked() ||
+                    !crops.TryGetValue(Utils.GetPrefabName(crop.gameObject), out (GameObject sapling, string seed) planting))
+                {
+                    continue;
+                }
+                ZNetView view = crop.GetComponent<ZNetView>();
+                if (view == null || !view.IsValid() || !view.IsOwner())
+                {
+                    continue;
+                }
+                extra += crop.m_amount * bonus;
+                int amount = crop.m_amount + (int)extra;
+                extra -= (int)extra;
+                int stored = Deposit(crop.m_itemPrefab.name, amount, from);
+                Vector3 spot = crop.transform.position;
+                if (stored < amount)
+                {
+                    // No room left: what did not fit waits on the ground for the farmer.
+                    DropOnGround(crop.m_itemPrefab, amount - stored, spot);
+                }
+                ZNetScene.instance.Destroy(crop.gameObject);
+                string seed = ItemToken(planting.seed);
+                if (RemoveFromChests(seed, 1) == 1)
+                {
+                    UnityEngine.Object.Instantiate(planting.sapling, spot, Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f));
+                }
+                Credit(credited, crop.m_itemPrefab.name, stored);
+                if (stored < amount)
+                {
+                    // Chests full: the rest of the field waits for the farmer.
+                    break;
+                }
+            }
+        }
+
+        private static void DropOnGround(GameObject prefab, int amount, Vector3 position)
+        {
+            ItemDrop drop = prefab.GetComponent<ItemDrop>();
+            if (drop == null || amount <= 0)
+            {
+                return;
+            }
+            ItemDrop.ItemData item = drop.m_itemData.Clone();
+            item.m_dropPrefab = prefab;
+            item.m_stack = Mathf.Min(amount, item.m_shared.m_maxStackSize);
+            ItemDrop.DropItem(item, item.m_stack, position + Vector3.up * 0.5f, Quaternion.identity);
+        }
+
+        private static void Credit(Dictionary<string, int> credited, string item, int amount)
+        {
+            if (amount > 0)
+            {
+                credited[item] = (credited.TryGetValue(item, out int sum) ? sum : 0) + amount;
+            }
+        }
+
+        // Items (by their shared name, e.g. "$item_copperore") in the settlement's chests this machine owns.
+        private static int CountInChests(string sharedName)
+        {
+            int count = 0;
+            foreach (Container chest in s_chests)
+            {
+                if (chest != null && chest.m_nview.IsOwner())
+                {
+                    count += chest.GetInventory().CountItems(sharedName);
+                }
+            }
+            return count;
+        }
+
+        private static int RemoveFromChests(string sharedName, int amount)
+        {
+            int left = amount;
+            foreach (Container chest in s_chests)
+            {
+                if (left <= 0)
+                {
+                    break;
+                }
+                if (chest == null || !chest.m_nview.IsOwner())
+                {
+                    continue;
+                }
+                Inventory inventory = chest.GetInventory();
+                int take = Math.Min(left, inventory.CountItems(sharedName));
+                if (take > 0)
+                {
+                    inventory.RemoveItem(sharedName, take);
+                    left -= take;
+                }
+            }
+            return amount - left;
+        }
+
         // Items per second: the settler's live pace once measured long enough, else the configured default.
         private static float PerSecond(Settler worker)
         {
@@ -132,9 +335,11 @@ namespace AgeOfJarls.Settlement
             float output = zdo.GetFloat(Keys.ZdoSettlerWorkOutput);
             if (time >= MeasuredAfterSeconds && output > 0f)
             {
+                // Measured live, traits and experience included.
                 return output / time;
             }
-            return AoJConfig.CatchUpDefaultRate.Value / (float)WorldClock.DayLength;
+            float traits = Mathf.Max(0.1f, 1f + worker.TraitSum(Core.Defs.TraitStat.WorkSpeed));
+            return AoJConfig.CatchUpDefaultRate.Value / (float)WorldClock.DayLength * traits;
         }
 
         // Settlers catch up on their hunger first (Needs.Update), then eat from the cauldrons until fed. Returns the

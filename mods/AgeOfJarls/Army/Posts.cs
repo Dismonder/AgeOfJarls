@@ -54,12 +54,47 @@ namespace AgeOfJarls.Army
             return best;
         }
 
+        /// <summary>The weapon a role fights with: any melee weapon, a bow, a one-hander for the shield, a spear or atgeir, a two-hander.</summary>
+        internal static System.Func<ItemDrop.ItemData, bool> WeaponFor(CombatRole role)
+        {
+            switch (role)
+            {
+                case CombatRole.Archer:
+                    return IsBow;
+                case CombatRole.Shieldbearer:
+                    return IsOneHanded;
+                case CombatRole.Spearman:
+                    return IsSpear;
+                case CombatRole.Berserker:
+                    return IsTwoHanded;
+                default:
+                    return IsMeleeWeapon;
+            }
+        }
+
+        /// <summary>A shieldbearer always carries a shield; others do when their weapon leaves a hand free (not archers, not berserkers).</summary>
+        internal static bool UsesShield(CombatRole role, ItemDrop.ItemData weapon) =>
+            role == CombatRole.Shieldbearer ||
+            (role != CombatRole.Archer && role != CombatRole.Berserker && IsOneHanded(weapon));
+
+        // By the skill, not only the hand: crossbows and staffs are two-handed too, pickaxes are one-handed tools.
         internal static bool IsMeleeWeapon(ItemDrop.ItemData item) =>
             item != null && (item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon ||
-                             item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.TwoHandedWeapon);
+                             item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.TwoHandedWeapon) &&
+            IsMeleeSkill(item.m_shared.m_skillType);
+
+        private static bool IsMeleeSkill(Skills.SkillType skill) =>
+            skill == Skills.SkillType.Swords || skill == Skills.SkillType.Knives || skill == Skills.SkillType.Clubs ||
+            skill == Skills.SkillType.Axes || skill == Skills.SkillType.Spears || skill == Skills.SkillType.Polearms;
 
         internal static bool IsOneHanded(ItemDrop.ItemData item) =>
-            item != null && item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon;
+            IsMeleeWeapon(item) && item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon;
+
+        internal static bool IsTwoHanded(ItemDrop.ItemData item) =>
+            IsMeleeWeapon(item) && item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.TwoHandedWeapon;
+
+        internal static bool IsSpear(ItemDrop.ItemData item) =>
+            IsMeleeWeapon(item) && (item.m_shared.m_skillType == Skills.SkillType.Spears || item.m_shared.m_skillType == Skills.SkillType.Polearms);
 
         internal static bool IsBow(ItemDrop.ItemData item) => item != null && item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Bow;
 

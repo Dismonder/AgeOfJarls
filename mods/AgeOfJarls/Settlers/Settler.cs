@@ -199,7 +199,11 @@ namespace AgeOfJarls.Settlers
                 // A captive takes no orders until a player frees it.
                 return;
             }
-            if (!MayOrder(sender, SettlementRight.Military) || !Enum.IsDefined(typeof(Army.CombatRole), role))
+            // A role the settlement has not unlocked yet is refused when its table is loaded here to tell.
+            JarlTable home = HomeTable;
+            bool locked = role != (int)Army.CombatRole.None && home != null && home.Data != null &&
+                          !Army.CombatRoles.IsUnlocked((Army.CombatRole)role, home.Data.Tier);
+            if (!MayOrder(sender, SettlementRight.Military) || !Enum.IsDefined(typeof(Army.CombatRole), role) || locked)
             {
                 Log.Warning(Module, $"Role change for {DisplayName} from peer {sender} refused");
                 return;
@@ -460,12 +464,31 @@ namespace AgeOfJarls.Settlers
                 // AI only runs on the owner, but ownership moves between players, so every client sets the same value.
                 _ai.m_fleeIfLowHealth = Mathf.Clamp(AoJConfig.SettlerFleeThreshold.Value + TraitSum(TraitStat.FleeThreshold), 0f, MaxFleeThreshold);
             }
+            // Movement runs on the owner too, and ownership moves: every client sets the same speeds (from the speeds
+            // left after UndoEnemyScaling, so a second Apply never stacks them).
+            if (_baseWalkSpeed < 0f)
+            {
+                _baseWalkSpeed = _humanoid.m_walkSpeed;
+                _baseRunSpeed = _humanoid.m_runSpeed;
+            }
+            float speed = Mathf.Max(0.5f, 1f + TraitSum(TraitStat.MoveSpeed));
+            _humanoid.m_walkSpeed = _baseWalkSpeed * speed;
+            _humanoid.m_runSpeed = _baseRunSpeed * speed;
 
             if (!_nview.IsOwner())
             {
                 return;
             }
             EnsureUid();
+            if (firstTime)
+            {
+                // Veterans start with combat experience.
+                float start = Mathf.Clamp(TraitSum(TraitStat.CombatStart), 0f, 100f);
+                if (start > CombatSkill.Level(_nview.GetZDO()))
+                {
+                    _nview.GetZDO().Set(CombatSkill.SkillKey, start);
+                }
+            }
 
             // Tamed = the game's own notion of "on the players' side": no fleeing from no-monster areas such as the
             // start temple, no striking back at players, no hitting allies with area attacks. Non-owners read it
@@ -496,8 +519,16 @@ namespace AgeOfJarls.Settlers
 
         private static int ItemHash(string itemName) => string.IsNullOrEmpty(itemName) ? 0 : itemName.GetStableHashCode();
 
-        private float TraitSum(string stat)
+        private float _baseWalkSpeed = -1f;
+        private float _baseRunSpeed = -1f;
+
+        /// <summary>The sum of the settler's traits for one stat (<see cref="TraitStat"/>); 0 before its identity is known.</summary>
+        internal float TraitSum(string stat)
         {
+            if (Identity == null)
+            {
+                return 0f;
+            }
             float sum = 0f;
             foreach (string id in Identity.Traits)
             {
@@ -557,11 +588,18 @@ namespace AgeOfJarls.Settlers
             }
             RefreshFollowTarget();
             UpdateHome();
+            if (_humanoid is SettlerCharacter sleeper)
+            {
+                sleeper.BedHealing = JarlTable.HasUnlock(HomeTable?.Data, JarlTable.UnlockFastHealing) ? FastHealing : 1f;
+            }
             if (Identity != null && !IsCaptive)
             {
                 Needs.Update(_nview.GetZDO(), this, HomeTable);
             }
         }
+
+        /// <summary>Healing in bed in a settlement that unlocked healers (tiers.json "fast_healing").</summary>
+        private const float FastHealing = 2f;
 
         private const string SitAnimation = "emote_sit";
         private bool _sitting;
@@ -1390,11 +1428,23 @@ namespace AgeOfJarls.Settlers
             return text.ToString().TrimEnd('\n');
         }
 
-        // Rates are relative (0.15 = +15%); the flee threshold is an absolute share of health.
+        // Rates are relative (0.15 = +15%) and the flee threshold an absolute share of health; night work is a flag
+        // and the starting combat experience a plain number.
         private static string StatText(string stat, float value)
         {
+            string token = "$aoj_stat_" + stat.ToLowerInvariant();
             string sign = value >= 0f ? "+" : "-";
-            return $"$aoj_stat_{stat.ToLowerInvariant()} {sign}{Mathf.RoundToInt(Mathf.Abs(value) * 100f)}%";
+            switch (stat)
+            {
+                case TraitStat.NightWork:
+                    return token;
+                case TraitStat.CombatStart:
+                    return $"{token} {Mathf.RoundToInt(value)}";
+                case TraitStat.FleeThreshold when value <= -1f:
+                    return "$aoj_stat_neverflees";
+                default:
+                    return $"{token} {sign}{Mathf.RoundToInt(Mathf.Abs(value) * 100f)}%";
+            }
         }
 
         /// <summary>What the settler carries, from the saved inventory (readable on every machine), as tokens.</summary>

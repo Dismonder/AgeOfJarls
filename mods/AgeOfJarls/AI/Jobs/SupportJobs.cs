@@ -280,9 +280,25 @@ namespace AgeOfJarls.AI.Jobs
                 _toPlant.Add((_target.transform.position, crop.sapling, crop.seed, Time.time + ReplantDelay));
             }
             _target.Interact(Body, false, false);
+            BonusCrop(_target);
             Reservations.Release(_target, Uid);
             _target = null;
             return true;
+        }
+
+        // Green-thumbed farmers now and then bring in one more of the crop (it drops with the rest and is gathered).
+        private void BonusCrop(Pickable crop)
+        {
+            float chance = Settler.TraitSum(Core.Defs.TraitStat.CropYield);
+            ItemDrop drop = crop.m_itemPrefab != null ? crop.m_itemPrefab.GetComponent<ItemDrop>() : null;
+            if (chance <= 0f || drop == null || Random.value >= chance)
+            {
+                return;
+            }
+            ItemDrop.ItemData item = drop.m_itemData.Clone();
+            item.m_dropPrefab = crop.m_itemPrefab;
+            item.m_stack = 1;
+            ItemDrop.DropItem(item, 1, crop.transform.position + Vector3.up * 0.5f, Quaternion.identity);
         }
 
         private bool Plant(float dt)
@@ -376,8 +392,8 @@ namespace AgeOfJarls.AI.Jobs
             return true;
         }
 
-        // Grown crop prefab name -> (the sapling that grows into it, the seed item it is planted from).
-        private static Dictionary<string, (GameObject sapling, string seed)> Crops()
+        /// <summary>Grown crop prefab name -> (the sapling that grows into it, the seed item it is planted from); also for the catch-up.</summary>
+        internal static Dictionary<string, (GameObject sapling, string seed)> Crops()
         {
             if (s_crops != null || ZNetScene.instance == null)
             {

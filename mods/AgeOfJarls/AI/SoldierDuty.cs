@@ -149,7 +149,8 @@ namespace AgeOfJarls.AI
         {
             List<ItemDrop.ItemData> bag = _body.GetInventory().GetAllItems();
             ItemDrop.ItemData bow = bag.FirstOrDefault(Posts.IsBow);
-            bool needWeapon = role == CombatRole.Archer ? bow == null : role == CombatRole.Shieldbearer ? !bag.Exists(Posts.IsOneHanded) : !bag.Exists(Posts.IsMeleeWeapon);
+            System.Func<ItemDrop.ItemData, bool> weaponFits = Posts.WeaponFor(role);
+            bool needWeapon = !bag.Any(weaponFits);
             bool needShield = role == CombatRole.Shieldbearer && !bag.Exists(Posts.IsShield);
             bool needArrows = role == CombatRole.Archer && bow != null && bag.Where(i => Posts.IsArrowFor(i, bow)).Sum(i => i.m_stack) < 10;
             var missingArmor = new HashSet<ItemDrop.ItemData.ItemType>(new[]
@@ -161,7 +162,7 @@ namespace AgeOfJarls.AI
                 return null;
             }
             return item =>
-                (needWeapon && (role == CombatRole.Archer ? Posts.IsBow(item) : role == CombatRole.Shieldbearer ? Posts.IsOneHanded(item) : Posts.IsMeleeWeapon(item))) ||
+                (needWeapon && weaponFits(item)) ||
                 (needShield && Posts.IsShield(item)) ||
                 (needArrows && Posts.IsArrowFor(item, bow)) ||
                 (Posts.IsArmor(item) && missingArmor.Contains(item.m_shared.m_itemType));
@@ -181,18 +182,15 @@ namespace AgeOfJarls.AI
         private void EquipBest(CombatRole role)
         {
             List<ItemDrop.ItemData> bag = _body.GetInventory().GetAllItems();
-            ItemDrop.ItemData weapon = role == CombatRole.Archer
-                ? bag.Where(Posts.IsBow).OrderByDescending(i => i.GetDamage().GetTotalDamage()).FirstOrDefault()
-                : bag.Where(role == CombatRole.Shieldbearer ? (System.Func<ItemDrop.ItemData, bool>)Posts.IsOneHanded : Posts.IsMeleeWeapon)
-                    .OrderByDescending(i => i.GetDamage().GetTotalDamage()).FirstOrDefault();
+            ItemDrop.ItemData weapon = bag.Where(Posts.WeaponFor(role)).OrderByDescending(i => i.GetDamage().GetTotalDamage()).FirstOrDefault();
             if (weapon != null && !weapon.m_equipped)
             {
                 _body.EquipItem(weapon, triggerEquipEffects: false);
             }
-            if (role != CombatRole.Archer)
+            if (Posts.UsesShield(role, weapon))
             {
                 ItemDrop.ItemData shield = bag.Where(Posts.IsShield).OrderByDescending(i => i.m_shared.m_blockPower).FirstOrDefault();
-                if (shield != null && !shield.m_equipped && (role == CombatRole.Shieldbearer || Posts.IsOneHanded(weapon)))
+                if (shield != null && !shield.m_equipped)
                 {
                     _body.EquipItem(shield, triggerEquipEffects: false);
                 }

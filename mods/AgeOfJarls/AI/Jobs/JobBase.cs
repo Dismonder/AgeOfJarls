@@ -84,13 +84,14 @@ namespace AgeOfJarls.AI.Jobs
             FlushStats();
         }
 
-        /// <summary>x0.6 - x1.25 from morale and hunger, up to x1.5 more from experience.</summary>
+        /// <summary>x0.6 - x1.25 from morale and hunger, up to x1.5 more from experience, and the traits (Diligent, Lazy).</summary>
         protected float Pace
         {
             get
             {
                 ZDO zdo = Settler.Zdo;
-                return zdo == null ? 1f : Needs.WorkPace(zdo) * (1f + Skill / 200f);
+                float traits = Mathf.Max(0.1f, 1f + Settler.TraitSum(Core.Defs.TraitStat.WorkSpeed));
+                return zdo == null ? traits : Needs.WorkPace(zdo) * (1f + Skill / 200f) * traits;
             }
         }
 

@@ -121,7 +121,8 @@ namespace AgeOfJarls.Work
                 SettlementData data = table != null ? table.Data : null;
                 int tier = data != null ? data.Tier : 0;
                 return Mathf.Min(AoJConfig.TotemBaseSlots.Value + tier / 2, AoJConfig.TotemMaxSlots.Value) +
-                       AoJConfig.TotemSlotsPerMember.Value * JarlTable.ExtraMembers(data);
+                       AoJConfig.TotemSlotsPerMember.Value * JarlTable.ExtraMembers(data) +
+                       (JarlTable.HasUnlock(data, JarlTable.UnlockTotemSlot) ? 1 : 0);
             }
         }
 

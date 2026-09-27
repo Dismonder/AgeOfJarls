@@ -173,23 +173,6 @@ namespace AgeOfJarls.Settlers
             return Mathf.Clamp(morale, 0f, 100f);
         }
 
-        private static float TraitSum(Settler settler, string stat)
-        {
-            SettlerIdentity identity = settler.Identity;
-            if (identity == null)
-            {
-                return 0f;
-            }
-            float sum = 0f;
-            foreach (string id in identity.Traits)
-            {
-                TraitDef trait = DefsRegistry.Current.Traits.Find(t => t.Id == id);
-                if (trait != null && trait.Modifiers.TryGetValue(stat, out float value))
-                {
-                    sum += value;
-                }
-            }
-            return sum;
-        }
+        private static float TraitSum(Settler settler, string stat) => settler.TraitSum(stat);
     }
 }

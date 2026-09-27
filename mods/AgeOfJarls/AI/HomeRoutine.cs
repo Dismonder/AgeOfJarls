@@ -3,6 +3,7 @@ using System.Linq;
 using AgeOfJarls.AI.Jobs;
 using AgeOfJarls.Army;
 using AgeOfJarls.Core;
+using AgeOfJarls.Core.Defs;
 using AgeOfJarls.Settlement;
 using AgeOfJarls.Settlers;
 using AgeOfJarls.Work;
@@ -257,7 +258,7 @@ namespace AgeOfJarls.AI
             }
         }
 
-        // A worker gathers a load before walking to the chests; everyone else stores right away.
+        // A worker gathers a load before walking to the chests (a Strong one carries more); everyone else stores right away.
         private bool ShouldStore()
         {
             Inventory bag = _character.GetInventory();
@@ -266,7 +267,8 @@ namespace AgeOfJarls.AI
                 return true;
             }
             int carried = bag.GetAllItems().Where(i => SettlementStorage.IsStorable(i) && !_keep(i)).Sum(i => i.m_stack);
-            return carried >= AoJConfig.WorkerLoad.Value || bag.GetEmptySlots() <= FreeSlotsBeforeStoring;
+            float load = AoJConfig.WorkerLoad.Value * Mathf.Max(0.25f, 1f + _settler.TraitSum(TraitStat.CarryWeight));
+            return carried >= load || bag.GetEmptySlots() <= FreeSlotsBeforeStoring;
         }
 
         // ---------------------------------------------------------------- storing
@@ -465,7 +467,8 @@ namespace AgeOfJarls.AI
                 StopJob();
                 return false;
             }
-            if (!totem.IsWorkTime)
+            // A Night Owl keeps working at a day-only totem through the night.
+            if (!totem.IsWorkTime && _settler.TraitSum(TraitStat.NightWork) <= 0f)
             {
                 StopJob();
                 return false;

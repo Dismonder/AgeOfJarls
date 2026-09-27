@@ -79,8 +79,9 @@ namespace AgeOfJarls.Core.Defs
     }
 
     /// <summary>
-    /// Stats a trait may modify. Rates are relative (0.15 = +15%); FleeThreshold is an absolute change
-    /// of the health fraction at which a civilian flees (-1 = never flees).
+    /// Stats a trait may modify. Rates are relative (0.15 = +15%); FleeThreshold is an absolute change of the health
+    /// fraction at which a civilian flees (-1 = never flees); NightWork is a flag (1 = works through the night);
+    /// CombatStart is the combat experience (0-100) a new settler starts with.
     /// </summary>
     public static class TraitStat
     {
@@ -88,9 +89,15 @@ namespace AgeOfJarls.Core.Defs
         public const string MoraleRecovery = "moraleRecovery";
         public const string CarryWeight = "carryWeight";
         public const string MeleeDamage = "meleeDamage";
+        public const string RangedDamage = "rangedDamage";
+        public const string DamageTaken = "damageTaken";
+        public const string MoveSpeed = "moveSpeed";
         public const string FoodConsumption = "foodConsumption";
         public const string MaxHealth = "maxHealth";
         public const string FleeThreshold = "fleeThreshold";
+        public const string CropYield = "cropYield";
+        public const string NightWork = "nightWork";
+        public const string CombatStart = "combatStart";
 
         private static readonly Dictionary<string, string> Canonical = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -98,9 +105,15 @@ namespace AgeOfJarls.Core.Defs
             { MoraleRecovery, MoraleRecovery },
             { CarryWeight, CarryWeight },
             { MeleeDamage, MeleeDamage },
+            { RangedDamage, RangedDamage },
+            { DamageTaken, DamageTaken },
+            { MoveSpeed, MoveSpeed },
             { FoodConsumption, FoodConsumption },
             { MaxHealth, MaxHealth },
             { FleeThreshold, FleeThreshold },
+            { CropYield, CropYield },
+            { NightWork, NightWork },
+            { CombatStart, CombatStart },
         };
 
         public static bool TryGetCanonical(string key, out string canonical)
