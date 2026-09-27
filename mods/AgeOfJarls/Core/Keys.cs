@@ -27,6 +27,11 @@ namespace AgeOfJarls.Core
         internal const string RpcSettlerFeed = "AoJ_SettlerFeed";
         /// <summary>Routed to everybody: a settlement's alarm started or ended (Army.AlarmPins).</summary>
         internal const string RpcAlarmPin = "AoJ_AlarmPin";
+        /// <summary>On a chest: give it a kind (Settlement.ChestLabels).</summary>
+        internal const string RpcChestKind = "AoJ_ChestKind";
+
+        /// <summary>Chest: the kind of things settlers put in it (a storage.json kind or a built-in one); "" = anything.</summary>
+        internal static readonly int ZdoChestKind = "aoj_chest_kind".GetStableHashCode();
 
         internal const string SettlerPrefab = "AoJ_Settler";
         internal const string JarlTablePrefab = "AoJ_JarlTable";
@@ -40,6 +45,12 @@ namespace AgeOfJarls.Core
         internal static readonly int ZdoTotemId = "aoj_totem_id".GetStableHashCode();
         internal static readonly int ZdoTotemRadius = "aoj_totem_radius".GetStableHashCode();
         internal static readonly int ZdoTotemAllDay = "aoj_totem_allday".GetStableHashCode();
+        /// <summary>0 low, 1 normal (default), 2 high: which totems free settlers take first.</summary>
+        internal static readonly int ZdoTotemPriority = "aoj_totem_priority".GetStableHashCode();
+        /// <summary>Woodcutter totem: replant every felled tree (off by default: clearing land stays clear).</summary>
+        internal static readonly int ZdoTotemReplant = "aoj_totem_replant".GetStableHashCode();
+        /// <summary>Settlement: players assign work themselves (free settlers do not take a free place at a totem).</summary>
+        internal static readonly int ZdoSettlementManualWork = "aoj_settlement_manual_work".GetStableHashCode();
         /// <summary>Wood (or other output) delivered by the totem's workers and the seconds they worked, measured live for the catch-up.</summary>
         internal static readonly int ZdoTotemOutput = "aoj_totem_output".GetStableHashCode();
         internal static readonly int ZdoTotemWorkTime = "aoj_totem_worktime".GetStableHashCode();

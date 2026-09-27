@@ -11,18 +11,47 @@ namespace AgeOfJarls.Settlement
     /// Where settlers put things away. Chests stay sorted: an item goes where the same item already lies, then where
     /// its kind lies (wood with wood, hides with hides), then into an empty chest; never into a chest that holds
     /// other things only. Chests that only hold the item or its kind win over mixed ones, the nearest over the rest.
+    /// A member can give a chest a kind ([Shift+E] on it, <see cref="ChestKinds"/>): it then takes that kind only, and
+    /// before any other chest but the Settlement Cauldron.
     /// </summary>
     internal static class SettlementStorage
     {
         private const string Module = "Storage";
 
-        private const int RankCauldron = -2;
-        private const int RankSameItem = 0;
-        private const int RankSameItemMixed = 1;
-        private const int RankSameKind = 2;
-        private const int RankSameKindMixed = 3;
-        private const int RankEmpty = 4;
+        private const int RankCauldron = 0;
+        private const int RankAssigned = 1;
+        private const int RankSameItem = 2;
+        private const int RankSameItemMixed = 3;
+        private const int RankSameKind = 4;
+        private const int RankSameKindMixed = 5;
+        private const int RankEmpty = 6;
         private const int RankNone = -1;
+
+        /// <summary>Kinds without a list in storage.json: told by the item type (see <see cref="KindOf"/>).</summary>
+        private static readonly string[] BuiltInKinds = { "food", "trophy", "consumable", "gear" };
+
+        /// <summary>The kinds a chest can be given, storage.json's first; "" = anything (sorted by what it holds).</summary>
+        internal static List<string> ChestKinds()
+        {
+            var kinds = new List<string>(DefsRegistry.Current.Storage.Kinds.Keys);
+            kinds.AddRange(BuiltInKinds.Where(k => !kinds.Contains(k)));
+            return kinds;
+        }
+
+        /// <summary>The kind a member gave this chest, or "" (sorted by what it holds).</summary>
+        internal static string AssignedKind(Container chest) =>
+            chest != null && chest.m_nview != null && chest.m_nview.IsValid() ? chest.m_nview.GetZDO().GetString(Keys.ZdoChestKind) : "";
+
+        /// <summary>"" -> the first kind -> ... -> the last kind -> "".</summary>
+        internal static string NextKind(string current)
+        {
+            List<string> kinds = ChestKinds();
+            int index = kinds.IndexOf(current ?? "");
+            return index + 1 < kinds.Count ? kinds[index + 1] : "";
+        }
+
+        /// <summary>Localization token of a chest kind ("" = anything).</summary>
+        internal static string KindToken(string kind) => string.IsNullOrEmpty(kind) ? "$aoj_kind_auto" : "$aoj_kind_" + kind;
 
         private static readonly List<Piece> s_pieces = new List<Piece>();
 
@@ -203,9 +232,11 @@ namespace AgeOfJarls.Settlement
                     continue;
                 }
                 Inventory contents = chest.GetInventory();
-                // Food goes to the Settlement Cauldron first; nothing else ever goes there.
-                int rank = IsCauldron(chest)
-                    ? (Settlers.Needs.IsFood(item) ? RankCauldron : RankNone)
+                // Food goes to the Settlement Cauldron first; nothing else ever goes there. A chest given a kind takes
+                // that kind only, before any sorted chest.
+                string assigned = AssignedKind(chest);
+                int rank = IsCauldron(chest) ? (Settlers.Needs.IsFood(item) ? RankCauldron : RankNone)
+                    : assigned.Length > 0 ? (assigned == kind ? RankAssigned : RankNone)
                     : Rank(contents, item, kind);
                 if (rank == RankNone || rank > bestRank || FreeSpace(contents, item) <= 0)
                 {
@@ -265,7 +296,7 @@ namespace AgeOfJarls.Settlement
         }
 
         // Same kind: an explicit group above, or the item type for things that need no list (trophies, food, gear).
-        private static string KindOf(ItemDrop.ItemData item)
+        internal static string KindOf(ItemDrop.ItemData item)
         {
             string prefab = item.m_dropPrefab != null ? item.m_dropPrefab.name : null;
             if (prefab != null && KindTable().TryGetValue(prefab, out string kind))

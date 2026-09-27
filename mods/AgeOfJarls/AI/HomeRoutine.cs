@@ -238,6 +238,7 @@ namespace AgeOfJarls.AI
 
             _bed = _settler.TryGetBed(_table, out Vector3 bedPosition) ? JarlTable.FindBedAt(bedPosition) : null;
             _anchor = _settler.HomeAnchor(_table);
+            AutoWork(data);
 
             SettlementStorage.CollectChests(_table.transform.position, _radius, _chests);
             _chests.RemoveAll(_avoided);
@@ -255,6 +256,49 @@ namespace AgeOfJarls.AI
             if (_avoidUntil.Count > MaxAvoided)
             {
                 _avoidUntil.Clear();
+            }
+        }
+
+        private const float AutoWorkSeconds = 10f;
+        private float _autoWorkTimer;
+
+        // A free civilian at home takes a free place at one of its settlement's totems, the highest priority first,
+        // then the emptiest, then the nearest - unless the settlement assigns work by hand. A totem with more workers
+        // than places (a member left, a tier setting changed) lets its newest ones go: every machine orders the
+        // workers by id alike, so exactly the extra ones leave.
+        private void AutoWork(SettlementData data)
+        {
+            _autoWorkTimer -= PlanSeconds;
+            if (_autoWorkTimer > 0f)
+            {
+                return;
+            }
+            _autoWorkTimer = AutoWorkSeconds;
+            WorkTotem current = _settler.JobTotem;
+            if (current != null)
+            {
+                List<Settler> workers = current.Workers();
+                int capacity = current.Capacity;
+                if (workers.Count > capacity && workers.OrderBy(w => w.Uid).Skip(capacity).Contains(_settler))
+                {
+                    _settler.TakeJob(0L);
+                }
+                return;
+            }
+            if (_settler.JobId != 0L || _settler.Role != CombatRole.None || _table.ManualWork)
+            {
+                return;
+            }
+            WorkTotem best = WorkTotem.Loaded
+                .Where(t => t != null && t.Id != 0L && t.Settlement == _table && JobInfo.IsUnlocked(t.Job, data.Tier) &&
+                            t.Workers().Count < t.Capacity)
+                .OrderByDescending(t => t.Priority)
+                .ThenBy(t => t.Workers().Count / (float)Mathf.Max(1, t.Capacity))
+                .ThenBy(t => Vector3.Distance(t.transform.position, _ai.transform.position))
+                .FirstOrDefault();
+            if (best != null)
+            {
+                _settler.TakeJob(best.Id);
             }
         }
 

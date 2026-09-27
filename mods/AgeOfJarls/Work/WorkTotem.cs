@@ -40,9 +40,26 @@ namespace AgeOfJarls.Work
         {
             Radius = 1,
             AllDay = 2,
+            Priority = 3,
+            Replant = 4,
         }
 
+        /// <summary>A woodcutter totem whose workers replant the trees they fell.</summary>
+        internal bool Replants => m_job == JobType.Woodcutter && _nview != null && _nview.IsValid() && _nview.GetZDO().GetBool(Keys.ZdoTotemReplant);
+
+        /// <summary>Which totems free settlers go to first when the settlement assigns work by itself.</summary>
+        internal const int LowPriority = 0;
+        internal const int NormalPriority = 1;
+        internal const int HighPriority = 2;
+
         internal JobType Job => m_job;
+
+        internal int Priority => _nview != null && _nview.IsValid()
+            ? Mathf.Clamp(_nview.GetZDO().GetInt(Keys.ZdoTotemPriority, NormalPriority), LowPriority, HighPriority)
+            : NormalPriority;
+
+        internal static string PriorityToken(int priority) =>
+            priority == HighPriority ? "$aoj_priority_high" : priority == LowPriority ? "$aoj_priority_low" : "$aoj_priority_normal";
 
         internal long Id => _nview != null && _nview.IsValid() ? _nview.GetZDO().GetLong(Keys.ZdoTotemId) : 0L;
 
@@ -148,6 +165,10 @@ namespace AgeOfJarls.Work
 
         internal void RequestAllDay(bool allDay) => Send(TotemAction.AllDay, p => p.Write(allDay));
 
+        internal void RequestPriority(int priority) => Send(TotemAction.Priority, p => p.Write(Mathf.Clamp(priority, LowPriority, HighPriority)));
+
+        internal void RequestReplant(bool replant) => Send(TotemAction.Replant, p => p.Write(replant));
+
         private void Send(TotemAction action, Action<ZPackage> write)
         {
             var package = new ZPackage();
@@ -195,6 +216,12 @@ namespace AgeOfJarls.Work
                     case TotemAction.AllDay:
                         zdo.Set(Keys.ZdoTotemAllDay, package.ReadBool());
                         break;
+                    case TotemAction.Priority:
+                        zdo.Set(Keys.ZdoTotemPriority, Mathf.Clamp(package.ReadInt(), LowPriority, HighPriority));
+                        break;
+                    case TotemAction.Replant:
+                        zdo.Set(Keys.ZdoTotemReplant, package.ReadBool());
+                        break;
                     default:
                         Log.Warning(Module, $"Unknown totem action {(int)action} from peer {sender}");
                         break;
@@ -220,7 +247,8 @@ namespace AgeOfJarls.Work
             text.Append("<b>$aoj_totem: ").Append(JobInfo.Token(m_job)).Append("</b>\n");
             text.Append("$aoj_workers: ").Append(workers.Count == 0 ? "-" : string.Join(", ", workers.Select(w => w.DisplayName)))
                 .Append($" ({workers.Count}/{Capacity})\n");
-            text.Append("$aoj_radius ").Append(Mathf.RoundToInt(Radius)).Append(" m · ").Append(AllDay ? "$aoj_hours_allday" : "$aoj_hours_day");
+            text.Append("$aoj_radius ").Append(Mathf.RoundToInt(Radius)).Append(" m · ").Append(AllDay ? "$aoj_hours_allday" : "$aoj_hours_day")
+                .Append(" · $aoj_priority: ").Append(PriorityToken(Priority));
             ToolKind tool = JobInfo.RequiredTool(m_job);
             if (tool != ToolKind.None)
             {

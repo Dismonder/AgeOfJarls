@@ -8,9 +8,27 @@ namespace AgeOfJarls.AI.Jobs
     /// Woodcutter: fells trees in the zone with its axe, chops the fallen logs and gathers the wood; the home routine
     /// carries the load to the sorted chests. Swings are real attacks with the axe in hand, so the game's own rules
     /// apply (tool tier against the tree, damage, effects, drops). Logs come before new trees, so nothing is left lying.
+    /// At a totem set to replant, every tree it fells is followed by a sapling of the same kind a few metres away,
+    /// from the seeds in the chests (pine cones, beech seeds...), so the forest grows back.
     /// </summary>
     internal sealed class WoodcutterJob : HarvestJob
     {
+        /// <summary>Logs and wood first: a felled tree is replanted a little later.</summary>
+        private const float PlantDelay = 20f;
+        private const float PlantReach = 2f;
+        private const float SpotDistance = 3f;
+        private const float SpotClearance = 1.2f;
+        private const int MaxQueued = 8;
+        private const int SeedBatch = 5;
+
+        private static Dictionary<string, (GameObject sapling, string seed)> s_saplings;
+        private static readonly Collider[] s_hits = new Collider[8];
+        private static int s_blockMask;
+
+        private readonly List<(Vector3 stump, GameObject sapling, string seed, float readyAt)> _toPlant =
+            new List<(Vector3, GameObject, string, float)>();
+        private Vector3? _spot;
+
         internal WoodcutterJob(JobContext context) : base(context)
         {
         }
@@ -20,6 +38,138 @@ namespace AgeOfJarls.AI.Jobs
         protected override ToolKind Tool => ToolKind.Axe;
 
         protected override string NothingToDo => "$aoj_problem_no_trees";
+
+        protected override void OnBroughtDown(string prefab, Vector3 position)
+        {
+            if (Totem != null && Totem.Replants && _toPlant.Count < MaxQueued && Saplings().TryGetValue(prefab, out (GameObject sapling, string seed) kind))
+            {
+                _toPlant.Add((position, kind.sapling, kind.seed, Time.time + PlantDelay));
+            }
+        }
+
+        protected override bool Work(float dt)
+        {
+            if (_toPlant.Count > 0 && Time.time >= _toPlant[0].readyAt && Totem.Replants && Plant(dt))
+            {
+                return true;
+            }
+            return base.Work(dt);
+        }
+
+        internal override void Stop()
+        {
+            _spot = null;
+            base.Stop();
+        }
+
+        private bool Plant(float dt)
+        {
+            (Vector3 stump, GameObject sapling, string seed, float readyAt) next = _toPlant[0];
+            Inventory bag = Body.GetInventory();
+            if (!bag.GetAllItems().Exists(i => PrefabName(i) == next.seed))
+            {
+                Step fetch = Fetch(dt, i => PrefabName(i) == next.seed, SeedBatch);
+                if (fetch == Step.Failed)
+                {
+                    // No seeds of this kind anywhere: the tree is not replanted.
+                    Problem("$aoj_problem_no_tree_seeds");
+                    Done();
+                    return false;
+                }
+                return true;
+            }
+            if (_spot == null)
+            {
+                _spot = FreeSpot(next.stump);
+                if (_spot == null)
+                {
+                    Done();
+                    return false;
+                }
+            }
+            Step walk = WalkTo(dt, _spot.Value, PlantReach);
+            if (walk != Step.Done)
+            {
+                if (walk == Step.Failed)
+                {
+                    Done();
+                }
+                return walk == Step.Busy;
+            }
+            Face(_spot.Value);
+            ItemDrop.ItemData seed = bag.GetAllItems().Find(i => PrefabName(i) == next.seed);
+            if (seed != null)
+            {
+                Object.Instantiate(next.sapling, _spot.Value, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
+                bag.RemoveItem(seed, 1);
+                Settler.FlushInventory();
+            }
+            Done();
+            return true;
+        }
+
+        private void Done()
+        {
+            _toPlant.RemoveAt(0);
+            _spot = null;
+        }
+
+        // A few metres from the stump, inside the zone, on dry ground with nothing solid in the way.
+        private Vector3? FreeSpot(Vector3 stump)
+        {
+            if (s_blockMask == 0)
+            {
+                s_blockMask = LayerMask.GetMask("Default", "static_solid", "Default_small", "piece", "piece_nonsolid");
+            }
+            float start = Random.Range(0f, 360f);
+            for (int i = 0; i < 8; i++)
+            {
+                Vector3 spot = stump + Quaternion.Euler(0f, start + i * 45f, 0f) * Vector3.forward * SpotDistance;
+                if (!InZone(spot) || ZoneSystem.instance == null)
+                {
+                    continue;
+                }
+                spot.y = ZoneSystem.instance.GetGroundHeight(spot);
+                if (spot.y < ZoneSystem.instance.m_waterLevel + 0.2f)
+                {
+                    continue;
+                }
+                if (Physics.OverlapSphereNonAlloc(spot + Vector3.up * (SpotClearance + 0.2f), SpotClearance, s_hits, s_blockMask) == 0)
+                {
+                    return spot;
+                }
+            }
+            return null;
+        }
+
+        // Grown tree prefab name -> (the sapling that grows into it, the seed it is planted from).
+        private static Dictionary<string, (GameObject sapling, string seed)> Saplings()
+        {
+            if (s_saplings != null || ZNetScene.instance == null)
+            {
+                return s_saplings ?? new Dictionary<string, (GameObject, string)>();
+            }
+            s_saplings = new Dictionary<string, (GameObject, string)>();
+            foreach (GameObject prefab in ZNetScene.instance.m_prefabs)
+            {
+                Plant plant = prefab != null ? prefab.GetComponent<Plant>() : null;
+                Piece piece = prefab != null ? prefab.GetComponent<Piece>() : null;
+                if (plant == null || piece == null || piece.m_resources == null || piece.m_resources.Length == 0 ||
+                    piece.m_resources[0].m_resItem == null)
+                {
+                    continue;
+                }
+                string seed = piece.m_resources[0].m_resItem.gameObject.name;
+                foreach (GameObject grown in plant.m_grownPrefabs)
+                {
+                    if (grown != null && grown.GetComponent<TreeBase>() != null && !s_saplings.ContainsKey(grown.name))
+                    {
+                        s_saplings[grown.name] = (prefab, seed);
+                    }
+                }
+            }
+            return s_saplings;
+        }
 
         protected override IEnumerable<Component> Candidates()
         {
@@ -112,6 +262,16 @@ namespace AgeOfJarls.AI.Jobs
         private float _swingTimer;
         private float _tripTimer;
 
+        // What the current target was, to tell when the swings brought it down (it is destroyed, not just released).
+        private string _targetPrefab;
+        private Vector3 _targetPosition;
+        private bool _struck;
+
+        /// <summary>The target this worker struck is gone: felled, broken or split.</summary>
+        protected virtual void OnBroughtDown(string prefab, Vector3 position)
+        {
+        }
+
         protected HarvestJob(JobContext context) : base(context)
         {
         }
@@ -153,6 +313,11 @@ namespace AgeOfJarls.AI.Jobs
 
             if (!IsWorkable(_target, tool))
             {
+                if (_target == null && _struck && _targetPrefab != null)
+                {
+                    // Unity's null: the object this worker was striking has been destroyed.
+                    OnBroughtDown(_targetPrefab, _targetPosition);
+                }
                 Release();
                 _scanTimer -= dt;
                 if (_scanTimer > 0f)
@@ -168,6 +333,8 @@ namespace AgeOfJarls.AI.Jobs
                     Problem(NothingToDo);
                     return false;
                 }
+                _targetPrefab = Utils.GetPrefabName(_target.gameObject);
+                _targetPosition = _target.transform.position;
                 Ctx.Mover.Reset();
             }
             Problem("");
@@ -195,6 +362,7 @@ namespace AgeOfJarls.AI.Jobs
             if (facing && _swingTimer <= 0f && !Body.InAttack() && Body.StartAttack(null, false))
             {
                 _swingTimer = BaseSwingSeconds / Mathf.Max(0.1f, Pace);
+                _struck = true;
             }
             return true;
         }
@@ -254,6 +422,9 @@ namespace AgeOfJarls.AI.Jobs
                 Reservations.Release(_target, Uid);
             }
             _target = null;
+            // Letting go of a target is not bringing it down.
+            _struck = false;
+            _targetPrefab = null;
         }
     }
 }

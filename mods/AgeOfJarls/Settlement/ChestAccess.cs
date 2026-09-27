@@ -20,6 +20,7 @@ namespace AgeOfJarls.Settlement
             if (view != null && view.GetZDO() != null && __instance.m_piece != null)
             {
                 view.Register(Keys.RpcChestRequest, sender => RPC_Request(__instance, sender));
+                view.Register<string>(Keys.RpcChestKind, (sender, kind) => ChestLabels.RPC_SetKind(__instance, sender, kind));
             }
         }
 

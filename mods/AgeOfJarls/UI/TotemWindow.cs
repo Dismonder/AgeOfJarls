@@ -30,6 +30,9 @@ namespace AgeOfJarls.UI
         private Text _title;
         private Text _info;
         private Text _hoursLabel;
+        private Text _priorityLabel;
+        private Text _replantLabel;
+        private GameObject _replantButton;
         private GameObject _controls;
 
         internal static void Open(WorkTotem totem)
@@ -62,10 +65,14 @@ namespace AgeOfJarls.UI
                 _workerNames[i] = Label(_workerRows[i].transform, new Vector2(-110f, y), 17, GUIManager.Instance.ValheimOrange, 330f, 36f, TextAnchor.MiddleLeft);
                 Button(_workerRows[i].transform, "$aoj_btn_release", new Vector2(190f, y), 150f, () => Release(index), RowButtonHeight);
             }
-            Button(controls, "$aoj_btn_assign", new Vector2(0f, -160f), 330f, Assign);
+            Button(controls, "$aoj_btn_assign", new Vector2(-200f, -160f), 200f, Assign);
+            _priorityLabel = Button(controls, "", new Vector2(8f, -160f), 196f, CyclePriority);
             Button(controls, "$aoj_radius_less", new Vector2(-165f, -208f), 150f, () => ChangeRadius(-RadiusStep), RowButtonHeight);
             Button(controls, "$aoj_radius_more", new Vector2(-5f, -208f), 150f, () => ChangeRadius(RadiusStep), RowButtonHeight);
             _hoursLabel = Button(controls, "", new Vector2(175f, -208f), 170f, ToggleHours, RowButtonHeight);
+            // Woodcutters only: replant felled trees, or clear the land for good.
+            _replantLabel = Button(controls, "", new Vector2(212f, -160f), 196f, ToggleReplant);
+            _replantButton = _replantLabel.GetComponentInParent<Button>().gameObject;
             Button(root, "$aoj_close", new Vector2(0f, -262f), 200f, Hide);
         }
 
@@ -114,6 +121,26 @@ namespace AgeOfJarls.UI
                 }
             }
             _hoursLabel.text = Localize(_totem.AllDay ? "$aoj_hours_allday" : "$aoj_hours_day");
+            _priorityLabel.text = Localize("$aoj_priority: " + WorkTotem.PriorityToken(_totem.Priority));
+            _replantButton.SetActive(_totem.Job == JobType.Woodcutter);
+            _replantLabel.text = Localize(_totem.Replants ? "$aoj_replant_on" : "$aoj_replant_off");
+        }
+
+        private void ToggleReplant()
+        {
+            if (_totem != null)
+            {
+                _totem.RequestReplant(!_totem.Replants);
+            }
+        }
+
+        // Low -> normal -> high -> low: free settlers go to higher priorities first.
+        private void CyclePriority()
+        {
+            if (_totem != null)
+            {
+                _totem.RequestPriority((_totem.Priority + 1) % (WorkTotem.HighPriority + 1));
+            }
         }
 
         private static string JobHint(JobType job) => "$aoj_job_hint_" + job.ToString().ToLowerInvariant();

@@ -291,6 +291,23 @@ namespace AgeOfJarls.Settlers
 
         internal void RequestSetJob(long totemId) => _nview.InvokeRPC(Keys.RpcSettlerSetJob, totemId);
 
+        /// <summary>
+        /// Owner only: the settlement's own assignment (a free place at a totem, or leaving one that has too many
+        /// workers), with no player behind it to check.
+        /// </summary>
+        internal void TakeJob(long totemId)
+        {
+            if (_nview == null || !_nview.IsValid() || !_nview.IsOwner() || JobId == totemId)
+            {
+                return;
+            }
+            ZDO zdo = _nview.GetZDO();
+            zdo.Set(Keys.ZdoSettlerJob, totemId);
+            zdo.Set(Keys.ZdoSettlerProblem, "");
+            Work.WorkTotem totem = Work.WorkTotem.FindById(totemId);
+            Log.Info(Module, totemId == 0L ? $"{DisplayName} leaves a full totem" : $"{DisplayName} takes up work as {totem?.Job.ToString() ?? "a worker"}");
+        }
+
         private void RPC_SetJob(long sender, long totemId)
         {
             if (!_nview.IsOwner())

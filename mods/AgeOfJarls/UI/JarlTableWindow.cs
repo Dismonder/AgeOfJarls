@@ -136,7 +136,9 @@ namespace AgeOfJarls.UI
             BuildMembers(members);
             BuildSettlers(settlers);
             BuildStorage(storage);
-            _work = Label(work, new Vector2(0f, -20f), 15, GUIManager.Instance.ValheimBeige, Width - 60f, 470f, TextAnchor.UpperLeft);
+            _work = Label(work, new Vector2(0f, 0f), 15, GUIManager.Instance.ValheimBeige, Width - 60f, 430f, TextAnchor.UpperLeft);
+            _workControls = Page(work, "WorkControls").gameObject;
+            _manualWorkLabel = Button(_workControls.transform, "", new Vector2(0f, -245f), 420f, ToggleManualWork, RowButtonHeight);
             BuildDefense(defense);
             _chronicle = Label(chronicle, new Vector2(0f, -20f), 15, GUIManager.Instance.ValheimBeige, Width - 60f, 470f, TextAnchor.UpperLeft);
             Button(root, "$aoj_close", new Vector2(0f, -300f), 200f, Hide);
@@ -145,6 +147,8 @@ namespace AgeOfJarls.UI
         }
 
         private Text _work;
+        private GameObject _workControls;
+        private Text _manualWorkLabel;
         private Text _defense;
         private Text _alarmLabel;
         private GameObject _defenseControls;
@@ -284,6 +288,8 @@ namespace AgeOfJarls.UI
                     break;
                 case 3:
                     _work.text = Localize(WorkText(data));
+                    _workControls.SetActive(May(SettlementRight.Manage));
+                    _manualWorkLabel.text = Localize(_table.ManualWork ? "$aoj_work_manual" : "$aoj_work_auto");
                     break;
                 case 4:
                     RefreshStorage(data);
@@ -640,11 +646,11 @@ namespace AgeOfJarls.UI
             {
                 text.Append("$aoj_work_none\n");
             }
-            foreach (Work.WorkTotem totem in totems.OrderBy(t => t.Job))
+            foreach (Work.WorkTotem totem in totems.OrderByDescending(t => t.Priority).ThenBy(t => t.Job))
             {
                 List<Settler> workers = totem.Workers();
                 int distance = Mathf.RoundToInt(Vector3.Distance(totem.transform.position, _table.transform.position));
-                text.Append($"<color=#e0c080>{Work.JobInfo.Token(totem.Job)}</color> ({distance} m, {workers.Count}/{totem.Capacity}): ");
+                text.Append($"<color=#e0c080>{Work.JobInfo.Token(totem.Job)}</color> ({distance} m, {workers.Count}/{totem.Capacity}, {Work.WorkTotem.PriorityToken(totem.Priority)}): ");
                 text.Append(workers.Count == 0 ? "-" : string.Join(", ", workers.Select(w => w.JobProblem.Length > 0 ? $"{w.DisplayName} <color=#ff9060>({w.JobProblem})</color>" : w.DisplayName)));
                 if (!Work.JobInfo.IsUnlocked(totem.Job, data.Tier))
                 {
@@ -655,7 +661,16 @@ namespace AgeOfJarls.UI
             List<Settler> idle = data.Settlers.Select(s => Settler.FindByUid(s.Uid)).Where(s => s != null && s.JobId == 0L && s.Role == Army.CombatRole.None).ToList();
             text.Append("\n<color=#e0c080>$aoj_unemployed</color>: ").Append(idle.Count == 0 ? "-" : string.Join(", ", idle.Select(s => s.DisplayName)));
             text.Append("\n\n<color=#b0b0b0>$aoj_work_hint</color>");
+            text.Append("\n<color=#b0b0b0>").Append(_table.ManualWork ? "$aoj_work_manual_hint" : "$aoj_work_auto_hint").Append("</color>");
             return text.ToString();
+        }
+
+        private void ToggleManualWork()
+        {
+            if (_table != null)
+            {
+                _table.RequestManualWork(!_table.ManualWork);
+            }
         }
 
         // ---------------------------------------------------------------- defense tab
@@ -729,12 +744,15 @@ namespace AgeOfJarls.UI
                       (contents.Count > 4 ? $" (+{contents.Count - 4})" : "");
                 int used = inventory.NrOfItems();
                 int size = used + inventory.GetEmptySlots();
-                lines.Append($"<color=#e0c080>{chest.m_name}</color> ({distance} m, {used}/{size}): {held}\n");
+                string assigned = SettlementStorage.AssignedKind(chest);
+                string kind = assigned.Length > 0 ? $" [{SettlementStorage.KindToken(assigned)}]" : "";
+                lines.Append($"<color=#e0c080>{chest.m_name}{kind}</color> ({distance} m, {used}/{size}): {held}\n");
             }
             if (_chests.Count > MaxChestLines)
             {
-                lines.Append($"... (+{_chests.Count - MaxChestLines})");
+                lines.Append($"... (+{_chests.Count - MaxChestLines})\n");
             }
+            lines.Append("\n<color=#b0b0b0>$aoj_storage_hint</color>");
 
             string sums = totals.Count == 0
                 ? "-"

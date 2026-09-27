@@ -21,6 +21,7 @@ namespace AgeOfJarls.Settlement
         SetAlarm = 7,
         Feast = 8,
         SetRank = 9,
+        SetManualWork = 10,
     }
 
     /// <summary>
@@ -98,6 +99,11 @@ namespace AgeOfJarls.Settlement
 
         /// <summary>Alarm: civilians take shelter, the troop mans its posts.</summary>
         internal bool AlarmOn => _nview != null && _nview.IsValid() && _nview.GetZDO().GetBool(Keys.ZdoSettlementAlarm);
+
+        /// <summary>Players assign all work themselves; otherwise free civilians take free places at the totems (by priority).</summary>
+        internal bool ManualWork => _nview != null && _nview.IsValid() && _nview.GetZDO().GetBool(Keys.ZdoSettlementManualWork);
+
+        internal void RequestManualWork(bool manual) => Send(SettlementAction.SetManualWork, p => p.Write(manual));
 
         /// <summary>Renown from won sieges.</summary>
         internal int Fame => _nview != null && _nview.IsValid() ? _nview.GetZDO().GetInt(Keys.ZdoSettlementFame) : 0;
@@ -901,6 +907,17 @@ namespace AgeOfJarls.Settlement
                     WorldClock.Set(_nview.GetZDO(), Keys.ZdoSettlementFeastUntil, WorldClock.Now + FeastDays * WorldClock.DayLength);
                     Chronicle.Add(_nview, "$aoj_chr_feast_by", actor);
                     Log.Info(Module, $"A feast in {DisplayName(data)}");
+                    return false;
+                }
+                case SettlementAction.SetManualWork:
+                {
+                    bool manual = package.ReadBool();
+                    if (!role.Allows(SettlementRight.Manage))
+                    {
+                        Log.Warning(Module, $"Peer {sender} tried to change how work is assigned without the rank for it");
+                        return false;
+                    }
+                    _nview.GetZDO().Set(Keys.ZdoSettlementManualWork, manual);
                     return false;
                 }
                 default:
