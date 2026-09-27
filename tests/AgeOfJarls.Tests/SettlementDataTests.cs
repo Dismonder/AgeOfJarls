@@ -138,6 +138,18 @@ namespace AgeOfJarls.Tests
             Assert.False(data.HasSettler(11));
         }
 
+        // The name arrives in a client's request and is shown to every player.
+        [Fact]
+        public void RosterNamesAreCleaned()
+        {
+            var data = new SettlementData();
+
+            Assert.True(data.TryAddSettler(11, "<color=red>$aoj_evil</color>", 3));
+
+            Assert.DoesNotContain("<", data.FindSettler(11).Name);
+            Assert.DoesNotContain("$", data.FindSettler(11).Name);
+        }
+
         private static void WriteMember(ZPackage package, long id, string name, int rank)
         {
             package.Write(id);
