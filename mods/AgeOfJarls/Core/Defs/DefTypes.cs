@@ -60,6 +60,8 @@ namespace AgeOfJarls.Core.Defs
         public int Tier;
         public List<string> Common = new List<string>();
         public string Elite = "";
+        /// <summary>From the second wave on, one of these comes along to break buildings instead of hunting players ("" = none).</summary>
+        public string SiegeUnit = "";
     }
 
     public sealed class RaidsDef

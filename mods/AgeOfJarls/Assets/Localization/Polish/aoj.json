@@ -247,7 +247,7 @@
   "aoj_msg_feast": "Uczta! Osadnicy będą weselsi przez dwa dni",
   "aoj_msg_feast_needs": "Na ucztę potrzeba 1 miodu pitnego i $1 porcji jedzenia w ekwipunku",
   "aoj_msg_freed": "$1 jest wolny i idzie za tobą - przyjmij go przy Stole Jarla",
-  "aoj_msg_guards_alive": "Strażnicy wciąż żyją ($1)",
+  "aoj_msg_guards_alive": "Strażnicy wciąż żyją ($1) - pokonaj ich albo rozbij kratę",
   "aoj_msg_no_free_settler": "Brak wolnego osadnika w tej osadzie",
   "aoj_msg_no_totems": "W osadzie nie ma totemów pracy",
   "aoj_msg_released": "$1 nie ma już pracy",
@@ -305,7 +305,7 @@
   "aoj_work_none": "Brak totemów - postaw Totem Drwala lub Tragarza (młotek, Różne)",
   "aoj_workers": "Pracownicy",
   "aoj_activity_recovering": "leczy się w łóżku (ranny)",
-  "aoj_chr_breaches": "Oblężenie zniszczyło budowle: $1 - napraw je (Budowniczy pomoże)",
+  "aoj_chr_breaches": "Oblężenie zniszczyło budowle: $1 - Budowniczowie odbudują je z materiałów w skrzyniach",
   "aoj_skills": "Umiejętności",
   "aoj_skill_combat": "Walka",
   "aoj_msg_fed": "$1 zjada: $2",
@@ -425,5 +425,8 @@
   "aoj_work_manual_hint": "Pracę przydzielacie sami: w oknie totemu (Przydziel) albo w oknie osadnika.",
   "aoj_replant_on": "Sadzi drzewa: tak",
   "aoj_replant_off": "Sadzi drzewa: nie",
-  "aoj_problem_no_tree_seeds": "brak nasion drzew w skrzyniach (szyszki, żołędzie, nasiona buka...)"
+  "aoj_problem_no_tree_seeds": "brak nasion drzew w skrzyniach (szyszki, żołędzie, nasiona buka...)",
+  "aoj_captive_how": "pokonaj strażników albo rozbij kratę",
+  "aoj_problem_no_materials": "brak materiałów w skrzyniach do odbudowy",
+  "aoj_breaches_waiting": "Zniszczone budowle do odbudowy: $1 (Budowniczowie wezmą materiały ze skrzyń)"
 }

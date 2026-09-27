@@ -9,10 +9,13 @@ namespace AgeOfJarls.Sieges
 {
     /// <summary>
     /// Sieges, run by the Jarl's Table owner. From tier 1, every few game days (configurable) a settlement with a player
-    /// at home may be besieged: 2-4 waves come from one direction, from beyond the settlement's edge, hunting players
-    /// and settlers. The attackers match the settlement's progress (Black Forest foes at tier 1, the swamp at tier 2 and
-    /// so on), the last wave brings an elite. Beating every wave earns fame, a day of high morale and a chronicle entry.
-    /// A settlement nobody is in is never besieged; if everyone leaves, the siege peters out.
+    /// at home may be besieged: 2-4 waves come from beyond the settlement's edge, hunting players and settlers - from
+    /// one direction, from two once "full sieges" are unlocked (tier 4), from three from tier 6. The attackers match the
+    /// settlement's progress (Black Forest foes at tier 1, the swamp at tier 2 and so on); from the second wave a siege
+    /// unit (a troll, an abomination...) comes along to break buildings, and the last wave brings an elite. Buildings
+    /// destroyed meanwhile are remembered for the Builders to put back (<see cref="Breaches"/>). Beating every wave
+    /// earns fame, a day of high morale and a chronicle entry. A settlement nobody is in is never besieged; if everyone
+    /// leaves, the siege peters out.
     /// </summary>
     internal static class SiegeDirector
     {
@@ -32,36 +35,31 @@ namespace AgeOfJarls.Sieges
             internal int LastWaveSize;
             internal float NextWaveAt;
             internal float EmptySince = -1f;
-            internal Vector3 Entry;
+            internal readonly List<Vector3> Entries = new List<Vector3>();
             internal readonly List<Character> Attackers = new List<Character>();
         }
 
         private static readonly Dictionary<long, Siege> s_active = new Dictionary<long, Siege>();
 
-        // Common attackers and the elite of the last wave, by the settlement's tier (i.e. the bosses beaten).
-        private static readonly (string[] common, string elite)[] Waves =
+        // Common attackers, the elite of the last wave and the siege unit, by the settlement's tier (the bosses beaten).
+        private static readonly (string[] common, string elite, string siegeUnit)[] Waves =
         {
-            (new[] { "Greyling", "Greydwarf" }, "Greydwarf_Elite"),
-            (new[] { "Greydwarf", "Greydwarf_Elite", "Greydwarf_Shaman" }, "Troll"),
-            (new[] { "Draugr", "Skeleton", "Draugr_Elite" }, "Abomination"),
-            (new[] { "Wolf", "Fenring", "Ulv" }, "StoneGolem"),
-            (new[] { "Goblin", "GoblinArcher", "GoblinShaman" }, "GoblinBrute"),
-            (new[] { "Seeker", "SeekerSoldier", "Dverger" }, "Gjall"),
-            (new[] { "Charred_Melee", "Charred_Archer", "Charred_Mage" }, "Morgen"),
-            (new[] { "Charred_Melee", "Charred_Archer", "Charred_Mage", "Asksvin" }, "Morgen"),
+            (new[] { "Greyling", "Greydwarf" }, "Greydwarf_Elite", ""),
+            (new[] { "Greydwarf", "Greydwarf_Elite", "Greydwarf_Shaman" }, "Troll", "Troll"),
+            (new[] { "Draugr", "Skeleton", "Draugr_Elite" }, "Abomination", "Abomination"),
+            (new[] { "Wolf", "Fenring", "Ulv" }, "StoneGolem", "StoneGolem"),
+            (new[] { "Goblin", "GoblinArcher", "GoblinShaman" }, "GoblinBrute", "GoblinBrute"),
+            (new[] { "Seeker", "SeekerSoldier", "Dverger" }, "Gjall", "SeekerBrute"),
+            (new[] { "Charred_Melee", "Charred_Archer", "Charred_Mage" }, "Morgen", "Morgen"),
+            (new[] { "Charred_Melee", "Charred_Archer", "Charred_Mage", "Asksvin" }, "Morgen", "Morgen"),
         };
 
         internal static bool IsBesieged(long settlementId) => s_active.ContainsKey(settlementId);
 
-        /// <summary>A building destroyed by a blow (on its owner): counted as a breach of a besieged settlement here.</summary>
-        internal static void RecordBreach(Vector3 position)
+        /// <summary>Table owner: a breach the table accepted (see JarlTable), counted for the chronicle.</summary>
+        internal static void CountBreach(long settlementId)
         {
-            if (s_active.Count == 0)
-            {
-                return;
-            }
-            JarlTable table = JarlTable.FindContaining(position);
-            if (table != null && s_active.TryGetValue(table.SettlementId, out Siege siege))
+            if (s_active.TryGetValue(settlementId, out Siege siege))
             {
                 siege.Breaches++;
             }
@@ -75,6 +73,8 @@ namespace AgeOfJarls.Sieges
             }
         }
 
+        // A building destroyed by a blow, on the machine that owns it (not always the table's): during a siege it is
+        // reported to the table, which remembers it for the Builders.
         [HarmonyLib.HarmonyPatch(typeof(WearNTear), "Destroy")]
         private static class BreachPatch
         {
@@ -82,9 +82,14 @@ namespace AgeOfJarls.Sieges
             private static void Prefix(WearNTear __instance, HitData hitData)
             {
                 // Deconstructing (no hit) is not a breach.
-                if (hitData != null && __instance != null)
+                if (hitData == null || __instance == null || __instance.GetComponent<Piece>() == null)
                 {
-                    RecordBreach(__instance.transform.position);
+                    return;
+                }
+                JarlTable table = JarlTable.FindContaining(__instance.transform.position);
+                if (table != null && table.UnderSiege)
+                {
+                    table.ReportBreach(Utils.GetPrefabName(__instance.gameObject), __instance.transform.position, __instance.transform.rotation);
                 }
             }
         }
@@ -101,6 +106,11 @@ namespace AgeOfJarls.Sieges
             {
                 Update(table, data, id, siege);
                 return;
+            }
+            if (table.UnderSiege)
+            {
+                // The siege ran on a machine that is gone (the table changed hands): it ends here.
+                table.SetUnderSiege(false);
             }
             if (!AoJConfig.Sieges.Value || data.Tier < 1)
             {
@@ -133,8 +143,9 @@ namespace AgeOfJarls.Sieges
             {
                 return false;
             }
-            Vector3? entry = FindEntry(table);
-            if (entry == null)
+            int directions = !JarlTable.HasUnlock(data, UnlockFullSieges) ? 1 : data.Tier >= 6 ? 3 : 2;
+            List<Vector3> entries = FindEntries(table, directions);
+            if (entries.Count == 0)
             {
                 Log.Warning(Module, $"No dry ground around {JarlTable.DisplayName(data)} to attack from");
                 return false;
@@ -146,16 +157,26 @@ namespace AgeOfJarls.Sieges
             {
                 WavesLeft = Mathf.Clamp(2 + data.Tier / 2, 2, 4),
                 Strength = Mathf.Max(2, Mathf.RoundToInt((2 + data.Tier + population / 5f) * AoJConfig.SiegeStrength.Value * defenders)),
-                Entry = entry.Value,
             };
+            siege.Entries.AddRange(entries);
             s_active[id] = siege;
+            table.SetUnderSiege(true);
             table.Mourn();
             Chronicle.Add(table.NetView, "$aoj_chr_siege");
             MessageHud.instance?.MessageAll(MessageHud.MessageType.Center, $"$aoj_msg_siege {JarlTable.DisplayName(data)}");
             Alarm.Set(table, true, manual: false);
-            Log.Info(Module, $"Siege of {JarlTable.DisplayName(data)}: {siege.WavesLeft} waves of about {siege.Strength}, from {siege.Entry:F0}");
+            Log.Info(Module, $"Siege of {JarlTable.DisplayName(data)}: {siege.WavesLeft} waves of about {siege.Strength}, from {entries.Count} side(s)");
             SpawnWave(table, data, id, siege);
             return true;
+        }
+
+        /// <summary>The unlock id (tiers.json) that brings attacks from several sides.</summary>
+        private const string UnlockFullSieges = "sieges";
+
+        private static void End(JarlTable table, long id)
+        {
+            s_active.Remove(id);
+            table.SetUnderSiege(false);
         }
 
         private static void Update(JarlTable table, SettlementData data, long id, Siege siege)
@@ -170,7 +191,7 @@ namespace AgeOfJarls.Sieges
                 }
                 if (Time.time - siege.EmptySince > AbandonSeconds)
                 {
-                    s_active.Remove(id);
+                    End(table, id);
                     Chronicle.Add(table.NetView, "$aoj_chr_siege_faded");
                     ReportBreaches(table, siege);
                     Log.Info(Module, $"Siege of {JarlTable.DisplayName(data)} petered out: nobody at home");
@@ -192,30 +213,41 @@ namespace AgeOfJarls.Sieges
         }
 
         // The line-up for the settlement's tier from raids.json (the highest entry not above the tier), else built in.
-        private static (string[] common, string elite) RosterFor(int tier)
+        private static (string[] common, string elite, string siegeUnit) RosterFor(int tier)
         {
             List<Core.Defs.SiegeWaveDef> waves = Core.Defs.DefsRegistry.Current.Raids.SiegeWaves;
             Core.Defs.SiegeWaveDef best = waves.LastOrDefault(w => w.Tier <= tier) ?? waves.FirstOrDefault();
             if (best != null)
             {
-                return (best.Common.ToArray(), best.Elite);
+                return (best.Common.ToArray(), best.Elite, best.SiegeUnit);
             }
             return Waves[Mathf.Clamp(tier - 1, 0, Waves.Length - 1)];
         }
 
         private static void SpawnWave(JarlTable table, SettlementData data, long id, Siege siege)
         {
-            (string[] common, string elite) roster = RosterFor(data.Tier);
+            (string[] common, string elite, string siegeUnit) roster = RosterFor(data.Tier);
             bool last = siege.WavesLeft == 1;
             int count = siege.Strength + siege.Wave;
             int spawned = 0;
             for (int i = 0; i < count; i++)
             {
                 string prefab = last && i == 0 && !string.IsNullOrEmpty(roster.elite) ? roster.elite : roster.common[Random.Range(0, roster.common.Length)];
-                Character attacker = Spawn(prefab, siege.Entry, id, table.transform.position);
+                // Round the sides: every direction gets its share.
+                Character attacker = Spawn(prefab, siege.Entries[i % siege.Entries.Count], id, table.transform.position, huntPlayers: true);
                 if (attacker != null)
                 {
                     siege.Attackers.Add(attacker);
+                    spawned++;
+                }
+            }
+            // From the second wave: a siege unit that goes for the buildings, not the people.
+            if (siege.Wave >= 1 && !string.IsNullOrEmpty(roster.siegeUnit))
+            {
+                Character breaker = Spawn(roster.siegeUnit, siege.Entries[Random.Range(0, siege.Entries.Count)], id, table.transform.position, huntPlayers: false);
+                if (breaker != null)
+                {
+                    siege.Attackers.Add(breaker);
                     spawned++;
                 }
             }
@@ -230,7 +262,7 @@ namespace AgeOfJarls.Sieges
             Log.Info(Module, $"Wave {siege.Wave}: {spawned} attackers");
         }
 
-        private static Character Spawn(string prefabName, Vector3 entry, long settlementId, Vector3 target)
+        private static Character Spawn(string prefabName, Vector3 entry, long settlementId, Vector3 target, bool huntPlayers)
         {
             GameObject prefab = ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(prefabName) : null;
             if (prefab == null)
@@ -248,7 +280,8 @@ namespace AgeOfJarls.Sieges
             BaseAI ai = spawned.GetComponent<BaseAI>();
             if (ai != null)
             {
-                ai.SetHuntPlayer(true);
+                // A siege unit left to itself goes for the nearest buildings (MonsterAI's static targets).
+                ai.SetHuntPlayer(huntPlayers);
                 ai.SetAlerted(true);
             }
             return spawned.GetComponent<Character>();
@@ -260,7 +293,7 @@ namespace AgeOfJarls.Sieges
             {
                 ReportBreaches(table, siege);
             }
-            s_active.Remove(id);
+            End(table, id);
             ZDO zdo = table.NetView.GetZDO();
             int fame = data.Tier + 1;
             zdo.Set(Keys.ZdoSettlementFame, zdo.GetInt(Keys.ZdoSettlementFame) + fame);
@@ -283,21 +316,28 @@ namespace AgeOfJarls.Sieges
         internal static int PlayersAtHome(JarlTable table) =>
             Player.GetAllPlayers().Count(p => p != null && !p.IsDead() && Utils.DistanceXZ(p.transform.position, table.transform.position) <= table.Radius);
 
-        // A dry spot beyond the settlement's edge in a random direction.
-        private static Vector3? FindEntry(JarlTable table)
+        // Dry spots beyond the settlement's edge, spread around it (one per side, fewer if the land is mostly water).
+        private static List<Vector3> FindEntries(JarlTable table, int count)
         {
+            var entries = new List<Vector3>();
             float distance = table.Radius + EntryMargin;
             float water = ZoneSystem.instance.m_waterLevel;
-            for (int attempt = 0; attempt < 16; attempt++)
+            float start = Random.Range(0f, 360f);
+            for (int side = 0; side < count; side++)
             {
-                Vector3 point = table.transform.position + Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * distance;
-                if (ZoneSystem.instance.GetGroundHeight(point, out float height) && height > water + 1f)
+                for (int attempt = 0; attempt < 8; attempt++)
                 {
-                    point.y = height;
-                    return point;
+                    float angle = start + side * 360f / count + Random.Range(-30f, 30f);
+                    Vector3 point = table.transform.position + Quaternion.Euler(0f, angle, 0f) * Vector3.forward * distance;
+                    if (ZoneSystem.instance.GetGroundHeight(point, out float height) && height > water + 1f)
+                    {
+                        point.y = height;
+                        entries.Add(point);
+                        break;
+                    }
                 }
             }
-            return null;
+            return entries;
         }
     }
 }

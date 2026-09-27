@@ -11,8 +11,9 @@ namespace AgeOfJarls.Recruitment
     /// <summary>
     /// Captives in enemy camps. When a vanilla location loads (the same moment for new and long-explored worlds), its
     /// owner decides once - saved in the location's ZDO - whether a camp from the configured list holds a captive
-    /// settler. The captive is tied up among a couple of fresh guards from the biome, so freeing it always takes a
-    /// fight: with no guard alive nearby, [E] frees it and it follows its rescuer home.
+    /// settler. The captive is tied up behind bars (<see cref="CaptiveCage"/>) among a couple of fresh guards from the
+    /// biome, so freeing it always takes a fight: with no guard alive nearby, or with the bars broken, [E] frees it and
+    /// it follows its rescuer home.
     /// </summary>
     [HarmonyPatch(typeof(LocationProxy), "SpawnLocation")]
     internal static class CaptiveCamps
@@ -67,9 +68,11 @@ namespace AgeOfJarls.Recruitment
             }
             Vector3 spot = Ground(center + new Vector3(Random.Range(-2f, 2f), 0f, Random.Range(-2f, 2f)));
             GameObject captive = UnityEngine.Object.Instantiate(settlerPrefab, spot, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
-            captive.GetComponent<Settler>()?.MakeCaptive();
+            Heightmap.Biome biome = WorldGenerator.instance != null ? WorldGenerator.instance.GetBiome(center) : Heightmap.Biome.Meadows;
+            // Only a captive that really has bars can be freed by breaking them.
+            captive.GetComponent<Settler>()?.MakeCaptive(caged: CaptiveCage.Place(spot, biome));
 
-            string[] guards = GuardsFor(WorldGenerator.instance != null ? WorldGenerator.instance.GetBiome(center) : Heightmap.Biome.Meadows);
+            string[] guards = GuardsFor(biome);
             for (int i = 0; i < Guards; i++)
             {
                 GameObject guard = ZNetScene.instance.GetPrefab(guards[i % guards.Length]);

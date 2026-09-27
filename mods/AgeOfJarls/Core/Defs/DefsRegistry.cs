@@ -19,7 +19,7 @@ namespace AgeOfJarls.Core.Defs
     internal static class DefsRegistry
     {
         /// <summary>Bump when the wire format produced by <see cref="Serialize"/> changes.</summary>
-        internal const int ProtocolVersion = 3;
+        internal const int ProtocolVersion = 4;
 
         private const string Module = "Defs";
         private const string TraitsFile = "traits.json";

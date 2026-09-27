@@ -678,7 +678,7 @@ namespace AgeOfJarls.UI
         private void RefreshDefense(SettlementData data)
         {
             var text = new StringBuilder();
-            bool besieged = Sieges.SiegeDirector.IsBesieged(_table.SettlementId);
+            bool besieged = _table.UnderSiege;
             text.Append("$aoj_alarm: ").Append(_table.AlarmOn ? "<color=#ff6040>$aoj_alarm_on</color>" : "$aoj_alarm_off");
             text.Append("  ·  $aoj_fame: ").Append(_table.Fame);
             if (besieged)
@@ -701,6 +701,11 @@ namespace AgeOfJarls.UI
                 string.Join(", ", banners.Select(b => $"{Army.WarBanner.KindToken(b.Kind)} {b.Posted().Count}/{b.Places}")));
             int armories = Army.Armory.Loaded.Count(a => a != null && Vector3.Distance(a.transform.position, _table.transform.position) <= JarlTable.RadiusOf(data));
             text.Append("\n$aoj_armories: ").Append(armories);
+            int breaches = _table.BreachList.Count;
+            if (breaches > 0)
+            {
+                text.Append("\n<color=#ff9060>").Append(Localize("$aoj_breaches_waiting", breaches.ToString())).Append("</color>");
+            }
             text.Append("\n\n<color=#b0b0b0>$aoj_defense_hint</color>");
             _defense.text = Localize(text.ToString());
             _defenseControls.SetActive(May(SettlementRight.Military));

@@ -22,6 +22,10 @@ namespace AgeOfJarls.Settlement
         Feast = 8,
         SetRank = 9,
         SetManualWork = 10,
+        /// <summary>A building a siege destroyed (from the machine that owned it).</summary>
+        Breach = 11,
+        /// <summary>A Builder put a destroyed building back.</summary>
+        Rebuilt = 12,
     }
 
     /// <summary>
@@ -102,6 +106,31 @@ namespace AgeOfJarls.Settlement
 
         /// <summary>Players assign all work themselves; otherwise free civilians take free places at the totems (by priority).</summary>
         internal bool ManualWork => _nview != null && _nview.IsValid() && _nview.GetZDO().GetBool(Keys.ZdoSettlementManualWork);
+
+        /// <summary>A siege is on (readable on every machine; the siege itself runs on the table's owner).</summary>
+        internal bool UnderSiege => _nview != null && _nview.IsValid() && _nview.GetZDO().GetBool(Keys.ZdoSettlementBesieged);
+
+        /// <summary>Owner only (Sieges.SiegeDirector).</summary>
+        internal void SetUnderSiege(bool on)
+        {
+            if (_nview != null && _nview.IsValid() && _nview.IsOwner() && UnderSiege != on)
+            {
+                _nview.GetZDO().Set(Keys.ZdoSettlementBesieged, on);
+            }
+        }
+
+        /// <summary>Destroyed buildings waiting for the Builders.</summary>
+        internal List<Breaches.Entry> BreachList => _nview != null && _nview.IsValid() ? Breaches.Read(_nview.GetZDO()) : new List<Breaches.Entry>();
+
+        internal void ReportBreach(string prefab, Vector3 position, Quaternion rotation) =>
+            Send(SettlementAction.Breach, p =>
+            {
+                p.Write(prefab ?? "");
+                p.Write(position);
+                p.Write(rotation);
+            });
+
+        internal void ReportRebuilt(Vector3 position) => Send(SettlementAction.Rebuilt, p => p.Write(position));
 
         internal void RequestManualWork(bool manual) => Send(SettlementAction.SetManualWork, p => p.Write(manual));
 
@@ -918,6 +947,36 @@ namespace AgeOfJarls.Settlement
                         return false;
                     }
                     _nview.GetZDO().Set(Keys.ZdoSettlementManualWork, manual);
+                    return false;
+                }
+                case SettlementAction.Breach:
+                {
+                    // Any machine reports what it saw destroyed; the table takes only a real building, inside the
+                    // settlement, while a siege is on - so a made-up report costs at most some Builder materials.
+                    string prefab = package.ReadString();
+                    Vector3 position = package.ReadVector3();
+                    Quaternion rotation = package.ReadQuaternion();
+                    if (!UnderSiege || Utils.DistanceXZ(position, transform.position) > Radius || !Breaches.IsRebuildable(prefab))
+                    {
+                        return false;
+                    }
+                    List<Breaches.Entry> entries = Breaches.Read(_nview.GetZDO());
+                    if (!entries.Exists(e => (e.Position - position).sqrMagnitude <= Breaches.SameSpot * Breaches.SameSpot))
+                    {
+                        entries.Add(new Breaches.Entry { Prefab = prefab, Position = position, Rotation = rotation });
+                        Breaches.Write(_nview.GetZDO(), entries);
+                        Sieges.SiegeDirector.CountBreach(SettlementId);
+                    }
+                    return false;
+                }
+                case SettlementAction.Rebuilt:
+                {
+                    Vector3 position = package.ReadVector3();
+                    List<Breaches.Entry> entries = Breaches.Read(_nview.GetZDO());
+                    if (entries.RemoveAll(e => (e.Position - position).sqrMagnitude <= Breaches.SameSpot * Breaches.SameSpot) > 0)
+                    {
+                        Breaches.Write(_nview.GetZDO(), entries);
+                    }
                     return false;
                 }
                 default:

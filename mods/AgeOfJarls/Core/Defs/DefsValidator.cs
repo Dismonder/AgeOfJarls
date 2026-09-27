@@ -158,6 +158,7 @@ namespace AgeOfJarls.Core.Defs
                 {
                     w.Common = (w.Common ?? new List<string>()).Select(c => c?.Trim()).Where(c => !string.IsNullOrEmpty(c)).ToList();
                     w.Elite = w.Elite?.Trim() ?? "";
+                w.SiegeUnit = w.SiegeUnit?.Trim() ?? "";
                     return w;
                 })
                 .Where(w => w.Common.Count > 0)

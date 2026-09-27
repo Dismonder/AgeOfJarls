@@ -1,12 +1,12 @@
 {
   "siegeWaves": [
-    { "tier": 1, "common": [ "Greyling", "Greydwarf" ], "elite": "Greydwarf_Elite" },
-    { "tier": 2, "common": [ "Greydwarf", "Greydwarf_Elite", "Greydwarf_Shaman" ], "elite": "Troll" },
-    { "tier": 3, "common": [ "Draugr", "Skeleton", "Draugr_Elite" ], "elite": "Abomination" },
-    { "tier": 4, "common": [ "Wolf", "Fenring", "Ulv" ], "elite": "StoneGolem" },
-    { "tier": 5, "common": [ "Goblin", "GoblinArcher", "GoblinShaman" ], "elite": "GoblinBrute" },
-    { "tier": 6, "common": [ "Seeker", "SeekerSoldier", "Dverger" ], "elite": "Gjall" },
-    { "tier": 7, "common": [ "Charred_Melee", "Charred_Archer", "Charred_Mage", "Asksvin" ], "elite": "Morgen" }
+    { "tier": 1, "common": [ "Greyling", "Greydwarf" ], "elite": "Greydwarf_Elite", "siegeUnit": "" },
+    { "tier": 2, "common": [ "Greydwarf", "Greydwarf_Elite", "Greydwarf_Shaman" ], "elite": "Troll", "siegeUnit": "Troll" },
+    { "tier": 3, "common": [ "Draugr", "Skeleton", "Draugr_Elite" ], "elite": "Abomination", "siegeUnit": "Abomination" },
+    { "tier": 4, "common": [ "Wolf", "Fenring", "Ulv" ], "elite": "StoneGolem", "siegeUnit": "StoneGolem" },
+    { "tier": 5, "common": [ "Goblin", "GoblinArcher", "GoblinShaman" ], "elite": "GoblinBrute", "siegeUnit": "GoblinBrute" },
+    { "tier": 6, "common": [ "Seeker", "SeekerSoldier", "Dverger" ], "elite": "Gjall", "siegeUnit": "SeekerBrute" },
+    { "tier": 7, "common": [ "Charred_Melee", "Charred_Archer", "Charred_Mage", "Asksvin" ], "elite": "Morgen", "siegeUnit": "Morgen" }
   ],
   "campGuards": {
     "Meadows": [ "Greyling", "Greydwarf" ],

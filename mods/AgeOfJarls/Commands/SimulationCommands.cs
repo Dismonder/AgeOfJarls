@@ -104,7 +104,8 @@ namespace AgeOfJarls.Commands
                 return;
             }
             Vector3 spot = me.transform.position + me.transform.forward * 8f + Vector3.up;
-            Object.Instantiate(prefab, spot, Quaternion.identity).GetComponent<Settler>()?.MakeCaptive();
+            GameObject captive = Object.Instantiate(prefab, spot, Quaternion.identity);
+            captive.GetComponent<Settler>()?.MakeCaptive(caged: Recruitment.CaptiveCage.Place(spot, Heightmap.Biome.Meadows));
             foreach (string guard in new[] { "Greydwarf", "Greydwarf" })
             {
                 GameObject guardPrefab = ZNetScene.instance.GetPrefab(guard);
@@ -113,7 +114,7 @@ namespace AgeOfJarls.Commands
                     Object.Instantiate(guardPrefab, spot + Random.insideUnitSphere * 4f + Vector3.up, Quaternion.identity);
                 }
             }
-            context.AddString("A captive waits 8 m ahead, guarded. Beat the guards, then press [E] on it.");
+            context.AddString("A captive waits 8 m ahead behind bars, guarded. Beat the guards or break the bars, then press [E] on it.");
         }
     }
 
@@ -147,7 +148,7 @@ namespace AgeOfJarls.Commands
             {
                 return;
             }
-            context.AddString($"{JarlTable.DisplayName(data)}: tier {data.Tier}, {data.Settlers.Count} settler(s), alarm {(table.AlarmOn ? "ON" : "off")}, fame {table.Fame}, besieged {Sieges.SiegeDirector.IsBesieged(table.SettlementId)}");
+            context.AddString($"{JarlTable.DisplayName(data)}: tier {data.Tier}, {data.Settlers.Count} settler(s), alarm {(table.AlarmOn ? "ON" : "off")}, fame {table.Fame}, besieged {table.UnderSiege}, breaches {table.BreachList.Count}");
             foreach (WorkTotem totem in WorkTotem.Loaded.Where(t => t != null && t.Settlement == table))
             {
                 context.AddString($"  totem {totem.Job}: {string.Join(", ", totem.Workers().Select(w => w.DisplayName))} ({totem.Workers().Count}/{totem.Capacity}), radius {totem.Radius:0} m");

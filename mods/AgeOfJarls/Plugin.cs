@@ -30,6 +30,7 @@ namespace AgeOfJarls
             SettlerPrefab.Register();
             JarlTablePiece.Register();
             SettlementPieces.Register();
+            Recruitment.CaptiveCage.Register();
             ConsoleCommands.Register();
             UI.CommandWheel.RegisterKey();
 

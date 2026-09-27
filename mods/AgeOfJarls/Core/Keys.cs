@@ -91,6 +91,10 @@ namespace AgeOfJarls.Core
         /// <summary>World time until which a recent loss or attack weighs on everyone's morale.</summary>
         internal static readonly int ZdoSettlementGriefUntil = "aoj_settlement_grief".GetStableHashCode();
         internal static readonly int ZdoSettlementFame = "aoj_settlement_fame".GetStableHashCode();
+        /// <summary>Settlement: a siege is on (every machine reports destroyed buildings to the table meanwhile).</summary>
+        internal static readonly int ZdoSettlementBesieged = "aoj_settlement_besieged".GetStableHashCode();
+        /// <summary>Settlement: buildings a siege destroyed, for the Builders (see Settlement.Breaches).</summary>
+        internal static readonly int ZdoSettlementBreaches = "aoj_settlement_breaches".GetStableHashCode();
         internal static readonly int ZdoSettlementNextSiege = "aoj_settlement_next_siege".GetStableHashCode();
 
         /// <summary>War banner: stable id, kind and post size.</summary>
@@ -101,6 +105,8 @@ namespace AgeOfJarls.Core
         internal static readonly int ZdoCampDecided = "aoj_camp".GetStableHashCode();
         /// <summary>Settler: a captive waiting to be freed (true until a player frees it).</summary>
         internal static readonly int ZdoSettlerCaptive = "aoj_settler_captive".GetStableHashCode();
+        /// <summary>Settler: the captive was locked behind bars (breaking them frees it too).</summary>
+        internal static readonly int ZdoSettlerCaged = "aoj_settler_caged".GetStableHashCode();
         /// <summary>Settler: sitting down (idle at home); every machine plays the sitting pose from it.</summary>
         internal static readonly int ZdoSettlerSitting = "aoj_settler_sitting".GetStableHashCode();
         /// <summary>Settler: world time until which it lies knocked out (see Settlers.SettlerCharacter.KnockOut).</summary>

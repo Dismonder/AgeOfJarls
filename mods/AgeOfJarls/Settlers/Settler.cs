@@ -226,8 +226,8 @@ namespace AgeOfJarls.Settlers
             }
         }
 
-        /// <summary>Owner only: turns a freshly spawned settler into a captive.</summary>
-        internal void MakeCaptive()
+        /// <summary>Owner only: turns a freshly spawned settler into a captive (<paramref name="caged"/>: locked behind bars).</summary>
+        internal void MakeCaptive(bool caged = false)
         {
             if (_nview == null || !_nview.IsValid() || !_nview.IsOwner())
             {
@@ -235,6 +235,7 @@ namespace AgeOfJarls.Settlers
             }
             ZDO zdo = _nview.GetZDO();
             zdo.Set(Keys.ZdoSettlerCaptive, true);
+            zdo.Set(Keys.ZdoSettlerCaged, caged);
             zdo.Set(Keys.ZdoSettlerFollow, 0L);
             zdo.Set(Keys.ZdoSettlerHold, true);
             if (_ai != null)
@@ -246,7 +247,14 @@ namespace AgeOfJarls.Settlers
 
         internal void RequestFree(Player player) => _nview.InvokeRPC(Keys.RpcSettlerFree, player.GetPlayerID());
 
-        // Guards alive nearby keep the captive locked in; freed, it follows its rescuer.
+        /// <summary>A captive once locked behind bars that are gone now (broken by a player).</summary>
+        internal bool CageBroken =>
+            _nview != null && _nview.IsValid() && _nview.GetZDO().GetBool(Keys.ZdoSettlerCaged) && !Recruitment.CaptiveCage.AnyNear(transform.position);
+
+        /// <summary>Nothing keeps the captive in any more: no guard alive nearby, or its bars broken.</summary>
+        internal bool CanBeFreed => IsCaptive && (GuardsNearby() == 0 || CageBroken);
+
+        // Guards alive nearby (and unbroken bars) keep the captive locked in; freed, it follows its rescuer.
         private void RPC_Free(long sender, long playerId)
         {
             if (!_nview.IsOwner())
@@ -255,7 +263,7 @@ namespace AgeOfJarls.Settlers
                 return;
             }
             Player player = Player.GetPlayer(playerId);
-            if (!IsCaptive || player == null || GuardsNearby() > 0)
+            if (player == null || !CanBeFreed)
             {
                 return;
             }
@@ -861,7 +869,7 @@ namespace AgeOfJarls.Settlers
             if (IsCaptive)
             {
                 int guards = GuardsNearby();
-                if (guards > 0)
+                if (!CanBeFreed)
                 {
                     player.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_guards_alive", guards.ToString()));
                 }
@@ -1313,7 +1321,7 @@ namespace AgeOfJarls.Settlers
 
             if (IsCaptive)
             {
-                return Localize($"{DisplayName}\n<color=#b0b0b0>$aoj_captive · {_traitsText}</color>\n" +
+                return Localize($"{DisplayName}\n<color=#b0b0b0>$aoj_captive · {_traitsText}\n$aoj_captive_how</color>\n" +
                                 "[<color=yellow><b>$KEY_Use</b></color>] $aoj_free_captive");
             }
 

@@ -100,17 +100,28 @@ namespace AgeOfJarls.AI.Jobs
         }
     }
 
-    /// <summary>Builder: repairs damaged buildings in its zone (the vanilla repair, as with a hammer). Needs a hammer.</summary>
+    /// <summary>
+    /// Builder: repairs damaged buildings in its zone (the vanilla repair, as with a hammer), then puts back what a siege
+    /// destroyed (<see cref="Settlement.Breaches"/>) - the lowest first, so floors stand before the walls on them - with
+    /// the materials of each piece's recipe from the settlement's chests. Needs a hammer.
+    /// </summary>
     internal sealed class BuilderJob : JobBase
     {
         private const float RepairSeconds = 2f;
         private const float Reach = 2.8f;
         private const float ScanSeconds = 4f;
+        private const float RebuildRetrySeconds = 60f;
+
+        // Spots a builder on this machine is working on: two never carry materials to the same spot.
+        private static readonly HashSet<long> s_claimed = new HashSet<long>();
+        private static readonly List<Piece> s_pieces = new List<Piece>();
 
         private WearNTear _target;
         private float _timer;
         private float _scanTimer;
         private Collider[] _colliders = new Collider[0];
+        private Settlement.Breaches.Entry? _rebuild;
+        private float _rebuildScanAt;
 
         internal BuilderJob(JobContext context) : base(context)
         {
@@ -118,7 +129,7 @@ namespace AgeOfJarls.AI.Jobs
 
         internal override JobType Job => JobType.Builder;
 
-        internal override string DebugTarget => Describe(_target);
+        internal override string DebugTarget => _rebuild != null ? $"rebuild {_rebuild.Value.Prefab}" : Describe(_target);
 
         protected override bool Work(float dt)
         {
@@ -126,6 +137,16 @@ namespace AgeOfJarls.AI.Jobs
             {
                 return false;
             }
+            // Damage first, unless a rebuild is under way; then what a siege destroyed.
+            if (_rebuild == null && Repair(dt))
+            {
+                return true;
+            }
+            return Rebuild(dt);
+        }
+
+        private bool Repair(float dt)
+        {
             if (_target == null || _target.GetHealthPercentage() >= 0.999f || !Reservations.IsFree(_target, Uid))
             {
                 _scanTimer -= dt;
@@ -169,6 +190,127 @@ namespace AgeOfJarls.AI.Jobs
             return true;
         }
 
+        private bool Rebuild(float dt)
+        {
+            Settlement.JarlTable table = Totem.Settlement;
+            if (table == null)
+            {
+                return false;
+            }
+            if (_rebuild == null)
+            {
+                if (Time.time < _rebuildScanAt)
+                {
+                    return false;
+                }
+                _rebuildScanAt = Time.time + ScanSeconds;
+                foreach (Settlement.Breaches.Entry entry in table.BreachList.OrderBy(e => e.Position.y))
+                {
+                    if (InZone(entry.Position) && s_claimed.Add(SpotKey(entry.Position)))
+                    {
+                        _rebuild = entry;
+                        break;
+                    }
+                }
+                if (_rebuild == null)
+                {
+                    return false;
+                }
+            }
+
+            Settlement.Breaches.Entry spot = _rebuild.Value;
+            GameObject prefab = ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(spot.Prefab) : null;
+            Piece recipe = prefab != null ? prefab.GetComponent<Piece>() : null;
+            if (recipe == null)
+            {
+                table.ReportRebuilt(spot.Position);
+                ForgetRebuild();
+                return false;
+            }
+            Inventory bag = Body.GetInventory();
+            foreach (Piece.Requirement need in recipe.m_resources)
+            {
+                if (need.m_resItem == null || need.m_amount <= 0)
+                {
+                    continue;
+                }
+                string item = need.m_resItem.gameObject.name;
+                int have = bag.GetAllItems().Where(i => PrefabName(i) == item).Sum(i => i.m_stack);
+                if (have >= need.m_amount)
+                {
+                    continue;
+                }
+                Step fetch = Fetch(dt, i => PrefabName(i) == item, need.m_amount - have);
+                if (fetch == Step.Failed)
+                {
+                    Problem("$aoj_problem_no_materials");
+                    ForgetRebuild();
+                    _rebuildScanAt = Time.time + RebuildRetrySeconds;
+                    return false;
+                }
+                return true;
+            }
+
+            Step walk = WalkTo(dt, spot.Position, Reach);
+            if (walk != Step.Done)
+            {
+                if (walk == Step.Failed)
+                {
+                    ForgetRebuild();
+                    _rebuildScanAt = Time.time + RebuildRetrySeconds;
+                }
+                return walk == Step.Busy;
+            }
+            Face(spot.Position);
+            if (!AlreadyStands(spot))
+            {
+                GameObject built = Object.Instantiate(prefab, spot.Position, spot.Rotation);
+                long jarl = table.Data?.Jarl?.PlayerId ?? 0L;
+                if (jarl != 0L)
+                {
+                    // Like the players' own buildings: the Jarl can take it down again. The platform id only names the
+                    // creator from the world's player history, which a settler is not in.
+                    built.GetComponent<Piece>()?.SetCreator(jarl, default);
+                }
+                recipe.m_placeEffect.Create(spot.Position, spot.Rotation, built.transform);
+                foreach (Piece.Requirement need in recipe.m_resources)
+                {
+                    if (need.m_resItem != null && need.m_amount > 0)
+                    {
+                        bag.RemoveItem(need.m_resItem.m_itemData.m_shared.m_name, need.m_amount);
+                    }
+                }
+                Settler.FlushInventory();
+                Produced(1);
+            }
+            table.ReportRebuilt(spot.Position);
+            ForgetRebuild();
+            Problem("");
+            return true;
+        }
+
+        // A player may have put it back already.
+        private static bool AlreadyStands(Settlement.Breaches.Entry spot)
+        {
+            s_pieces.Clear();
+            Piece.GetAllPiecesInRadius(spot.Position, Settlement.Breaches.SameSpot, s_pieces);
+            bool found = s_pieces.Exists(p => p != null && Utils.GetPrefabName(p.gameObject) == spot.Prefab);
+            s_pieces.Clear();
+            return found;
+        }
+
+        private static long SpotKey(Vector3 position) =>
+            ((long)Mathf.Round(position.x * 4f) * 73856093L) ^ ((long)Mathf.Round(position.y * 4f) * 19349663L) ^ ((long)Mathf.Round(position.z * 4f) * 83492791L);
+
+        private void ForgetRebuild()
+        {
+            if (_rebuild != null)
+            {
+                s_claimed.Remove(SpotKey(_rebuild.Value.Position));
+            }
+            _rebuild = null;
+        }
+
         internal override void Stop()
         {
             if (_target != null)
@@ -176,6 +318,7 @@ namespace AgeOfJarls.AI.Jobs
                 Reservations.Release(_target, Uid);
             }
             _target = null;
+            ForgetRebuild();
             base.Stop();
         }
 

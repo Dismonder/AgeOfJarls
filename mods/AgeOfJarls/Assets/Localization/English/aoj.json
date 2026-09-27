@@ -247,7 +247,7 @@
   "aoj_msg_feast": "A feast! Settlers will be merrier for two days",
   "aoj_msg_feast_needs": "A feast needs 1 mead and $1 portions of food in your inventory",
   "aoj_msg_freed": "$1 is free and follows you - accept them at the Jarl's Table",
-  "aoj_msg_guards_alive": "The guards are still alive ($1)",
+  "aoj_msg_guards_alive": "The guards are still alive ($1) - beat them or break the bars",
   "aoj_msg_no_free_settler": "No free settler in this settlement",
   "aoj_msg_no_totems": "The settlement has no Work Totems",
   "aoj_msg_released": "$1 has no job now",
@@ -305,7 +305,7 @@
   "aoj_work_none": "No totems - build a Woodcutter's or Hauler's Totem (hammer, Misc)",
   "aoj_workers": "Workers",
   "aoj_activity_recovering": "healing in bed (wounded)",
-  "aoj_chr_breaches": "The siege destroyed $1 building(s) - repair them (a Builder helps)",
+  "aoj_chr_breaches": "The siege destroyed buildings: $1 - Builders will put them back with materials from the chests",
   "aoj_skills": "Skills",
   "aoj_skill_combat": "Combat",
   "aoj_msg_fed": "$1 eats: $2",
@@ -425,5 +425,8 @@
   "aoj_work_manual_hint": "You assign work yourselves: in the totem window (Assign) or in the settler window.",
   "aoj_replant_on": "Replants trees: yes",
   "aoj_replant_off": "Replants trees: no",
-  "aoj_problem_no_tree_seeds": "no tree seeds in the chests (pine cones, acorns, beech seeds...)"
+  "aoj_problem_no_tree_seeds": "no tree seeds in the chests (pine cones, acorns, beech seeds...)",
+  "aoj_captive_how": "beat the guards or break the bars",
+  "aoj_problem_no_materials": "no materials in the chests to rebuild with",
+  "aoj_breaches_waiting": "Destroyed buildings to rebuild: $1 (Builders take the materials from the chests)"
 }
