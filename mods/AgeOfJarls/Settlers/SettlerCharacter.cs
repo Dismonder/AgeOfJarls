@@ -1,3 +1,4 @@
+using AgeOfJarls.Core;
 using UnityEngine;
 
 namespace AgeOfJarls.Settlers
@@ -6,7 +7,8 @@ namespace AgeOfJarls.Settlers
     /// The settler's Humanoid. Takes its hover text from <see cref="Settler"/> (vanilla Character asks nothing but
     /// Tameable for it), keeps vanilla's tamed-creature skill logic away (settlers get their own skills) and lets the
     /// settler lie in a bed the way Player does. The pose is the synced "attach_bed" animation plus the synced position,
-    /// so the other player sees it without running any of this.
+    /// so the other player sees it without running any of this. Unless Settlers/PermanentDeath is on, a settler whose
+    /// health runs out is knocked out instead of dying (<see cref="KnockOut"/>).
     /// </summary>
     public class SettlerCharacter : Humanoid
     {
@@ -87,6 +89,15 @@ namespace AgeOfJarls.Settlers
         public override void CustomFixedUpdate(float fixedDeltaTime)
         {
             base.CustomFixedUpdate(fixedDeltaTime);
+            if (Down && m_nview.IsValid() && m_nview.IsOwner())
+            {
+                // Lies where it fell until the time is up.
+                m_body.linearVelocity = Vector3.zero;
+                if (!IsDownIn(m_nview.GetZDO()))
+                {
+                    StandUp();
+                }
+            }
             if (!_lying)
             {
                 return;
@@ -131,6 +142,49 @@ namespace AgeOfJarls.Settlers
             _bedPoint = null;
             _bedColliders = null;
             m_body.useGravity = true;
+        }
+
+        // ---------------------------------------------------------------- knocked out
+
+        /// <summary>How long a knocked-out settler stays down, and the share of its health it gets up with.</summary>
+        private const float DownSeconds = 15f;
+        private const float GetUpHealth = 0.1f;
+
+        /// <summary>
+        /// Knocked out: lies still, takes no damage and is nobody's enemy (<see cref="KnockoutPatches"/>). The owner
+        /// sets it at once; every other machine reads it from the ZDO each second (Settler.Tick).
+        /// </summary>
+        internal bool Down { get; set; }
+
+        internal static bool IsDownIn(ZDO zdo) => zdo != null && WorldClock.Get(zdo, Keys.ZdoSettlerDownUntil, 0.0) > WorldClock.Now;
+
+        /// <summary>
+        /// Owner only, in place of dying: the settler falls with a little health and all its gear, lies on the ground
+        /// for a moment (the synced bed pose), then gets up; low on health, it keeps away from fights and heals.
+        /// </summary>
+        internal void KnockOut()
+        {
+            if (_lying)
+            {
+                // Caught in bed (fire, a raid): it falls out of it.
+                Release();
+                m_nview.GetZDO().Set(ZDOVars.s_inBed, false);
+            }
+            SetHealth(Mathf.Max(1f, GetMaxHealth() * GetUpHealth));
+            WorldClock.Set(m_nview.GetZDO(), Keys.ZdoSettlerDownUntil, WorldClock.Now + DownSeconds);
+            Down = true;
+            m_zanim.SetBool(BedAnimation, true);
+            m_body.linearVelocity = Vector3.zero;
+            Player.MessageAllInRange(transform.position, KnockoutMessageRange, MessageHud.MessageType.TopLeft,
+                $"{GetHoverName()}: $aoj_msg_settler_down");
+        }
+
+        private const float KnockoutMessageRange = 40f;
+
+        private void StandUp()
+        {
+            Down = false;
+            m_zanim.SetBool(BedAnimation, false);
         }
 
         private void SetBedCollisions(bool ignore)

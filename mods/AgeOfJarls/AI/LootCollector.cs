@@ -42,6 +42,10 @@ namespace AgeOfJarls.AI
             _mover = mover;
         }
 
+        /// <summary>For aoj_debug: the item it is walking to, if any.</summary>
+        internal string DebugState() =>
+            _target == null ? "-" : $"{_target.m_itemData.m_shared.m_name} {Vector3.Distance(_ai.transform.position, _target.transform.position):0} m";
+
         /// <summary>While following <paramref name="leader"/>: loot near them, handed over when <paramref name="handOver"/>.</summary>
         internal void Follow(float dt, Player leader, bool handOver)
         {

@@ -90,6 +90,8 @@ namespace AgeOfJarls.Core
         internal static readonly int ZdoSettlerCaptive = "aoj_settler_captive".GetStableHashCode();
         /// <summary>Settler: sitting down (idle at home); every machine plays the sitting pose from it.</summary>
         internal static readonly int ZdoSettlerSitting = "aoj_settler_sitting".GetStableHashCode();
+        /// <summary>Settler: world time until which it lies knocked out (see Settlers.SettlerCharacter.KnockOut).</summary>
+        internal static readonly int ZdoSettlerDownUntil = "aoj_settler_down_until".GetStableHashCode();
 
         /// <summary>ZDO blob with the whole settlement (see Settlement.SettlementData), stored on the Jarl's Table.</summary>
         internal static readonly int ZdoSettlement = "aoj_settlement".GetStableHashCode();

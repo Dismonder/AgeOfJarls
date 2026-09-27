@@ -22,6 +22,7 @@ namespace AgeOfJarls.Core
         internal static ConfigEntry<bool> SettlerCollectLoot;
         internal static ConfigEntry<float> SettlerLootRange;
         internal static ConfigEntry<float> SettlerWanderRange;
+        internal static ConfigEntry<bool> PermanentDeath;
 
         internal static ConfigEntry<float> SettlementMinDistance;
         internal static ConfigEntry<int> MaxJarls;
@@ -92,6 +93,10 @@ namespace AgeOfJarls.Core
                 "How far (m) an idle settler strolls around its home spot (the Jarl's Table by day, its bed at night) " +
                 "or around the place where it was left.", synced: true,
                 acceptableValues: new AcceptableValueRange<float>(1f, 20f));
+            PermanentDeath = config.BindConfig("Settlers", "PermanentDeath", false,
+                "A settler whose health runs out dies for good and leaves its gear in a grave anyone can open. " +
+                "Off (default): it is knocked out for a moment - nobody attacks it, it keeps all its gear - and gets up " +
+                "with a little health.", synced: true);
 
             SettlementMinDistance = config.BindConfig("Settlement", "MinDistance", 150f,
                 "Minimum distance in meters between two Jarl's Tables.", synced: true,

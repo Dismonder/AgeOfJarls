@@ -116,6 +116,8 @@ namespace AgeOfJarls.AI.Jobs
         {
         }
 
+        internal override string DebugTarget => Describe(_target);
+
         protected abstract ToolKind Tool { get; }
 
         protected abstract string NothingToDo { get; }

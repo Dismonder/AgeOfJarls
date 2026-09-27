@@ -72,6 +72,12 @@ namespace AgeOfJarls.AI.Jobs
         /// <summary>What the worker keeps in its bag instead of storing: its tool, and supplies it works with.</summary>
         internal virtual bool Keeps(ItemDrop.ItemData item) => JobInfo.Fits(item, JobInfo.RequiredTool(Job));
 
+        /// <summary>For aoj_debug: what the job is working on right now.</summary>
+        internal virtual string DebugTarget => "";
+
+        protected string Describe(Component target) =>
+            target == null ? "" : $"{Utils.GetPrefabName(target.gameObject)} {Vector3.Distance(Position, target.transform.position):0} m";
+
         /// <summary>Leaving the job (orders, night, a fight): drop reservations.</summary>
         internal virtual void Stop()
         {

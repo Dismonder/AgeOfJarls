@@ -147,6 +147,39 @@ namespace AgeOfJarls.Settlers
         /// <summary>A captive from a camp: takes no orders until a player frees it.</summary>
         internal bool IsCaptive => _nview != null && _nview.IsValid() && _nview.GetZDO().GetBool(Keys.ZdoSettlerCaptive);
 
+        /// <summary>Knocked out for a moment instead of dead (see SettlerCharacter.KnockOut).</summary>
+        internal bool IsDown => _humanoid is SettlerCharacter body && body.Down;
+
+        /// <summary>
+        /// For aoj_debug: what every machine knows from the ZDO and, on the machine that simulates the settler, what
+        /// its AI is doing. Localized.
+        /// </summary>
+        internal string DebugText()
+        {
+            if (_nview == null || !_nview.IsValid() || _humanoid == null)
+            {
+                return "";
+            }
+            ZDO zdo = _nview.GetZDO();
+            bool owner = _nview.IsOwner();
+            var text = new StringBuilder();
+            text.Append("<b>").Append(DisplayName).Append("</b> ").Append(owner ? "[mine]" : $"[peer {zdo.GetOwner()}]")
+                .Append($"  HP {Mathf.CeilToInt(_humanoid.GetHealth())}/{Mathf.CeilToInt(_humanoid.GetMaxHealth())}")
+                .Append(IsDown ? "  DOWN" : "").Append(IsCaptive ? "  CAPTIVE" : "").Append('\n');
+            string home = !HasHome ? "none" : HomeTable != null ? (IsAtHome ? "at home" : "away") : "not loaded";
+            text.Append($"{(SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)} · follows {zdo.GetLong(Keys.ZdoSettlerFollow)}")
+                .Append(zdo.GetBool(Keys.ZdoSettlerHold) ? " · holds" : "").Append($" · home {home}\n");
+            Work.WorkTotem totem = JobTotem;
+            string job = totem != null ? totem.Job.ToString() : JobId != 0L ? "far" : "-";
+            string problem = JobProblem.Length > 0 ? $" ({JobProblem})" : "";
+            text.Append($"job {job}{problem} · role {Role} · food {Needs.Satiety(zdo):0} · morale {Needs.Morale(zdo):0}");
+            if (owner && _ai is AI.SettlerAI ai)
+            {
+                text.Append('\n').Append(ai.DebugState());
+            }
+            return Localize(text.ToString());
+        }
+
         internal Army.CombatRole Role => _nview != null && _nview.IsValid() ? (Army.CombatRole)_nview.GetZDO().GetInt(Keys.ZdoSettlerRole) : Army.CombatRole.None;
 
         /// <summary>Stable id of the war banner it is posted at; 0 = none.</summary>
@@ -496,6 +529,18 @@ namespace AgeOfJarls.Settlers
             UpdatePose();
 
             bool owner = _nview.IsOwner();
+            if (_humanoid is SettlerCharacter body)
+            {
+                // Monster AIs on any machine check it; the owner alone lets the settler get up (SettlerCharacter).
+                if (SettlerCharacter.IsDownIn(_nview.GetZDO()))
+                {
+                    body.Down = true;
+                }
+                else if (!owner)
+                {
+                    body.Down = false;
+                }
+            }
             if (owner && !_wasOwner)
             {
                 OnBecameOwner();
@@ -1147,18 +1192,46 @@ namespace AgeOfJarls.Settlers
             DropAllItems();
         }
 
-        // Character.OnDeath runs on the owner. The gear drops where the settler fell instead of vanishing with it.
+        // Character.OnDeath runs on the owner - only with Settlers/PermanentDeath, otherwise a settler is knocked out
+        // instead. Its gear waits in a grave where it fell, like a player's, instead of vanishing with it.
         private void OnDeath()
         {
             if (_nview.IsValid() && _nview.IsOwner())
             {
-                DropAllItems();
+                if (!MoveGearToGrave())
+                {
+                    DropAllItems();
+                }
                 _inventoryDirty = false;
                 if (HasHome)
                 {
                     JarlTable.RequestRemoveSettler(HomeId, Uid);
                 }
             }
+        }
+
+        private const string GravePrefab = "Player_tombstone";
+
+        // The player's grave, with the settler's name on it and no owner, so any player may open it.
+        private bool MoveGearToGrave()
+        {
+            Inventory inventory = _humanoid.GetInventory();
+            GameObject prefab = ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(GravePrefab) : null;
+            if (prefab == null || inventory.NrOfItems() == 0)
+            {
+                return false;
+            }
+            // The grave takes only unequipped items.
+            _humanoid.UnequipAllItems();
+            GameObject grave = Instantiate(prefab, _humanoid.GetCenterPoint(), transform.rotation);
+            Container container = grave.GetComponent<Container>();
+            if (container == null)
+            {
+                return false;
+            }
+            container.GetInventory().MoveInventoryToGrave(inventory);
+            grave.GetComponent<TombStone>()?.Setup(DisplayName, 0L);
+            return true;
         }
 
         private void DropAllItems()
@@ -1192,8 +1265,8 @@ namespace AgeOfJarls.Settlers
             long me = Player.m_localPlayer != null ? Player.m_localPlayer.GetPlayerID() : 0L;
             bool following = me != 0L && _nview.IsValid() && _nview.GetZDO().GetLong(Keys.ZdoSettlerFollow) == me;
             ZDO zdo = _nview.GetZDO();
-            string doing = IsAtHome
-                ? "$aoj_activity_" + ((SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)).ToString().ToLowerInvariant()
+            string doing = IsDown ? "$aoj_down"
+                : IsAtHome ? "$aoj_activity_" + ((SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)).ToString().ToLowerInvariant()
                 : OrderText(zdo);
             Work.WorkTotem totem = JobTotem;
             string work = totem != null ? Work.JobInfo.Token(totem.Job) + " · " : Role != Army.CombatRole.None ? Army.CombatRoles.Token(Role) + " · " : "";
@@ -1260,8 +1333,8 @@ namespace AgeOfJarls.Settlers
                 return "";
             }
             ZDO zdo = _nview.GetZDO();
-            string doing = IsAtHome
-                ? "$aoj_activity_" + ((SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)).ToString().ToLowerInvariant()
+            string doing = IsDown ? "$aoj_down"
+                : IsAtHome ? "$aoj_activity_" + ((SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)).ToString().ToLowerInvariant()
                 : OrderText(zdo);
             Work.WorkTotem totem = JobTotem;
             string job = totem != null ? " · " + Work.JobInfo.Token(totem.Job) : Role != Army.CombatRole.None ? " · " + Army.CombatRoles.Token(Role) : "";

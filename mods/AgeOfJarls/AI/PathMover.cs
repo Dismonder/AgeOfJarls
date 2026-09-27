@@ -83,6 +83,19 @@ namespace AgeOfJarls.AI
             _ai = ai;
         }
 
+        /// <summary>For aoj_debug: the current trip, its path and any door on the way.</summary>
+        internal string DebugState()
+        {
+            if (Time.time - _lastMoveTime > 1f)
+            {
+                return "-";
+            }
+            string path = !_hasPath ? "no path" : _pathReaches ? $"{_path.Count} pts" : $"{_path.Count} pts, partial";
+            string stuck = _stuckTimer > 0.5f ? $", stuck {_stuckTimer:0.0}s" : "";
+            string door = _doorPhase != DoorPhase.None ? $", door {_doorPhase}" : "";
+            return $"{Vector3.Distance(_ai.transform.position, _target):0} m ({path}{stuck}{door})";
+        }
+
         /// <summary>Every AI frame: closes a door this settler left open once it is through or has stopped using it.</summary>
         internal void Update()
         {

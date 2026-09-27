@@ -172,6 +172,38 @@ namespace AgeOfJarls.AI
             _settler.SetActivity(_carrying ? SettlerActivity.NoChest : SettlerActivity.Idle);
         }
 
+        /// <summary>For aoj_debug: home, trip, job and its target.</summary>
+        internal string DebugState()
+        {
+            if (_table == null)
+            {
+                return "not home";
+            }
+            var parts = new List<string>();
+            if (_chest != null)
+            {
+                parts.Add($"to chest {Vector3.Distance(_ai.transform.position, _chest.transform.position):0} m");
+            }
+            if (_carrying)
+            {
+                parts.Add("carrying");
+            }
+            if (_activeJob != null)
+            {
+                string target = _activeJob.DebugTarget;
+                parts.Add($"{_activeJob.Job}{(_jobIdle ? " (idle)" : "")}{(target.Length > 0 ? " -> " + target : "")}");
+            }
+            if (_cauldron != null)
+            {
+                parts.Add("to cauldron");
+            }
+            if (_bed != null)
+            {
+                parts.Add(_character.IsLyingDown ? "in bed" : "has bed");
+            }
+            return parts.Count == 0 ? "home" : string.Join(", ", parts);
+        }
+
         /// <summary>Orders, fights and journeys come first: out of bed and no half-finished trip or job step.</summary>
         internal void Stop()
         {

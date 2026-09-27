@@ -51,6 +51,15 @@ namespace AgeOfJarls.AI
 
         public override bool UpdateAI(float dt)
         {
+            if (m_character is SettlerCharacter body && body.Down)
+            {
+                // Knocked out: lies still until it gets up, with no targets and no chores.
+                StopMoving();
+                m_targetCreature = null;
+                m_targetStatic = null;
+                _home?.Stop();
+                return true;
+            }
             // Before vanilla: its targeting then sees the ordered target (or none) and keeps it, since the
             // retarget timer is held back while an order stands.
             ApplyOrders();
@@ -173,6 +182,20 @@ namespace AgeOfJarls.AI
                 default:
                     return null;
             }
+        }
+
+        /// <summary>For aoj_debug, on the owner: fight, orders, home routine, path and loot.</summary>
+        internal string DebugState()
+        {
+            string fight = m_targetCreature != null ? $"fights {m_targetCreature.GetHoverName()}"
+                : m_targetStatic != null ? $"attacks {Utils.GetPrefabName(m_targetStatic.gameObject)}"
+                : Time.time < _ceaseFireUntil ? "cease-fire"
+                : "calm";
+            string ordered = _orderedTarget != null ? $" (ordered: {_orderedTarget.GetHoverName()})" : "";
+            string home = _home != null ? _home.DebugState() : "-";
+            string path = _mover != null ? _mover.DebugState() : "-";
+            string loot = _loot != null ? _loot.DebugState() : "-";
+            return $"{fight}{ordered}\nhome: {home}\npath: {path} · loot: {loot}";
         }
 
         /// <summary>No enemy or structure targeted and not mid-swing: free to do settler things.</summary>

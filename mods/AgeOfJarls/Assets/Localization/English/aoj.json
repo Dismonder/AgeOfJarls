@@ -342,5 +342,7 @@
   "aoj_msg_jarls_full": "The settlement has the most Jarls it can ($1) - you can hand your title over",
   "aoj_msg_rank_full": "The settlement has the most members it can",
   "aoj_chr_rank": "$1 - new rank: $2",
-  "aoj_chr_member_left": "$1 is no longer a member"
+  "aoj_chr_member_left": "$1 is no longer a member",
+  "aoj_down": "coming round",
+  "aoj_msg_settler_down": "falls in battle but will live"
 }

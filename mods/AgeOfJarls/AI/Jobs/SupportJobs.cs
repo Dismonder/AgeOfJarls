@@ -118,6 +118,8 @@ namespace AgeOfJarls.AI.Jobs
 
         internal override JobType Job => JobType.Builder;
 
+        internal override string DebugTarget => Describe(_target);
+
         protected override bool Work(float dt)
         {
             if (TakeTool(ToolKind.Hammer) == null)
@@ -223,6 +225,8 @@ namespace AgeOfJarls.AI.Jobs
         }
 
         internal override JobType Job => JobType.Farmer;
+
+        internal override string DebugTarget => Describe(_target);
 
         internal override bool Keeps(ItemDrop.ItemData item) => Crops().Values.Any(c => c.seed == PrefabName(item));
 

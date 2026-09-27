@@ -16,6 +16,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- tests/AgeOfJarls.Tests checks the saved formats and the rank rules. -->
+    <InternalsVisibleTo Include="AgeOfJarls.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Ships with the game (valheim_Data\Managed); reads the JSON definitions. -->
     <Reference Include="$(ManagedDir)Newtonsoft.Json.dll" Private="false" />
     <!-- Ships with the game; some vanilla signatures (Minimap.AddPin) name its PlatformUserID type. -->

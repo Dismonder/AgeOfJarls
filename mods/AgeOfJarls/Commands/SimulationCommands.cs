@@ -117,6 +117,22 @@ namespace AgeOfJarls.Commands
         }
     }
 
+    /// <summary><c>aoj_debug</c>: live state over every settler nearby (read only, so not a cheat).</summary>
+    internal sealed class DebugCommand : AojCommand
+    {
+        public override string Name => "aoj_debug";
+
+        public override string Help => "Age of Jarls: toggle live settler state over their heads (ZDO, and AI for the settlers you simulate)";
+
+        public override void Run(string[] args, Terminal context)
+        {
+            bool on = UI.DebugOverlay.Toggle();
+            context?.AddString(on
+                ? "Settler debug ON: state over settlers within 40 m. [mine] = your machine runs its AI. aoj_debug again to hide."
+                : "Settler debug OFF.");
+        }
+    }
+
     /// <summary><c>aoj_info</c>: the settlement you stand in, its work, food and defence at a glance.</summary>
     internal sealed class InfoCommand : AojCommand
     {

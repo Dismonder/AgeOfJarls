@@ -31,6 +31,9 @@ The user's mods are managed by **Vortex**: never touch folders in `BepInEx\plugi
 | Build only | `dotnet build mods/<Name> -p:DeployToGame=false` |
 | Build everything | `dotnet build Valheim.slnx` |
 | Thunderstore zip | `pwsh -NoProfile -File tools/package.ps1 <Name>` → `dist/<Name>-<ver>.zip` (checks icon 256x256, name, description ≤250) |
+| Unit tests | `dotnet test tests/<Name>.Tests` (xunit on net48; game DLLs load from the install; no Unity engine calls, and no generic asserts over types from `assembly_valheim` — .NET Framework cannot load its default interface methods) |
+| Translations check | `pwsh -NoProfile -File tools/check-loc.ps1 <Name>` (every `$token` in code exists in every language; exit 1 if not) |
+| World backup | `pwsh -NoProfile -File tools/backup-world.ps1 <world>` → `_backups/` (Steam cloud and local saves; refuses while the game runs) |
 | Launch game | `Start-Process steam://rungameid/892970` (only when the user wants to test) |
 | Is the game running? | `Get-Process valheim -ErrorAction SilentlyContinue` |
 

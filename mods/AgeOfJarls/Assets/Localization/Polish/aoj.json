@@ -342,5 +342,7 @@
   "aoj_msg_jarls_full": "Osada ma już najwięcej Jarlów ($1) - możesz przekazać swój tytuł",
   "aoj_msg_rank_full": "Osada ma już najwięcej członków",
   "aoj_chr_rank": "$1 - nowy szczebel: $2",
-  "aoj_chr_member_left": "$1 nie należy już do osady"
+  "aoj_chr_member_left": "$1 nie należy już do osady",
+  "aoj_down": "odzyskuje przytomność",
+  "aoj_msg_settler_down": "pada w walce, ale przeżyje"
 }
