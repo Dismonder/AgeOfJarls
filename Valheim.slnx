@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/mods/">
+    <Project Path="mods/AgeOfJarls/AgeOfJarls.csproj" />
+  </Folder>
+</Solution>

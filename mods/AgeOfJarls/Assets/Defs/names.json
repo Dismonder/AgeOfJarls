@@ -1,0 +1,10 @@
+{
+  "male": [
+    "Ragnar", "Bjorn", "Ivar", "Sigurd", "Harald", "Leif", "Erik", "Gunnar", "Torstein", "Halfdan", "Ulf", "Arne",
+    "Knut", "Sven", "Olaf", "Hakon", "Egil", "Rolf", "Asger", "Toke", "Njal", "Hrafn", "Ketil", "Vidar"
+  ],
+  "female": [
+    "Astrid", "Freydis", "Sigrid", "Ingrid", "Gudrun", "Thyra", "Helga", "Ragnhild", "Solveig", "Ylva", "Runa", "Hilde",
+    "Gunnhild", "Ragna", "Estrid", "Tove", "Dagny", "Liv", "Eir", "Bodil", "Frida", "Jorunn", "Signy", "Thora"
+  ]
+}

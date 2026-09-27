@@ -1,0 +1,12 @@
+{
+  "kinds": {
+    "wood": [ "Wood", "FineWood", "RoundLog", "ElderBark", "YggdrasilWood", "Blackwood" ],
+    "stone": [ "Stone", "Flint", "Obsidian", "Grausten", "BlackMarble" ],
+    "ore": [ "CopperOre", "TinOre", "CopperScrap", "BronzeScrap", "IronScrap", "IronOre", "SilverOre", "BlackMetalScrap", "FlametalOre", "FlametalOreNew" ],
+    "metal": [ "Copper", "Tin", "Bronze", "Iron", "Silver", "BlackMetal", "Flametal", "FlametalNew" ],
+    "hide": [ "DeerHide", "LeatherScraps", "TrollHide", "WolfPelt", "LoxPelt", "ScaleHide", "AskHide", "BjornHide" ],
+    "meat": [ "RawMeat", "DeerMeat", "NeckTail", "WolfMeat", "LoxMeat", "SerpentMeat", "ChickenMeat", "HareMeat", "BugMeat", "AsksvinMeat", "VoltureMeat", "BoneMawSerpentMeat", "BjornMeat" ],
+    "seed": [ "BeechSeeds", "FirCone", "PineCone", "BirchSeeds", "Acorn", "CarrotSeeds", "TurnipSeeds", "OnionSeeds", "VineberrySeeds" ],
+    "valuable": [ "Coins", "Amber", "AmberPearl", "Ruby", "SilverNecklace" ]
+  }
+}

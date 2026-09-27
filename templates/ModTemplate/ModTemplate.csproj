@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>ModTemplate</AssemblyName>
+    <RootNamespace>ModTemplate</RootNamespace>
+    <!-- Must be plain x.y.z (BepInEx parses it with System.Version). -->
+    <Version>0.1.0</Version>
+    <Description>ModTemplate for Valheim</Description>
+    <!-- true = reference Jotunn.dll and define the JOTUNN symbol. -->
+    <UseJotunn>__USE_JOTUNN__</UseJotunn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Package\**" />
+    <!-- Extra runtime files (translations, asset bundles) go in Assets\ and are deployed next to the DLL. -->
+    <None Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

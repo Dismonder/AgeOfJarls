@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>AgeOfJarls</AssemblyName>
+    <RootNamespace>AgeOfJarls</RootNamespace>
+    <!-- Must be plain x.y.z (BepInEx parses it with System.Version). -->
+    <Version>0.3.0</Version>
+    <Description>Settlements, settlers, work, sieges and co-op management for Valheim</Description>
+    <!-- true = reference Jotunn.dll and define the JOTUNN symbol. -->
+    <UseJotunn>true</UseJotunn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Package\**" />
+    <!-- Extra runtime files (translations, asset bundles) go in Assets\ and are deployed next to the DLL. -->
+    <None Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ships with the game (valheim_Data\Managed); reads the JSON definitions. -->
+    <Reference Include="$(ManagedDir)Newtonsoft.Json.dll" Private="false" />
+    <!-- Ships with the game; some vanilla signatures (Minimap.AddPin) name its PlatformUserID type. -->
+    <Reference Include="$(ManagedDir)Splatform.dll" Private="false" />
+  </ItemGroup>
+</Project>

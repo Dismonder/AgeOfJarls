@@ -1,0 +1,20 @@
+{
+  "siegeWaves": [
+    { "tier": 1, "common": [ "Greyling", "Greydwarf" ], "elite": "Greydwarf_Elite" },
+    { "tier": 2, "common": [ "Greydwarf", "Greydwarf_Elite", "Greydwarf_Shaman" ], "elite": "Troll" },
+    { "tier": 3, "common": [ "Draugr", "Skeleton", "Draugr_Elite" ], "elite": "Abomination" },
+    { "tier": 4, "common": [ "Wolf", "Fenring", "Ulv" ], "elite": "StoneGolem" },
+    { "tier": 5, "common": [ "Goblin", "GoblinArcher", "GoblinShaman" ], "elite": "GoblinBrute" },
+    { "tier": 6, "common": [ "Seeker", "SeekerSoldier", "Dverger" ], "elite": "Gjall" },
+    { "tier": 7, "common": [ "Charred_Melee", "Charred_Archer", "Charred_Mage", "Asksvin" ], "elite": "Morgen" }
+  ],
+  "campGuards": {
+    "Meadows": [ "Greyling", "Greydwarf" ],
+    "BlackForest": [ "Greydwarf", "Greydwarf_Elite" ],
+    "Swamp": [ "Draugr", "Draugr_Elite" ],
+    "Mountain": [ "Wolf", "Fenring" ],
+    "Plains": [ "Goblin", "GoblinBrute" ],
+    "Mistlands": [ "Seeker", "SeekerSoldier" ],
+    "AshLands": [ "Charred_Melee", "Charred_Archer" ]
+  }
+}

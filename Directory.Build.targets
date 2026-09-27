@@ -1,0 +1,29 @@
+<Project>
+  <PropertyGroup>
+    <DefineConstants Condition="'$(UseJotunn)' == 'true'">$(DefineConstants);JOTUNN</DefineConstants>
+    <PluginGuid Condition="'$(PluginGuid)' == ''">com.$(ModAuthor.ToLowerInvariant()).$(AssemblyName.ToLowerInvariant())</PluginGuid>
+    <PluginName Condition="'$(PluginName)' == ''">$(AssemblyName)</PluginName>
+    <PluginInfoFile>$(IntermediateOutputPath)PluginInfo.g.cs</PluginInfoFile>
+    <DeployDir>$(BepInExDir)plugins\$(AssemblyName)\</DeployDir>
+  </PropertyGroup>
+
+  <!-- PluginInfo.Guid/Name/Version come from the .csproj, so the version lives in one place. -->
+  <Target Name="GeneratePluginInfo" BeforeTargets="CoreCompile">
+    <WriteLinesToFile File="$(PluginInfoFile)" Overwrite="true" WriteOnlyWhenDifferent="true"
+      Lines="// &lt;auto-generated/&gt;;namespace $(RootNamespace) { internal static class PluginInfo { public const string Guid = &quot;$(PluginGuid)&quot;%3B public const string Name = &quot;$(PluginName)&quot;%3B public const string Version = &quot;$(Version)&quot;%3B } }" />
+    <ItemGroup>
+      <Compile Include="$(PluginInfoFile)" />
+      <FileWrites Include="$(PluginInfoFile)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Copies the build output to BepInEx\plugins\<AssemblyName>\. Disable with -p:DeployToGame=false. -->
+  <Target Name="DeployToValheim" AfterTargets="Build" Condition="'$(DeployToGame)' == 'true'">
+    <ItemGroup>
+      <_DeployFiles Include="$(OutDir)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_DeployFiles)" DestinationFiles="@(_DeployFiles->'$(DeployDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" Retries="0" ContinueOnError="WarnAndContinue" />
+    <Message Importance="high" Text="$(AssemblyName) -> $(DeployDir)" />
+  </Target>
+</Project>

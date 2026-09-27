@@ -1,0 +1,38 @@
+<Project>
+  <!-- Shared settings for every mod in this repo. A mod's .csproj only sets its name, version and UseJotunn. -->
+  <PropertyGroup>
+    <ValheimDir Condition="'$(ValheimDir)' == '' and '$(VALHEIM_DIR)' != ''">$(VALHEIM_DIR)</ValheimDir>
+    <ValheimDir Condition="'$(ValheimDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Valheim</ValheimDir>
+    <ManagedDir>$(ValheimDir)\valheim_Data\Managed\</ManagedDir>
+    <BepInExDir>$(ValheimDir)\BepInEx\</BepInExDir>
+
+    <ModAuthor Condition="'$(ModAuthor)' == ''">Damia</ModAuthor>
+    <DeployToGame Condition="'$(DeployToGame)' == ''">true</DeployToGame>
+
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <DebugType>portable</DebugType>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Game, BepInEx and (optionally) Jotunn are referenced straight from the local install, never copied. -->
+  <ItemGroup>
+    <Reference Include="$(BepInExDir)core\BepInEx.dll" Private="false" />
+    <Reference Include="$(BepInExDir)core\0Harmony.dll" Private="false" />
+    <Reference Include="$(ManagedDir)assembly_valheim.dll" Publicize="true" Private="false" />
+    <Reference Include="$(ManagedDir)assembly_utils.dll" Private="false" />
+    <Reference Include="$(ManagedDir)assembly_guiutils.dll" Private="false" />
+    <Reference Include="$(ManagedDir)UnityEngine.dll" Private="false" />
+    <Reference Include="$(ManagedDir)UnityEngine.*Module.dll" Private="false" />
+    <Reference Include="$(ManagedDir)UnityEngine.UI.dll" Private="false" />
+    <Reference Include="$(ManagedDir)Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="$(ManagedDir)SoftReferenceableAssets.dll" Private="false" />
+    <Reference Include="$(BepInExDir)plugins\Jotunn\Jotunn.dll" Private="false" Condition="'$(UseJotunn)' == 'true'" />
+  </ItemGroup>
+</Project>

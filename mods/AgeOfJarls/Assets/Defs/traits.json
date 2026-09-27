@@ -1,0 +1,8 @@
+[
+  { "id": "diligent", "positive": true,  "weight": 1, "origins": ["Meadows"],  "excludes": ["lazy"],     "modifiers": { "workSpeed": 0.15 } },
+  { "id": "lazy",     "positive": false, "weight": 1, "origins": [],           "excludes": ["diligent"], "modifiers": { "workSpeed": -0.15, "moraleRecovery": 0.25 } },
+  { "id": "strong",   "positive": true,  "weight": 1, "origins": ["Mountain"], "excludes": [],           "modifiers": { "carryWeight": 0.5, "meleeDamage": 0.1 } },
+  { "id": "frugal",   "positive": true,  "weight": 1, "origins": ["Swamp"],    "excludes": ["glutton"],  "modifiers": { "foodConsumption": -0.2 } },
+  { "id": "glutton",  "positive": false, "weight": 1, "origins": [],           "excludes": ["frugal"],   "modifiers": { "foodConsumption": 0.3, "maxHealth": 0.1 } },
+  { "id": "brave",    "positive": true,  "weight": 1, "origins": ["Plains"],   "excludes": [],           "modifiers": { "fleeThreshold": -1 } }
+]
