@@ -3,6 +3,18 @@
 > Stan na 2026-09-27. Historia etapów M0–M10 i szczegóły tego, co już zrobione: [roadmap.md](roadmap.md).
 > Rozmiary S < M < L to względna wielkość pracy, nie czas.
 
+## Postęp (0.4.0, 2026-09-27)
+- **Etap 0 — zrobiony:** repozytorium z historią (tag `v0.3.0`), `tools/backup-world.ps1`, kopia świata `testo`.
+- **Etap 1, mój tor — zrobiony:** `aoj_debug`, testy jednostkowe (`tests/AgeOfJarls.Tests`, 31 testów),
+  `tools/check-loc.ps1`. Sesje testowe w grze — do zrobienia.
+- **Decyzje:** śmierć i utrata sprzętu domyślnie wyłączone (osadnik jest powalony i wstaje; trwała śmierć z
+  grobem — opcja `Settlers/PermanentDeath`); reszta według propozycji.
+- **Etap 3 — kod gotowy (0.4.0), niesprawdzony w grze:** punkty 1–9 z tabeli poniżej (nadrabianie wszystkich
+  zawodów, 13 cech, powalenie zamiast śmierci, krata jeńców, rodzaje skrzyń + priorytety i samoczynny przydział
+  pracy + sadzenie drzew, oblężenia z kilku stron + jednostki oblężnicze + odbudowa wyłomów, pinezka alarmu +
+  kronika „kto co zrobił”, zużycie broni żołnierzy, Włócznik/Berserk i poziomy 6–7). Zostają: balans (10) po testach
+  i wydanie (11, za zgodą).
+
 ## 1. Gdzie jesteśmy
 
 | | Stan |

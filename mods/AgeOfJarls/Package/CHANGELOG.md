@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.0
+
+- Settlers are knocked out instead of dying (Settlers/PermanentDeath, off by default): they fall for a moment,
+  nobody attacks them, they keep all their gear and get up with a little health. With permanent death on, their gear
+  waits in a grave anyone can open.
+- 13 traits instead of 6 (nimble, cowardly, hawk-eyed, green-thumbed, night owl, hardened, veteran); work speed,
+  carry weight and melee damage from traits now really apply.
+- Combat roles Spearman (tier 4) and Berserker (tier 5); tier 6 adds a worker place at every totem, tier 7 twice as
+  fast healing in bed. The next tier's unlocks are listed with its requirements.
+- Catch-up for every job: smelter hands and cooks work through the chests' stock at their stations' pace, farmers
+  bring in the crops that ripened and replant them.
+- [Shift+E] on a chest in the settlement gives it a kind (wood, ores, food...): settlers put only that kind in it.
+- Totem priorities and automatic work: free civilians take free places at the totems by themselves, highest
+  priority first (a settlement can switch to manual assignment). Woodcutter totems can replant the trees they fell.
+- Captives sit behind bars: beat the guards or break the bars to free them.
+- Sieges come from two sides from tier 4 and three from tier 6, with a siege unit that goes for the buildings;
+  Builders rebuild what a siege destroyed with materials from the chests.
+- Soldiers wear out their weapons (Army/GearWear, half a player's rate); worn-out ones go back to the Armory.
+- A settlement's alarm puts a map pin at it for every player; the chronicle names who did what.
+- aoj_debug shows the live state of settlers nearby.
+
 ## 0.3.0
 
 - Shared settlements: every member (Karl and up) beyond the first adds the tier's settler limit again (two players =

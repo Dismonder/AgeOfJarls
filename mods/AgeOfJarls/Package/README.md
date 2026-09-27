@@ -5,11 +5,12 @@ server and in co-op. Works in new **and existing** worlds.
 
 ## Features
 
-- **Settlers** — every settler has a name, looks, an origin and traits. Order them with [E] (window) or the
-  **command wheel** (radial, like the emote wheel): press **H** while looking at a settler — up to 40 m away — to
-  call it (*come to me!*), stop it, send it to attack, fall back, go home or open its window; press H looking
-  elsewhere for your squad's orders, with the creature in your sight as the attack target. The game's wheel (G) has
-  the same squad orders under *Commands* and gives a settler's orders when your crosshair is on it.
+- **Settlers** — every settler has a name, looks, an origin and up to three of 13 traits (diligent, strong,
+  hawk-eyed, night owl, veteran...). Order them with [E] (window) or the **command wheel** (radial, like the emote
+  wheel): press **H** while looking at a settler — up to 40 m away — to call it (*come to me!*), stop it, send it to
+  attack, fall back, go home or open its window; press H looking elsewhere for your squad's orders, with the creature
+  in your sight as the attack target. The game's wheel (G) has the same squad orders under *Commands*. By default a
+  settler is **knocked out, not killed**: it gets up with its gear (permanent death is an option).
 - **Jarl's Table** — founds a settlement (radius 30–60 m, tiers 0–7 unlocked by bosses). Its window has tabs for
   the settlement, the members, the settlers (orders, dismissal), work, storage, defence and the chronicle.
 - **Built together, bigger together** — every player who joins (as a member) adds the tier's settler limit again (two
@@ -17,15 +18,20 @@ server and in co-op. Works in new **and existing** worlds.
   equal rights; below them **Hersirs** run the settlement, **Huscarls** lead the troop and **Karls** live there and
   bring their settlers; guests only look. Sieges grow with the number of players at home.
 - **Life at home** — settlers get a free bed (they sleep in it at night), eat from the **Settlement Cauldron**, carry
-  what they find into **sorted chests** (same item → same kind → an empty chest, never mixing), open and close doors,
-  and heal in bed when wounded. Morale (food, bed, variety, feasts) sets their work pace.
-- **Work Totems** — Woodcutter, Hauler, Miner, Smelter, Builder, Farmer and Cook. Assign workers, set the zone
-  (8–30 m) and the hours. Tools come from you (axe, pickaxe, hammer).
-- **While you are away** — when you come back, the settlement credits the work of your absence (up to 2 days).
-- **Recruitment** — castaways reach the shore after your first table; captives wait in enemy camps (also in old
-  worlds): beat the guards and set them free.
-- **Troop and sieges** — give settlers a combat role (warrior, archer, shieldbearer), build War Banners (posts) and an
-  Armory. From tier 1 settlements are sometimes besieged while you are home; the alarm sounds by itself.
+  what they find into **sorted chests** (same item → same kind → an empty chest, never mixing; [Shift+E] on a chest
+  sets what it is for), open and close doors, and heal in bed when wounded. Morale (food, bed, variety, feasts) sets
+  their work pace.
+- **Work Totems** — Woodcutter, Hauler, Miner, Smelter, Builder, Farmer and Cook. Set the zone (8–30 m), the hours
+  and a priority: free settlers take free places by themselves (or assign them by hand). Woodcutters can replant.
+  Tools come from you (axe, pickaxe, hammer).
+- **While you are away** — when you come back, the settlement credits the work of your absence (up to 2 days): wood,
+  stone, bars from the smelters, cooked food, the harvest.
+- **Recruitment** — castaways reach the shore after your first table; captives wait behind bars in enemy camps (also
+  in old worlds): beat the guards or break the bars and set them free.
+- **Troop and sieges** — combat roles (warrior, archer, shieldbearer, spearman, berserker), War Banners (posts) and an
+  Armory the troop takes and returns gear to. From tier 1 settlements are sometimes besieged while you are home —
+  later from several sides, with siege units that go for the walls; Builders put back what was destroyed. The alarm
+  sounds by itself and puts a pin on everyone's map.
 
 ## Installation
 
@@ -34,11 +40,12 @@ Everyone on a server needs the mod (the server too). Requires BepInEx and Jotunn
 
 ## Configuration
 
-`BepInEx/config/*AgeOfJarls*.cfg` (synced from the server): settler health, loot, work speed, hunger, catch-up,
-captive camps, sieges, the members' bonuses and the number of Jarls. Local: the command wheel key (`Commands/WheelKey`, default H) and reach (`Commands/LookRange`).
-Balance data in `BepInEx/config/AgeOfJarls/*.json` (traits, tiers, names, storage kinds).
+`BepInEx/config/*AgeOfJarls*.cfg` (synced from the server): settler health and death, loot, work speed, hunger,
+catch-up, captive camps, sieges, gear wear, the members' bonuses and the number of Jarls. Local: the command wheel key
+(`Commands/WheelKey`, default H) and reach (`Commands/LookRange`). Balance data in `BepInEx/config/AgeOfJarls/*.json`
+(traits, tiers, names, storage kinds, siege waves).
 
 ## Console (devcommands)
 
-`aoj_info`, `aoj_settlers`, `aoj_settlement`, `aoj_rank <rank> <player>`, `aoj_jarl <player>`, `aoj_spawn`,
-`aoj_catchup <hours>`, `aoj_siege`, `aoj_morale <0-100>`, `aoj_captive`, `aoj_reload_defs`.
+`aoj_info`, `aoj_settlers`, `aoj_settlement`, `aoj_debug`, `aoj_rank <rank> <player>`, `aoj_jarl <player>`,
+`aoj_spawn`, `aoj_catchup <hours>`, `aoj_siege`, `aoj_morale <0-100>`, `aoj_captive`, `aoj_reload_defs`.
