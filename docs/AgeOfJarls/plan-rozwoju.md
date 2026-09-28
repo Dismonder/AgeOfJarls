@@ -15,10 +15,19 @@
   kronika „kto co zrobił”, zużycie broni żołnierzy, Włócznik/Berserk i poziomy 6–7). Zostają: balans (10) po testach
   i wydanie (11, za zgodą).
 - **Sprawdzone w grze (pętla autonomiczna, 2026-09-27/28):** start 0.4.0 bez błędów, migracja osady do formatu 5,
-  `aoj_debug`, krata jeńca, powalenie (HP 10% → wstaje po 15 s).
+  `aoj_debug`, krata jeńca, powalenie (HP 10% → wstaje po 15 s), zbieranie i odkładanie do skrzyń, samoczynny
+  przydział do totemu, totemy jako wolnostojące sztandary bez warsztatu, ulepszanie totemów 1→3 (koszt, brakujące
+  surowce, poziom maks., rosnący sztandar), strefy przy stawianiu.
 - **Etap 2 — rozpoczęty:** `aoj_perf` mierzy koszt moda na klatkę; pierwsze liczby i wnioski w
   [architecture.md](architecture.md) §11. Poprawki: rozłożenie okresowej pracy osadników w czasie, żołnierze bez
   wolnego posterunku nie przeszukują sztandarów co klatkę, liczenie obsady bez alokacji.
+- **Po 0.4.0 (niewydane, CHANGELOG „Unreleased”):** wolnostojące totemy i sztandary wojenne, poziomy totemów w
+  `totems.json` (protokół definicji 5), komendy `aoj_perf`, `aoj_dump`, `aoj_totem`, `aoj_despawn`.
+- **Do sprawdzenia w grze (kolejność):** kocioł i głód (w `testo` osadnicy mają sytość 0), skrzynia wejściowa
+  tragarza (problem „brak wejścia”) i czy gracz wie, jak ją ustawić, drwal z siekierą, górnik/hutnik/kucharz/rolnik,
+  oblężenie i odbudowa, co-op, serwer dedykowany.
+- **Świat `testo` po testach:** Totem Tragarza poziom 3 przy osadzie, krata jeńca i 2 greydwarfy (świat ma pasywne
+  potwory), postać „test” z odblokowanymi przepisami na brąz (przedmioty z `spawn`).
 
 ## 1. Gdzie jesteśmy
 
