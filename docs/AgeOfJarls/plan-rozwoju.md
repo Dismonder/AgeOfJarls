@@ -29,8 +29,8 @@
   jagodą), osadnik nazywa przedmiot bez skrzyni („Pióra: postaw pustą skrzynię”).
 - **Do sprawdzenia w grze (kolejność):** górnik (ten sam kod celowania co drwal; w `testo` zablokowany poziomem
   osady), skrzynia wejściowa tragarza (problem „brak wejścia”) i czy gracz wie, jak ją ustawić,
-  hutnik/kucharz/rolnik, oblężenie i odbudowa, co-op, serwer dedykowany. Uwaga: `tod` przesuwa zegar świata —
-  osadnicy głodnieją o tyle, ile czasu przeskoczono.
+  hutnik/kucharz/rolnik, oblężenie i odbudowa, co-op, serwer dedykowany. Uwaga: gra działająca w tle między testami
+  to upływ czasu świata (doba = 30 min) — osadnicy w tym czasie jedzą zapasy.
 - **Świat `testo` po testach:** Totem Tragarza poziom 3 przy osadzie, krata jeńca i 2 greydwarfy (świat ma pasywne
   potwory), postać „test” z odblokowanymi przepisami na brąz (przedmioty z `spawn`).
 

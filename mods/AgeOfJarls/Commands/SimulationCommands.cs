@@ -203,12 +203,13 @@ namespace AgeOfJarls.Commands
     internal sealed class TotemCommand : AojCommand
     {
         private const float Range = 10f;
-        private static readonly List<string> Options = new List<string> { "upgrade", "release", "priority" };
+        private static readonly List<string> Options = new List<string> { "upgrade", "release", "priority", "radius" };
 
         public override string Name => "aoj_totem";
 
         public override string Help => $"Age of Jarls: the nearest totem within {Range:0} m (level, places, next upgrade); " +
-                                       "'upgrade' buys its next level, 'release' frees its workers, 'priority low|normal|high' sets it";
+                                       "'upgrade' buys its next level, 'release' frees its workers, 'priority low|normal|high' and " +
+                                       $"'radius <{WorkTotem.MinRadius:0}-{WorkTotem.MaxRadius:0}>' set them (like its window)";
 
         public override List<string> CommandOptionList() => Options;
 
@@ -240,6 +241,19 @@ namespace AgeOfJarls.Commands
                 context?.AddString($"{totem.Job}: priority {ConsoleCommands.Localize(WorkTotem.PriorityToken(priority))}.");
                 return;
             }
+            if (args.Length > 1 && args[0].Equals("radius", System.StringComparison.OrdinalIgnoreCase))
+            {
+                if (!float.TryParse(args[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float radius))
+                {
+                    context?.AddString($"usage: aoj_totem radius <{WorkTotem.MinRadius:0}-{WorkTotem.MaxRadius:0}>");
+                    return;
+                }
+                radius = Mathf.Clamp(radius, WorkTotem.MinRadius, WorkTotem.MaxRadius);
+                // The owner checks the rights, as for the window's slider.
+                totem.RequestRadius(radius);
+                context?.AddString($"{totem.Job}: radius {radius:0} m.");
+                return;
+            }
             if (args.Length > 0 && args[0].Equals("upgrade", System.StringComparison.OrdinalIgnoreCase))
             {
                 // Read before: the owner (this machine, alone) raises the level while the request is sent.
@@ -253,7 +267,7 @@ namespace AgeOfJarls.Commands
                 ? ", next level: " + ConsoleCommands.Localize(WorkTotem.CostText(WorkTotem.UpgradeCost(level + 1)))
                 : ", highest level";
             context?.AddString($"{totem.Job}: level {level}/{WorkTotem.MaxLevel}, pace x{totem.PaceBonus:0.00}, workers {totem.WorkerCount()}/{totem.Capacity}, " +
-                               $"radius {totem.Radius:0} m{next}");
+                               $"radius {totem.Radius:0} m, priority {ConsoleCommands.Localize(WorkTotem.PriorityToken(totem.Priority))}{next}");
         }
     }
 
