@@ -20,6 +20,9 @@
 - Settlers speak up when you are near: a greeting when you come back, what their work lacks ("Place a chest by the
   totem!"), an empty cauldron, nowhere to put their load; captives call for help. Rarely, and never in chorus.
 - Fixed placeholders in the new totem texts (a raw "{0}" showed instead of the value).
+- Hungry settlers no longer starve next to food: they eat what they carry, and when no cauldron has food they fetch
+  it from a settlement chest - enough for everyone when there is a cauldron, the rest goes into it.
+- A settler you talk to ([E]) stops and faces you, and carries on where it left off.
 
 - `aoj_perf [seconds]` measures what the mod costs per frame on your machine (settler AI with planning, jobs,
   paths and inventory saves, ticks, windows, and the game's own AI for comparison).

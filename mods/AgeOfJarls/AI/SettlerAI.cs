@@ -130,6 +130,17 @@ namespace AgeOfJarls.AI
                 return;
             }
 
+            // Talked to (its window open on this machine): it stops and faces the player, and takes up its chores
+            // where it left them once the window closes.
+            Player talker = Player.m_localPlayer;
+            if (talker != null && IsCalm() && UI.SettlerWindow.IsOpenFor(_settler))
+            {
+                StopMoving();
+                LookAt(talker.transform.position);
+                _settler.FlushInventory();
+                return;
+            }
+
             bool calm = IsCalm();
             if (calm && _settler.IsAtHome)
             {

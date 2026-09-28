@@ -41,6 +41,10 @@ namespace AgeOfJarls.UI
         private Text _info;
 
         /// <summary>Opens the window; opened from afar (the command wheel), it stays open up to <paramref name="reach"/> metres away.</summary>
+        /// <summary>This settler's window is open here: it stops and faces the player talking to it.</summary>
+        internal static bool IsOpenFor(Settler settler) =>
+            s_instance != null && s_instance.gameObject.activeSelf && s_instance._settler == settler;
+
         internal static void Open(Settler settler, float reach = MaxDistance)
         {
             if (GUIManager.CustomGUIFront == null || settler == null)

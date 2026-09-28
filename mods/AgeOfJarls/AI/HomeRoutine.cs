@@ -349,6 +349,14 @@ namespace AgeOfJarls.AI
             {
                 return true;
             }
+            if (_deliverFood)
+            {
+                if (bag.GetAllItems().Exists(Needs.IsFood))
+                {
+                    return true;
+                }
+                _deliverFood = false;
+            }
             if (_activeJob != null && !_jobIdle)
             {
                 int limit = AoJConfig.CarryLimit.Value;
@@ -466,6 +474,39 @@ namespace AgeOfJarls.AI
         // The nearest Settlement Cauldron with food; the best meal in it (most satiety) is eaten on the spot.
         private bool Eat(float dt)
         {
+            // Food in its own bag (fetched from a chest, picked up) is eaten on the spot. Every frame while hungry, so
+            // a plain loop rather than LINQ.
+            Inventory bag = _character.GetInventory();
+            ItemDrop.ItemData packed = null;
+            foreach (ItemDrop.ItemData item in bag.GetAllItems())
+            {
+                if (Needs.IsFood(item) && (packed == null || Needs.MealValue(item) > Needs.MealValue(packed)))
+                {
+                    packed = item;
+                }
+            }
+            if (packed != null && _settler.Zdo != null)
+            {
+                Needs.Eat(_settler.Zdo, packed);
+                bag.RemoveItem(packed, 1);
+                _settler.FlushInventory();
+                _starving = false;
+                Log.Debug(Module, $"{_settler.DisplayName} ate {packed.m_shared.m_name} from its bag");
+                if (AiTrace.On)
+                {
+                    AiTrace.Write(_ai, $"eats {packed.m_shared.m_name} from its bag (satiety {Needs.Satiety(_settler.Zdo):0})");
+                }
+                return true;
+            }
+            if (_pantry != null)
+            {
+                if (FetchFood(dt))
+                {
+                    return true;
+                }
+                _mealRetryAt = Time.time + MealRetrySeconds;
+                return false;
+            }
             if (Time.time < _mealRetryAt)
             {
                 return false;
@@ -483,6 +524,11 @@ namespace AgeOfJarls.AI
                 _starving = _cauldron == null;
                 if (_cauldron == null)
                 {
+                    if (FetchFood(dt))
+                    {
+                        _starving = false;
+                        return true;
+                    }
                     // Shown while it idles until the next look (see UpdateInner), not for a single frame.
                     _mealRetryAt = Time.time + MealRetrySeconds;
                     return false;
@@ -523,9 +569,83 @@ namespace AgeOfJarls.AI
                 Needs.Eat(_settler.Zdo, meal);
                 food.RemoveItem(meal, 1);
                 Log.Debug(Module, $"{_settler.DisplayName} ate {meal.m_shared.m_name}");
+                if (AiTrace.On)
+                {
+                    AiTrace.Write(_ai, $"eats {meal.m_shared.m_name} at the cauldron (satiety {Needs.Satiety(_settler.Zdo):0})");
+                }
             }
             _cauldron = null;
             return true;
+        }
+
+        /// <summary>Taken from a chest for an empty cauldron: the rest goes into the cauldron for everyone.</summary>
+        private const int RestockServings = 10;
+        /// <summary>Without any cauldron, only what the settler eats now.</summary>
+        private const int OwnServings = 2;
+        private Container _pantry;
+        private float _pantryTimer;
+        /// <summary>Carries food fetched for the cauldron: taken there at once, whatever its job, so the others can eat.</summary>
+        private bool _deliverFood;
+
+        // No cauldron has food but a chest of the settlement does: the hungry settler fetches some - enough for the
+        // others too when there is a cauldron to put the rest in (the storing trip takes it there, food goes to a
+        // cauldron first) - and eats from its bag. True while busy with it.
+        private bool FetchFood(float dt)
+        {
+            if (_pantry == null)
+            {
+                _pantry = SettlementStorage.FindHolding(_chests, Needs.IsFood, _ai.transform.position);
+                _pantryTimer = 0f;
+                if (_pantry == null)
+                {
+                    return false;
+                }
+                if (AiTrace.On)
+                {
+                    AiTrace.Write(_ai, $"hungry, no food in a cauldron: fetches some from a chest {Vector3.Distance(_ai.transform.position, _pantry.transform.position):0} m away");
+                }
+            }
+            if (!SettlementStorage.IsUsable(_pantry))
+            {
+                _pantry = null;
+                return false;
+            }
+
+            _character.GetUp();
+            _settler.SetActivity(SettlerActivity.Eating);
+            Vector3 target = _pantry.transform.position;
+            _pantryTimer += dt;
+            MoveResult move = _mover.MoveTo(dt, target, ChestStopDistance, ChestReach, run: false);
+            if (move == MoveResult.Moving && _pantryTimer < TripSeconds)
+            {
+                return true;
+            }
+            if (move != MoveResult.Arrived || Vector3.Distance(_ai.transform.position, target) > ChestReach)
+            {
+                _avoidUntil[_pantry.m_nview.GetZDO().m_uid] = Time.time + UnreachableSeconds;
+                _pantry = null;
+                return false;
+            }
+            if (!ChestAccess.Acquire(_pantry, ask: TimeToAsk(dt)))
+            {
+                if (_pantryTimer > TripSeconds + AccessSeconds)
+                {
+                    _pantry = null;
+                    return false;
+                }
+                return true;
+            }
+            bool cauldron = SettlementCauldron.Loaded.Exists(c => c != null && c.Container != null &&
+                                                                 Vector3.Distance(c.transform.position, _table.transform.position) <= _radius);
+            int taken = SettlementStorage.TakeFrom(_pantry, _character.GetInventory(), Needs.IsFood, cauldron ? RestockServings : OwnServings);
+            _settler.FlushInventory();
+            _pantry = null;
+            _deliverFood = cauldron && taken > 0;
+            if (AiTrace.On)
+            {
+                AiTrace.Write(_ai, $"took {taken} food from the chest{(cauldron ? " (the rest goes to the cauldron)" : "")}");
+            }
+            return taken > 0;
         }
 
         // ---------------------------------------------------------------- work
