@@ -305,6 +305,7 @@
   "aoj_bark_greet_3": "Skål, $1!",
   "aoj_bark_hungry": "My belly growls... and there is no food anywhere.",
   "aoj_bark_nochest": "I have nowhere to put this.",
+  "aoj_bark_nochest_item": "Nowhere to put the $1. Build an empty chest!",
   "aoj_bark_captive": "Help me, set me free!",
   "aoj_bark_sleep": "Zzz...",
   "aoj_totem_level": "Level",

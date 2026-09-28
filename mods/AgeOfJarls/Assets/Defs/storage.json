@@ -1,6 +1,6 @@
 {
   "kinds": {
-    "wood": [ "Wood", "FineWood", "RoundLog", "ElderBark", "YggdrasilWood", "Blackwood" ],
+    "wood": [ "Wood", "FineWood", "RoundLog", "ElderBark", "YggdrasilWood", "Blackwood", "Resin" ],
     "stone": [ "Stone", "Flint", "Obsidian", "Grausten", "BlackMarble" ],
     "ore": [ "CopperOre", "TinOre", "CopperScrap", "BronzeScrap", "IronScrap", "IronOre", "SilverOre", "BlackMetalScrap", "FlametalOre", "FlametalOreNew" ],
     "metal": [ "Copper", "Tin", "Bronze", "Iron", "Silver", "BlackMetal", "Flametal", "FlametalNew" ],

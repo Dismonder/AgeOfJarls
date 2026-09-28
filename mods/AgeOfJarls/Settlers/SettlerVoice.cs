@@ -113,7 +113,9 @@ namespace AgeOfJarls.Settlers
                 case SettlerActivity.NoFood:
                     return Localize("$aoj_bark_hungry");
                 case SettlerActivity.NoChest:
-                    return Localize("$aoj_bark_nochest");
+                    // Which thing, so the player knows what chest to add.
+                    string item = zdo.GetString(Keys.ZdoSettlerNoChestItem);
+                    return item.Length > 0 ? Localize("$aoj_bark_nochest_item", Localize(item)) : Localize("$aoj_bark_nochest");
                 default:
                     return null;
             }

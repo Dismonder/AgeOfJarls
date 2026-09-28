@@ -340,6 +340,16 @@ namespace AgeOfJarls.Settlers
             Log.Info(Module, totemId == 0L ? $"{DisplayName} has no job now" : $"{DisplayName} now works as {totem?.Job.ToString() ?? "a worker"}");
         }
 
+        /// <summary>Owner only; written when it changes: an item no chest takes ("" = none), for every machine's voice.</summary>
+        internal void SetNoChestItem(string token)
+        {
+            token = token ?? "";
+            if (_nview != null && _nview.IsValid() && _nview.IsOwner() && _nview.GetZDO().GetString(Keys.ZdoSettlerNoChestItem) != token)
+            {
+                _nview.GetZDO().Set(Keys.ZdoSettlerNoChestItem, token);
+            }
+        }
+
         /// <summary>Owner only; written when it changes, for the order window on every machine.</summary>
         internal void SetActivity(SettlerActivity activity)
         {

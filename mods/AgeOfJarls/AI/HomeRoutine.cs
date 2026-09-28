@@ -305,6 +305,23 @@ namespace AgeOfJarls.AI
                     }
                 }
             }
+            else if (_chest == null)
+            {
+                // Nothing to put away now (still gathering, at work, only its food ration): nor anything waiting for a chest.
+                _carrying = false;
+            }
+            // Carrying with no chest to go to means no chest takes any of it: the first such thing is named (its voice
+            // tells the player what chest is missing).
+            string unplaced = _chest == null && _carrying ? FirstStorableName() : "";
+            if (unplaced != _unplaced)
+            {
+                _unplaced = unplaced;
+                _settler.SetNoChestItem(unplaced);
+                if (AiTrace.On && unplaced.Length > 0)
+                {
+                    AiTrace.Write(_ai, $"no chest takes {unplaced}");
+                }
+            }
             if (_avoidUntil.Count > MaxAvoided)
             {
                 _avoidUntil.Clear();
@@ -420,7 +437,43 @@ namespace AgeOfJarls.AI
                 int limit = AoJConfig.CarryLimit.Value;
                 return limit > 0 && CarriedCount() >= limit * Mathf.Max(0.25f, 1f + _settler.TraitSum(TraitStat.CarryWeight));
             }
-            return !_loot.BusyWithin(GatherPauseSeconds);
+            return !_loot.BusyWithin(GatherPauseSeconds) && HasLoad(bag);
+        }
+
+        /// <summary>A few servings of food a settler keeps on it and eats when hungry: no reason for a trip.</summary>
+        private const int RationServings = 3;
+        private string _unplaced = "";
+
+        private string FirstStorableName()
+        {
+            foreach (ItemDrop.ItemData item in _character.GetInventory().GetAllItems())
+            {
+                if (SettlementStorage.IsStorable(item) && !_keep(item))
+                {
+                    return item.m_shared.m_name;
+                }
+            }
+            return "";
+        }
+
+        // Something worth a trip to the chests: anything storable but its own food ration (a berry left over from a meal
+        // would otherwise be carried back to the chest it came from).
+        private bool HasLoad(Inventory bag)
+        {
+            int food = 0;
+            foreach (ItemDrop.ItemData item in bag.GetAllItems())
+            {
+                if (!SettlementStorage.IsStorable(item) || _keep(item))
+                {
+                    continue;
+                }
+                if (!Needs.IsFood(item))
+                {
+                    return true;
+                }
+                food += item.m_stack;
+            }
+            return food > RationServings;
         }
 
         // ---------------------------------------------------------------- storing

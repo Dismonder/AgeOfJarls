@@ -305,6 +305,7 @@
   "aoj_bark_greet_3": "Skål, $1!",
   "aoj_bark_hungry": "Burczy mi w brzuchu… a jedzenia nigdzie nie ma.",
   "aoj_bark_nochest": "Nie mam gdzie tego odłożyć.",
+  "aoj_bark_nochest_item": "Nie mam gdzie odłożyć: $1. Postaw pustą skrzynię!",
   "aoj_bark_captive": "Pomóż mi, uwolnij mnie!",
   "aoj_bark_sleep": "Chrrr…",
   "aoj_totem_level": "Poziom",

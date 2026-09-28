@@ -33,6 +33,9 @@
   pass over it into the ground), a felled tree is finished before the next one falls (the log, its halves, the wood,
   the stump), stumps and small trees are cleared too (never saplings), and a log out of reach (on a roof) is given up
   after a few blows that leave no mark instead of being hit forever. At dusk the day's take goes to the chests first.
+- A settler keeps up to three servings of food on it and eats them when hungry, instead of carrying a berry left
+  over from a meal back to the chest. Resin sorts with wood (it comes with every tree), so woodcutters no longer carry
+  it around for want of a chest.
 - Soldiers stand at their posts and sheltering settlers stay put, instead of drifting towards their home spot and
   back; a settler sits down only after a few seconds of real idleness, not in a short gap between two tasks.
 - A place nobody walked lately (a far work zone) is waited for a moment while the game builds its paths, instead of

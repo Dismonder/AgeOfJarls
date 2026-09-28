@@ -148,6 +148,8 @@ namespace AgeOfJarls.Core
 
         /// <summary>What the settler is doing at home (<see cref="Settlers.SettlerActivity"/>), for every client's window.</summary>
         internal static readonly int ZdoSettlerActivity = "aoj_settler_activity".GetStableHashCode();
+        /// <summary>An item it carries that no chest takes (its name token), so every machine's settler can say which.</summary>
+        internal static readonly int ZdoSettlerNoChestItem = "aoj_settler_nochest_item".GetStableHashCode();
 
         /// <summary>A random, non-zero 64-bit id for <see cref="ZdoSettlementId"/> and <see cref="ZdoSettlerUid"/>.</summary>
         internal static long NewId()
