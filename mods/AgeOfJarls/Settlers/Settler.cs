@@ -609,6 +609,11 @@ namespace AgeOfJarls.Settlers
                     body.Down = false;
                 }
             }
+            if (Identity != null)
+            {
+                _voice = _voice ?? new SettlerVoice(this);
+                _voice.Tick(_nview.GetZDO(), _humanoid is SettlerCharacter knocked && knocked.Down);
+            }
             if (owner && !_wasOwner)
             {
                 OnBecameOwner();
@@ -643,6 +648,7 @@ namespace AgeOfJarls.Settlers
 
         private const float SnapshotSeconds = 10f;
         private float _nextSnapshot;
+        private SettlerVoice _voice;
 
         /// <summary>Healing in bed in a settlement that unlocked healers (tiers.json "fast_healing").</summary>
         private const float FastHealing = 2f;

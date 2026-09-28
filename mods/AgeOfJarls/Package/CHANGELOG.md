@@ -15,6 +15,11 @@
   work is done (`Work/CarryLimit`, 0 = no limit, replaces `WorkerLoad`); a settler doing chores picks up everything
   lying around before one trip to the chests, instead of walking there with every single item.
 - `aoj_trace` writes what the settlers decide (activities, chest trips, loot, stuck paths) to the log.
+- Smoother settlers: no more standing frozen after a world reload (a seated pose that never cleared), no switching
+  course several times a second between work and chores, a settler wedged against furniture slips free.
+- Settlers speak up when you are near: a greeting when you come back, what their work lacks ("Place a chest by the
+  totem!"), an empty cauldron, nowhere to put their load; captives call for help. Rarely, and never in chorus.
+- Fixed placeholders in the new totem texts (a raw "{0}" showed instead of the value).
 
 - `aoj_perf [seconds]` measures what the mod costs per frame on your machine (settler AI with planning, jobs,
   paths and inventory saves, ticks, windows, and the game's own AI for comparison).

@@ -14,10 +14,14 @@ $locDir = Join-Path $mod 'Assets\Localization'
 if (-not (Test-Path $locDir)) { throw "Brak tlumaczen: $locDir" }
 
 $languages = [ordered]@{}
+# Valheim fills in $1, $2...: a {0} (C# style) would reach the player as it is.
+$placeholders = [System.Collections.Generic.List[string]]::new()
 foreach ($dir in Get-ChildItem $locDir -Directory) {
     $keys = [System.Collections.Generic.HashSet[string]]::new()
     foreach ($file in Get-ChildItem $dir.FullName -Filter *.json) {
-        (Get-Content $file.FullName -Raw | ConvertFrom-Json -AsHashtable).Keys | ForEach-Object { [void]$keys.Add($_) }
+        $table = Get-Content $file.FullName -Raw | ConvertFrom-Json -AsHashtable
+        $table.Keys | ForEach-Object { [void]$keys.Add($_) }
+        $table.GetEnumerator() | Where-Object { $_.Value -match '\{\d+\}' } | ForEach-Object { $placeholders.Add("[$($dir.Name)] $($_.Key)") }
     }
     $languages[$dir.Name] = $keys
 }
@@ -48,5 +52,6 @@ $unused = @($allKeys | Where-Object { $key = $_; -not ($static -contains $key) -
 Write-Host ("Jezyki: {0} | kluczy: {1} | tokenow w kodzie: {2} (+{3} prefiksow) | nieuzywanych: {4}" -f
     ($languages.Keys -join ', '), $allKeys.Count, $static.Count, $dynamic.Count, $unused.Count)
 if ($unused.Count -gt 0) { Write-Host "nieuzywane (informacyjnie): $($unused -join ', ')" }
+if ($placeholders.Count -gt 0) { Write-Host "parametry {0} zamiast `$1: $($placeholders -join ', ')"; $problems += $placeholders.Count }
 if ($problems -gt 0) { Write-Host "Problemow: $problems"; exit 1 }
 Write-Host 'OK'
