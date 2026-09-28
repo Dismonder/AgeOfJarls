@@ -20,6 +20,10 @@ namespace AgeOfJarls.Settlement
         private const float BannerScale = 0.75f;
         private const float BeamHeight = 3f;
         private const float PoleTop = 3.2f;
+        /// <summary>A higher totem level shows from afar: a bigger cloth on a taller pole, per level.</summary>
+        private const float ScalePerLevel = 0.1f;
+        private const float HeightPerLevel = 0.3f;
+        private const float PoleAboveBeam = PoleTop - BeamHeight;
         /// <summary>A little into the ground, where WearNTear looks for what holds the piece up.</summary>
         private const float PoleBottom = -0.05f;
         private const float PoleThickness = 0.22f;
@@ -52,7 +56,8 @@ namespace AgeOfJarls.Settlement
             if (clothMesh != null && clothMesh.sharedMesh != null)
             {
                 Bounds bounds = clothMesh.sharedMesh.bounds;
-                var aim = new GameObject("cloth_collider") { layer = LayerMask.NameToLayer("piece_nonsolid") };
+                int walkThrough = LayerMask.NameToLayer("piece_nonsolid");
+                var aim = new GameObject("cloth_collider") { layer = walkThrough >= 0 ? walkThrough : prefab.layer };
                 aim.transform.SetParent(cloth, false);
                 BoxCollider box = aim.AddComponent<BoxCollider>();
                 box.center = bounds.center;
@@ -95,6 +100,32 @@ namespace AgeOfJarls.Settlement
                 wear.m_health = Mathf.Max(wear.m_health, MinHealth);
             }
             return true;
+        }
+
+        /// <summary>
+        /// Shows a standard at a level (1 = as built): the cloth grows and the pole with it, so the cloth never
+        /// reaches the ground. Does nothing on a piece that is not a standard (an old wall banner, missing parts).
+        /// </summary>
+        internal static void ShowLevel(Transform root, int level)
+        {
+            Transform banner = root.Find("banner");
+            Transform pole = root.Find("pole");
+            if (banner == null || pole == null)
+            {
+                return;
+            }
+            int steps = Mathf.Max(0, level - 1);
+            float beam = BeamHeight + HeightPerLevel * steps;
+            float top = beam + PoleAboveBeam;
+            banner.localScale = Vector3.one * (BannerScale + ScalePerLevel * steps);
+            banner.localPosition = new Vector3(ClothOffset, beam, 0f);
+            pole.localPosition = new Vector3(0f, (top + PoleBottom) / 2f, 0f);
+            pole.localScale = new Vector3(top - PoleBottom, PoleThickness, PoleThickness);
+            LODGroup lodGroup = root.GetComponent<LODGroup>();
+            if (lodGroup != null)
+            {
+                lodGroup.RecalculateBounds();
+            }
         }
     }
 }

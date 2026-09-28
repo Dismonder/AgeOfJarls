@@ -69,6 +69,20 @@ namespace AgeOfJarls.Work
         internal static (string item, int amount)[] UpgradeCost(int level) =>
             level >= 2 && level <= MaxLevel ? UpgradeCosts[level - 2] : new (string, int)[0];
 
+        private const float LooksSeconds = 2f;
+        /// <summary>The level the standard is drawn at; the prefab is built as level 1.</summary>
+        private int _shownLevel = 1;
+
+        private void UpdateLooks()
+        {
+            int level = Level;
+            if (level != _shownLevel)
+            {
+                _shownLevel = level;
+                FreeStandingBanner.ShowLevel(transform, level);
+            }
+        }
+
         // The player who paid for an upgrade here waits for the owner's answer; only then may a refund come in.
         private int _paidFromLevel;
         private float _paidUntil;
@@ -136,6 +150,8 @@ namespace AgeOfJarls.Work
             HideMarker();
             _nview.Register<ZPackage>(Keys.RpcTotemConfig, RPC_Config);
             _nview.Register<int>(Keys.RpcTotemRefund, RPC_Refund);
+            // The level may be raised on another machine (the owner's): every client redraws when its ZDO says so.
+            InvokeRepeating(nameof(UpdateLooks), 0.5f, LooksSeconds);
         }
 
         private void Start()
