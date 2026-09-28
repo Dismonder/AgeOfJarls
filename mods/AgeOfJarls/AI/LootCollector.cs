@@ -23,10 +23,6 @@ namespace AgeOfJarls.AI
         /// <summary>Loot farther than this from the leader is ignored, so a companion never wanders off.</summary>
         private const float LeashRange = 12f;
 
-        // Main thread only; shared by all settlers like the player's auto-pickup buffer.
-        private static readonly Collider[] s_hits = new Collider[64];
-        private static int s_itemMask;
-
         private readonly SettlerAI _ai;
         private readonly Humanoid _humanoid;
         private readonly PathMover _mover;
@@ -171,19 +167,17 @@ namespace AgeOfJarls.AI
 
         private ItemDrop FindLoot(Vector3 scanCenter, float scanRadius, Vector3 leashCenter, float leash, Predicate<ItemDrop.ItemData> wanted)
         {
-            if (s_itemMask == 0)
-            {
-                s_itemMask = LayerMask.GetMask("item");
-            }
-
+            // Every loaded drop (the game keeps them in one list), not a physics query into a fixed buffer: after a day of
+            // felling hundreds of pieces of wood lie about a settlement, and the buffer filled up with them before the
+            // one wanted - a starving settler never found the meat on the ground.
             ItemDrop best = null;
             float bestSqr = float.MaxValue;
             Vector3 origin = _ai.transform.position;
-            int count = Physics.OverlapSphereNonAlloc(scanCenter, scanRadius, s_hits, s_itemMask);
-            for (int i = 0; i < count; i++)
+            float scanSqr = scanRadius * scanRadius;
+            foreach (ItemDrop drop in ItemDrop.s_instances)
             {
-                ItemDrop drop = s_hits[i].GetComponentInParent<ItemDrop>();
-                if (!IsValidTarget(drop, leashCenter, leash, wanted))
+                if (drop == null || drop.m_nview == null || !drop.m_nview.IsValid() ||
+                    (drop.transform.position - scanCenter).sqrMagnitude > scanSqr || !IsValidTarget(drop, leashCenter, leash, wanted))
                 {
                     continue;
                 }

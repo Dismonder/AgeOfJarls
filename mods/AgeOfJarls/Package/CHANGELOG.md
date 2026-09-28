@@ -65,6 +65,11 @@
 - Builders repair what they can reach from where they stand, as far as a player's hammer (a roof or the top of a
   wall from the ground), and leave a piece they cannot get to for a minute instead of trying it again and again; a
   breach they cannot reach no longer holds up the others. Farmers leave an unreachable crop for a minute too.
+- Settlers see everything lying around: after a day of felling, hundreds of pieces of wood filled their search and
+  hid the rest (ore, coal, food were never picked up). Work zones next to a big base no longer miss trees or rocks
+  crowded out by the walls and floors.
+- A hungry settler eats food lying about the settlement (dropped by a player, or by the game from a full chest)
+  before it forages - one starved next to cooked meat on the ground.
 - `aoj_info` shows where each totem stands. Test commands: `aoj_fill <item> [n]` (cheat, into the nearest chest),
   `aoj_role <settler> <role>`, `aoj_alarm on|off`, `aoj_breach` (cheat, breaks the nearest building piece as a siege
   would, for the Builders to put back), `aoj_totem replant on|off`. `aoj_trace` also names the chest a worker fetches

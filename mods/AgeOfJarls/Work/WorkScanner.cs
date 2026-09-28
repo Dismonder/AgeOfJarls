@@ -12,7 +12,8 @@ namespace AgeOfJarls.Work
     {
         private const float CacheSeconds = 5f;
 
-        private static readonly Collider[] s_hits = new Collider[1024];
+        private const int MaxHits = 32768;
+        private static Collider[] s_hits = new Collider[1024];
         private static readonly Dictionary<(long, Type), (float time, List<Component> found)> s_cache =
             new Dictionary<(long, Type), (float, List<Component>)>();
         private static readonly HashSet<Component> s_seen = new HashSet<Component>();
@@ -38,7 +39,14 @@ namespace AgeOfJarls.Work
             }
             var found = new List<Component>();
             s_seen.Clear();
-            int count = Physics.OverlapSphereNonAlloc(totem.transform.position, totem.Radius + margin, s_hits, s_mask);
+            int count;
+            // A full buffer means some were left out - by a big base in the zone, the walls and floors could crowd out
+            // every tree: it grows and the query runs again.
+            while ((count = Physics.OverlapSphereNonAlloc(totem.transform.position, totem.Radius + margin, s_hits, s_mask)) == s_hits.Length &&
+                   s_hits.Length < MaxHits)
+            {
+                s_hits = new Collider[s_hits.Length * 2];
+            }
             for (int i = 0; i < count; i++)
             {
                 T component = s_hits[i].GetComponentInParent<T>();

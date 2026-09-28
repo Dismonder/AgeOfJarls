@@ -636,6 +636,16 @@ namespace AgeOfJarls.AI
                 _mealRetryAt = Time.time + MealRetrySeconds;
                 return false;
             }
+            if (_gatheringFood)
+            {
+                if (GatherGroundFood(dt))
+                {
+                    return true;
+                }
+                _gatheringFood = false;
+                _mealRetryAt = Time.time + MealRetrySeconds;
+                return false;
+            }
             if (Time.time < _mealRetryAt)
             {
                 return false;
@@ -653,7 +663,7 @@ namespace AgeOfJarls.AI
                 _starving = _cauldron == null;
                 if (_cauldron == null)
                 {
-                    if (FetchFood(dt) || Forage(dt))
+                    if (FetchFood(dt) || (_gatheringFood = GatherGroundFood(dt)) || Forage(dt))
                     {
                         _starving = false;
                         return true;
@@ -778,6 +788,32 @@ namespace AgeOfJarls.AI
         }
 
         // ---------------------------------------------------------------- foraging
+
+        private bool _gatheringFood;
+
+        // Food lying about in the settlement (dropped by a player, or by the game when a chest was full) is picked up and
+        // eaten from the bag before anything wild is foraged: a settler starved next to cooked meat on the ground.
+        private bool GatherGroundFood(float dt)
+        {
+            // What lies around is only theirs to take with Settlers/CollectLoot on.
+            if (!AoJConfig.SettlerCollectLoot.Value)
+            {
+                return false;
+            }
+            if (!_gatheringFood)
+            {
+                // A look right now: the collector's own next scan (for the chores) may be seconds away, and this is only
+                // asked once per meal retry.
+                _loot.ScanNow();
+            }
+            if (!_loot.CollectInZone(dt, _table.transform.position, _radius, Needs.IsFood))
+            {
+                return false;
+            }
+            _character.GetUp();
+            _settler.SetActivity(SettlerActivity.Eating);
+            return true;
+        }
 
         /// <summary>Beyond the settlement's edge by at most this much: the trip stays well within home (HomeMargin).</summary>
         private const float ForageMargin = 2f;
