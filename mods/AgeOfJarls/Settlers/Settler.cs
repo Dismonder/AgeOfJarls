@@ -384,7 +384,8 @@ namespace AgeOfJarls.Settlers
             _humanoid.m_onDeath += OnDeath;
             UndoEnemyScaling();
             StartCoroutine(InitIdentity());
-            InvokeRepeating(nameof(Tick), TickSeconds, TickSeconds);
+            // A random phase: settlers loaded in one frame would otherwise all tick in one frame every second.
+            InvokeRepeating(nameof(Tick), UnityEngine.Random.Range(0.2f, TickSeconds), TickSeconds);
         }
 
         private void OnDestroy()
@@ -571,6 +572,13 @@ namespace AgeOfJarls.Settlers
 
         // Once per second on every client; only flag checks and ZDO reads, no searches.
         private void Tick()
+        {
+            long perf = Perf.Start();
+            TickInner();
+            Perf.Stop(Perf.Section.SettlerTick, perf);
+        }
+
+        private void TickInner()
         {
             if (!_nview.IsValid())
             {
@@ -846,6 +854,7 @@ namespace AgeOfJarls.Settlers
                 return;
             }
 
+            long perf = Perf.Start();
             var package = new ZPackage();
             _humanoid.GetInventory().Save(package);
             ZDO zdo = _nview.GetZDO();
@@ -853,6 +862,7 @@ namespace AgeOfJarls.Settlers
             zdo.Set(Keys.ZdoSettlerInventory, package.GetArray());
             zdo.Set(Keys.ZdoSettlerInventoryRevision, revision);
             _loadedInventoryRevision = revision;
+            Perf.Stop(Perf.Section.InventorySaves, perf);
             Log.Debug(Module, $"Saved the inventory of {Identity?.Name} (revision {revision})");
         }
 
@@ -861,7 +871,7 @@ namespace AgeOfJarls.Settlers
         // [E] opens the order window, [Shift+E] toggles following without it.
         public bool Interact(Humanoid user, bool hold, bool alt)
         {
-            if (hold || Identity == null || !(user is Player player))
+            if (hold || Identity == null || !(user is Player player) || _nview == null || !_nview.IsValid())
             {
                 return false;
             }
@@ -1148,7 +1158,7 @@ namespace AgeOfJarls.Settlers
 
         public bool UseItem(Humanoid user, ItemDrop.ItemData item)
         {
-            if (Identity == null || item == null || !(user is Player player))
+            if (Identity == null || item == null || !(user is Player player) || _nview == null || !_nview.IsValid())
             {
                 return false;
             }
@@ -1314,6 +1324,11 @@ namespace AgeOfJarls.Settlers
 
         internal string GetHoverText()
         {
+            // Destroyed this frame (zone unloaded, removed): the ZDO is gone but the HUD still asks until the frame ends.
+            if (_nview == null || !_nview.IsValid())
+            {
+                return "";
+            }
             if (Identity == null)
             {
                 return Localize("$aoj_settler");

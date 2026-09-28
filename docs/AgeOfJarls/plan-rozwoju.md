@@ -14,6 +14,11 @@
   pracy + sadzenie drzew, oblężenia z kilku stron + jednostki oblężnicze + odbudowa wyłomów, pinezka alarmu +
   kronika „kto co zrobił”, zużycie broni żołnierzy, Włócznik/Berserk i poziomy 6–7). Zostają: balans (10) po testach
   i wydanie (11, za zgodą).
+- **Sprawdzone w grze (pętla autonomiczna, 2026-09-27/28):** start 0.4.0 bez błędów, migracja osady do formatu 5,
+  `aoj_debug`, krata jeńca, powalenie (HP 10% → wstaje po 15 s).
+- **Etap 2 — rozpoczęty:** `aoj_perf` mierzy koszt moda na klatkę; pierwsze liczby i wnioski w
+  [architecture.md](architecture.md) §11. Poprawki: rozłożenie okresowej pracy osadników w czasie, żołnierze bez
+  wolnego posterunku nie przeszukują sztandarów co klatkę, liczenie obsady bez alokacji.
 
 ## 1. Gdzie jesteśmy
 

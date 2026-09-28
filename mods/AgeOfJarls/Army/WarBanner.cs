@@ -90,6 +90,24 @@ namespace AgeOfJarls.Army
             return id == 0L ? new List<Settler>() : Settler.Loaded.Where(s => s.PostId == id).ToList();
         }
 
+        /// <summary>How many loaded settlers are posted here, without building a list (soldiers ask this often).</summary>
+        internal int PostedCount()
+        {
+            long id = Id;
+            int count = 0;
+            if (id != 0L)
+            {
+                foreach (Settler settler in Settler.Loaded)
+                {
+                    if (settler != null && settler.PostId == id)
+                    {
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
         internal bool MayManage(Player player)
         {
             if (player == null)

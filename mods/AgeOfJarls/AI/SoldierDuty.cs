@@ -39,6 +39,9 @@ namespace AgeOfJarls.AI
             _settler = settler;
             _body = body;
             _mover = mover;
+            // Soldiers loaded in the same frame must not all check gear and posts in the same frame ever after.
+            _gearTimer = UnityEngine.Random.Range(0f, GearCheckSeconds);
+            _postTimer = UnityEngine.Random.Range(0f, PostCheckSeconds);
         }
 
         /// <summary>True while busy with its duty (arming or standing guard).</summary>
@@ -56,8 +59,9 @@ namespace AgeOfJarls.AI
                 return true;
             }
 
+            // On the timer only: without a free banner, asking every frame would scan all banners and settlers.
             _postTimer -= dt;
-            if (_postTimer <= 0f || _post == null)
+            if (_postTimer <= 0f)
             {
                 _postTimer = PostCheckSeconds;
                 _post = Posts.Choose(_settler, table, CombatRoles.PostKind(role)) ?? Posts.Choose(_settler, table, BannerKind.Rally);

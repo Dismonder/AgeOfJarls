@@ -257,6 +257,14 @@ Każdy krok zapisuje w ZDO typ zadania, krok i cel (ZDOID), więc zadanie trwa d
 | Blob osady | < 8 KB |
 | Odświeżanie okna | tylko przy zmianie rewizji ZDO |
 
+**Pomiar (`aoj_perf`, 2026-09-28, 1 gracz, 60 kl./s).** 23 osadników (2 w domu, 21 bez domu): kod moda
+0,025 ms na klatkę (0,1%), AI osadnika w modzie średnio 2,8 µs na aktualizację (20 Hz), AI gry (MonsterAI)
+dla tych samych osadników 8,7 µs i skoki do 5,3 ms. Plan domowy (skan skrzyń, przydział pracy) ~100 µs co 3 s,
+zapis ekwipunku ~140 µs. Wniosek: koszt dużej osady to przede wszystkim AI gry, animacja i fizyka postaci;
+w kodzie moda ważne jest tylko, żeby okresowa praca nie wypadała w tej samej klatce u wszystkich osadników
+(zegary planu, ticku, sprzętu i posterunków startują w losowej fazie). Pomiar przy 60/120 osadnikach w domu
+wymaga osady na wyższym poziomie.
+
 ## 12. Zgodność z innymi modami
 - Twoje mody z Vortexa:
   - **AutoStore** — sam zbiera przedmioty do skrzyń; może konkurować z Tragarzami, do sprawdzenia.

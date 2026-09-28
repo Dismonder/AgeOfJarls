@@ -93,6 +93,8 @@ namespace AgeOfJarls.AI
             _loot = loot;
             _duty = duty;
             _jobFactory = jobFactory;
+            // Settlers loaded together (world load, a player arriving) would otherwise all plan in the same frame.
+            _planTimer = UnityEngine.Random.Range(0f, PlanSeconds);
             _hasChest = item => SettlementStorage.HasDestination(item, _chests, _ai.transform.position);
             _avoided = chest => _avoidUntil.TryGetValue(chest.m_nview.GetZDO().m_uid, out float until) && Time.time < until;
             _keep = item => AssignedJob()?.Keeps(item) ?? false;
@@ -114,7 +116,9 @@ namespace AgeOfJarls.AI
             if (_planTimer <= 0f)
             {
                 _planTimer = PlanSeconds;
+                long planning = Perf.Start();
                 Plan();
+                Perf.Stop(Perf.Section.Planning, planning);
             }
             if (_table == null)
             {
@@ -143,7 +147,10 @@ namespace AgeOfJarls.AI
                 return;
             }
             bool night = EnvMan.IsNight();
-            if (Work(dt))
+            long perf = Perf.Start();
+            bool working = Work(dt);
+            Perf.Stop(Perf.Section.Jobs, perf);
+            if (working)
             {
                 return;
             }
@@ -291,9 +298,9 @@ namespace AgeOfJarls.AI
             }
             WorkTotem best = WorkTotem.Loaded
                 .Where(t => t != null && t.Id != 0L && t.Settlement == _table && JobInfo.IsUnlocked(t.Job, data.Tier) &&
-                            t.Workers().Count < t.Capacity)
+                            t.WorkerCount() < t.Capacity)
                 .OrderByDescending(t => t.Priority)
-                .ThenBy(t => t.Workers().Count / (float)Mathf.Max(1, t.Capacity))
+                .ThenBy(t => t.WorkerCount() / (float)Mathf.Max(1, t.Capacity))
                 .ThenBy(t => Vector3.Distance(t.transform.position, _ai.transform.position))
                 .FirstOrDefault();
             if (best != null)

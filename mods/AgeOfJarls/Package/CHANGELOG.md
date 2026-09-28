@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- `aoj_perf [seconds]` measures what the mod costs per frame on your machine (settler AI with planning, jobs,
+  paths and inventory saves, ticks, windows, and the game's own AI for comparison).
+- `aoj_despawn [radius]` (cheat) removes test settlers: without a home and following nobody.
+- Smoother frames with many settlers: their periodic work (home planning, ticks, gear and post checks) no longer
+  lands in the same frame for everyone loaded together; soldiers without a free post stop searching every frame.
+- Fixed an error when looking at a settler at the moment it disappears (zone unloaded or removed).
+
 ## 0.4.0
 
 - Settlers are knocked out instead of dying (Settlers/PermanentDeath, off by default): they fall for a moment,

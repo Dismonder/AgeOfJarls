@@ -81,7 +81,8 @@ namespace AgeOfJarls.Settlement
             [HarmonyPrefix]
             private static bool Prefix(Container __instance, Humanoid character, bool hold, bool alt, ref bool __result)
             {
-                if (!alt || hold || !(character is Player player) || player != Player.m_localPlayer || SettlementOf(__instance) == null)
+                if (!alt || hold || !(character is Player player) || player != Player.m_localPlayer ||
+                    __instance.m_nview == null || !__instance.m_nview.IsValid() || SettlementOf(__instance) == null)
                 {
                     return true;
                 }

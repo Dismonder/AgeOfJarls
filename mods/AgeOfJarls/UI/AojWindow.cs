@@ -65,7 +65,9 @@ namespace AgeOfJarls.UI
         protected void RefreshNow()
         {
             _refreshTimer = RefreshSeconds;
+            long perf = Core.Perf.Start();
             Refresh();
+            Core.Perf.Stop(Core.Perf.Section.Windows, perf);
         }
 
         // Unity only calls this while the panel is active.

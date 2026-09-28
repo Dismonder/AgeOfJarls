@@ -310,7 +310,9 @@ namespace AgeOfJarls.Settlement
         {
             if (_nview.IsValid() && _nview.IsOwner() && Data != null)
             {
+                long perf = Perf.Start();
                 Army.Alarm.Check(this);
+                Perf.Stop(Perf.Section.TableTick, perf);
             }
         }
 
@@ -337,6 +339,13 @@ namespace AgeOfJarls.Settlement
             {
                 return;
             }
+            long perf = Perf.Start();
+            OwnerTickInner();
+            Perf.Stop(Perf.Section.TableTick, perf);
+        }
+
+        private void OwnerTickInner()
+        {
             // Ownership may have come from an older client or version: make sure the id and format are current.
             UpgradeSavedData();
             SettlementData data = Data;

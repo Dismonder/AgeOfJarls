@@ -134,6 +134,67 @@ namespace AgeOfJarls.Commands
         }
     }
 
+    /// <summary><c>aoj_perf [seconds]</c>: what the mod costs per frame on this machine (read only, so not a cheat).</summary>
+    internal sealed class PerfCommand : AojCommand
+    {
+        private const float DefaultSeconds = 10f;
+        private const float MaxSeconds = 120f;
+
+        public override string Name => "aoj_perf";
+
+        public override string Help => $"Age of Jarls: measure the mod's cost per frame on this machine for [seconds, default {DefaultSeconds:0}]";
+
+        public override void Run(string[] args, Terminal context)
+        {
+            float seconds = args.Length > 0 && float.TryParse(args[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float parsed)
+                ? Mathf.Clamp(parsed, 1f, MaxSeconds)
+                : DefaultSeconds;
+            context?.AddString(Perf.Begin(seconds)
+                ? $"Measuring for {seconds:0} s; the report comes here and to the BepInEx log."
+                : "A measurement is already running.");
+        }
+    }
+
+    /// <summary><c>aoj_despawn [radius]</c>: removes test settlers - homeless and not following anyone (cheat).</summary>
+    internal sealed class DespawnCommand : AojCommand
+    {
+        private const float DefaultRadius = 10f;
+        private const float MaxRadius = 50f;
+
+        public override string Name => "aoj_despawn";
+
+        public override string Help => $"Age of Jarls: remove settlers without a home that follow nobody, within [radius m, default {DefaultRadius:0}] (cheat)";
+
+        public override bool IsCheat => true;
+
+        public override void Run(string[] args, Terminal context)
+        {
+            Player me = Player.m_localPlayer;
+            if (me == null || ZNetScene.instance == null)
+            {
+                return;
+            }
+            float radius = args.Length > 0 && float.TryParse(args[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float parsed)
+                ? Mathf.Clamp(parsed, 1f, MaxRadius)
+                : DefaultRadius;
+            int removed = 0;
+            foreach (Settler settler in Settler.Loaded.ToArray())
+            {
+                ZNetView view = settler != null ? settler.GetComponent<ZNetView>() : null;
+                if (view == null || !view.IsValid() || settler.HasHome || settler.FollowedPlayerId != 0L ||
+                    Vector3.Distance(settler.transform.position, me.transform.position) > radius)
+                {
+                    continue;
+                }
+                // Only the owner may destroy the ZDO for everyone.
+                view.ClaimOwnership();
+                ZNetScene.instance.Destroy(settler.gameObject);
+                removed++;
+            }
+            context?.AddString($"Removed {removed} settler(s) without a home within {radius:0} m.");
+        }
+    }
+
     /// <summary><c>aoj_info</c>: the settlement you stand in, its work, food and defence at a glance.</summary>
     internal sealed class InfoCommand : AojCommand
     {

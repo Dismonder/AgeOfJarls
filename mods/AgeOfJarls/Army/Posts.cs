@@ -19,7 +19,7 @@ namespace AgeOfJarls.Army
             float bestSqr = float.MaxValue;
             foreach (WarBanner banner in WarBanner.Loaded)
             {
-                if (banner == null || banner.Kind != kind || banner.Settlement != table || banner.Posted().Count >= banner.Places)
+                if (banner == null || banner.Kind != kind || banner.Settlement != table || banner.PostedCount() >= banner.Places)
                 {
                     continue;
                 }

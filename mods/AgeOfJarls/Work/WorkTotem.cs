@@ -129,6 +129,24 @@ namespace AgeOfJarls.Work
             return id == 0L ? new List<Settler>() : Settler.Loaded.Where(s => s.JobId == id).ToList();
         }
 
+        /// <summary>How many loaded settlers work here, without building a list.</summary>
+        internal int WorkerCount()
+        {
+            long id = Id;
+            int count = 0;
+            if (id != 0L)
+            {
+                foreach (Settler settler in Settler.Loaded)
+                {
+                    if (settler != null && settler.JobId == id)
+                    {
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
         /// <summary>Workers the totem takes: more places as the settlement's tier rises and with every extra member.</summary>
         internal int Capacity
         {

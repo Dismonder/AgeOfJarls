@@ -63,10 +63,14 @@ namespace AgeOfJarls.AI
             // Before vanilla: its targeting then sees the ordered target (or none) and keeps it, since the
             // retarget timer is held back while an order stands.
             ApplyOrders();
-            if (!base.UpdateAI(dt))
+            long perf = Perf.Start();
+            bool running = base.UpdateAI(dt);
+            Perf.Stop(Perf.Section.VanillaAi, perf);
+            if (!running)
             {
                 return false;
             }
+            perf = Perf.Start();
             try
             {
                 UpdateSettlerBehaviours(dt);
@@ -80,6 +84,7 @@ namespace AgeOfJarls.AI
                     Log.Error(Module, $"{name}: settler behaviour failed, vanilla AI carries on: {e}");
                 }
             }
+            Perf.Stop(Perf.Section.SettlerAi, perf);
             return true;
         }
 
@@ -140,7 +145,9 @@ namespace AgeOfJarls.AI
                     _loot.Follow(dt, leader, handOver: !_settler.HasHome);
                 }
             }
+            long perf = Perf.Start();
             _mover.Update();
+            Perf.Stop(Perf.Section.Paths, perf);
             // Picked up, stored or handed over this frame: in the ZDO before ownership can move.
             _settler.FlushInventory();
         }

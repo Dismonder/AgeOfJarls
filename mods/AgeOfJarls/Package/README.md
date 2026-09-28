@@ -47,5 +47,6 @@ catch-up, captive camps, sieges, gear wear, the members' bonuses and the number 
 
 ## Console (devcommands)
 
-`aoj_info`, `aoj_settlers`, `aoj_settlement`, `aoj_debug`, `aoj_rank <rank> <player>`, `aoj_jarl <player>`,
-`aoj_spawn`, `aoj_catchup <hours>`, `aoj_siege`, `aoj_morale <0-100>`, `aoj_captive`, `aoj_reload_defs`.
+`aoj_info`, `aoj_settlers`, `aoj_settlement`, `aoj_debug`, `aoj_perf [seconds]`, `aoj_rank <rank> <player>`,
+`aoj_jarl <player>`, `aoj_spawn`, `aoj_despawn [radius]`, `aoj_catchup <hours>`, `aoj_siege`, `aoj_morale <0-100>`,
+`aoj_captive`, `aoj_reload_defs`.

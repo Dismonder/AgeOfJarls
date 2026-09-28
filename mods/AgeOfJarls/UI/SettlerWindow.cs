@@ -176,7 +176,7 @@ namespace AgeOfJarls.UI
         protected override bool IsTargetValid()
         {
             Player local = Player.m_localPlayer;
-            return _settler != null && local != null && !local.IsDead() &&
+            return _settler != null && _settler.Zdo != null && local != null && !local.IsDead() &&
                    Vector3.Distance(local.transform.position, _settler.transform.position) <= _reach;
         }
 
