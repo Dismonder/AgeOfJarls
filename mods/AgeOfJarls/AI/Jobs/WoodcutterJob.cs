@@ -432,9 +432,7 @@ namespace AgeOfJarls.AI.Jobs
             if (distance > StrikeDistance)
             {
                 _tripTimer += dt;
-                // Walked to below the aim point, at the target's own height: the path measures its ends in 3D.
-                Vector3 ground = new Vector3(point.x, _target.transform.position.y, point.z);
-                MoveResult move = Ctx.Mover.MoveTo(dt, ground, StrikeDistance * 0.8f, StrikeDistance + ReachSlack, run: false);
+                MoveResult move = Ctx.Mover.MoveTo(dt, point, StrikeDistance * 0.8f, StrikeDistance + ReachSlack, run: false);
                 if (move == MoveResult.Moving && _tripTimer <= GiveUpSeconds)
                 {
                     return true;

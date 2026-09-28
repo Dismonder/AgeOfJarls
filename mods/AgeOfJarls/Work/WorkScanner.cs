@@ -127,7 +127,8 @@ namespace AgeOfJarls.Work
             float bestSqr = float.MaxValue;
             foreach (Collider collider in colliders)
             {
-                if (collider == null || !collider.enabled)
+                // A broken piece of a rock is switched off with its game object, not the collider.
+                if (collider == null || !collider.enabled || !collider.gameObject.activeInHierarchy)
                 {
                     continue;
                 }
@@ -143,9 +144,23 @@ namespace AgeOfJarls.Work
         }
 
         // On the collider itself where Unity can tell (boxes, spheres, capsules, convex meshes): the box around a log
-        // lying at an angle is mostly empty air. Other meshes fall back to their bounds.
-        private static Vector3 ClosestOn(Collider collider, Vector3 from) =>
-            collider is MeshCollider mesh && !mesh.convex ? collider.bounds.ClosestPoint(from) : collider.ClosestPoint(from);
+        // lying at an angle is mostly empty air. Unity cannot for other meshes (a big rock): there it is where a line from
+        // the worker to the mesh's middle meets its surface - the corner of its bounds may hang in the air, out of reach.
+        private static Vector3 ClosestOn(Collider collider, Vector3 from)
+        {
+            if (!(collider is MeshCollider mesh) || mesh.convex)
+            {
+                return collider.ClosestPoint(from);
+            }
+            Bounds bounds = collider.bounds;
+            Vector3 toCenter = bounds.center - from;
+            float length = toCenter.magnitude;
+            if (length > 0.01f && collider.Raycast(new Ray(from, toCenter / length), out RaycastHit hit, length))
+            {
+                return hit.point;
+            }
+            return bounds.ClosestPoint(from);
+        }
 
     }
 }
