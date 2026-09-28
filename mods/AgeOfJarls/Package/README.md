@@ -44,7 +44,7 @@ Everyone on a server needs the mod (the server too). Requires BepInEx and Jotunn
 `BepInEx/config/*AgeOfJarls*.cfg` (synced from the server): settler health and death, loot, work speed, hunger,
 catch-up, captive camps, sieges, gear wear, the members' bonuses and the number of Jarls. Local: the command wheel key
 (`Commands/WheelKey`, default H) and reach (`Commands/LookRange`). Balance data in `BepInEx/config/AgeOfJarls/*.json`
-(traits, tiers, names, storage kinds, siege waves).
+(traits, tiers, names, storage kinds, siege waves, totem levels).
 
 ## Console (devcommands)
 

@@ -1,0 +1,8 @@
+{
+  "levels": [
+    { "level": 2, "paceBonus": 0.15, "extraPlaces": 1,
+      "cost": [ { "item": "Wood", "amount": 20 }, { "item": "Stone", "amount": 10 }, { "item": "Resin", "amount": 5 } ] },
+    { "level": 3, "paceBonus": 0.30, "extraPlaces": 2,
+      "cost": [ { "item": "FineWood", "amount": 10 }, { "item": "Bronze", "amount": 4 } ] }
+  ]
+}

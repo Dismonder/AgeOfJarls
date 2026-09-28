@@ -96,7 +96,7 @@ namespace AgeOfJarls.UI
             info.Append($"\n$aoj_totem_level {level}/{WorkTotem.MaxLevel}");
             if (level > 1)
             {
-                string bonus = Localize("$aoj_totem_bonus", Mathf.RoundToInt((_totem.PaceBonus - 1f) * 100f).ToString(), (level - 1).ToString());
+                string bonus = Localize("$aoj_totem_bonus", Mathf.RoundToInt((_totem.PaceBonus - 1f) * 100f).ToString(), _totem.ExtraPlaces.ToString());
                 info.Append(" <color=#b0b0b0>(").Append(bonus).Append(")</color>");
             }
             ToolKind tool = JobInfo.RequiredTool(_totem.Job);

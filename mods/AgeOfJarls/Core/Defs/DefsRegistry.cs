@@ -19,7 +19,7 @@ namespace AgeOfJarls.Core.Defs
     internal static class DefsRegistry
     {
         /// <summary>Bump when the wire format produced by <see cref="Serialize"/> changes.</summary>
-        internal const int ProtocolVersion = 4;
+        internal const int ProtocolVersion = 5;
 
         private const string Module = "Defs";
         private const string TraitsFile = "traits.json";
@@ -27,6 +27,7 @@ namespace AgeOfJarls.Core.Defs
         private const string NamesFile = "names.json";
         private const string StorageFile = "storage.json";
         private const string RaidsFile = "raids.json";
+        private const string TotemsFile = "totems.json";
 
         internal static DefsBundle Current { get; private set; } = new DefsBundle();
 
@@ -45,11 +46,18 @@ namespace AgeOfJarls.Core.Defs
                 Names = LoadFile<NamesDef>(NamesFile, DefsValidator.Names),
                 Storage = LoadFile<StorageDef>(StorageFile, DefsValidator.Storage),
                 Raids = LoadFile<RaidsDef>(RaidsFile, DefsValidator.Raids),
+                Totems = LoadFile<TotemsDef>(TotemsFile, DefsValidator.Totems),
             };
             if (bundle.Traits == null || bundle.Tiers == null || bundle.Names == null || bundle.Storage == null || bundle.Raids == null)
             {
                 Log.Error(Module, $"Local definitions are unusable, keeping: {Describe()}");
                 return false;
+            }
+            if (bundle.Totems == null)
+            {
+                // Optional: a missing or broken file only means totems cannot be upgraded.
+                Log.Warning(Module, $"No usable {TotemsFile}: totems cannot be upgraded");
+                bundle.Totems = new TotemsDef();
             }
 
             Activate(bundle, DefsSource.Local);
@@ -76,6 +84,7 @@ namespace AgeOfJarls.Core.Defs
                 bundle.Names = DefsValidator.Names(bundle.Names, "server");
                 bundle.Storage = DefsValidator.Storage(bundle.Storage, "server");
                 bundle.Raids = DefsValidator.Raids(bundle.Raids, "server");
+                bundle.Totems = DefsValidator.Totems(bundle.Totems, "server");
             }
             if (bundle?.Traits == null || bundle.Tiers == null || bundle.Names == null || bundle.Storage == null || bundle.Raids == null)
             {
@@ -91,7 +100,8 @@ namespace AgeOfJarls.Core.Defs
 
         internal static string Describe() =>
             $"{Source}, hash {Hash:X8}, {Current.Traits.Count} traits, {Current.Tiers.Count} tiers, " +
-            $"{Current.Names.Male.Count}+{Current.Names.Female.Count} names, {Current.Storage.Kinds.Count} storage kinds, {Current.Raids.SiegeWaves.Count} siege waves";
+            $"{Current.Names.Male.Count}+{Current.Names.Female.Count} names, {Current.Storage.Kinds.Count} storage kinds, {Current.Raids.SiegeWaves.Count} siege waves, " +
+            $"{Current.Totems.Levels.Count} totem upgrades";
 
         private static void Activate(DefsBundle bundle, DefsSource source)
         {

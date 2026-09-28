@@ -94,13 +94,41 @@ namespace AgeOfJarls.Core.Defs
                 tier.Unlocks = tier.Unlocks == null
                     ? new List<string>()
                     : tier.Unlocks.Where(u => !string.IsNullOrWhiteSpace(u)).Select(u => u.Trim()).Distinct().ToList();
-                tier.Cost = Costs(tier.Cost, i, source);
+                tier.Cost = Costs(tier.Cost, $"tier {i}", source);
             }
             return sorted;
         }
 
+        internal const int MaxTotemLevel = 5;
+        private const float MaxTotemPace = 1f;
+        private const int MaxTotemPlaces = 5;
+
+        /// <summary>
+        /// Never null: without usable levels totems simply cannot be upgraded, the rest of the definitions still load.
+        /// Levels must run 2, 3... up to <see cref="MaxTotemLevel"/>; the first gap ends the list.
+        /// </summary>
+        internal static TotemsDef Totems(TotemsDef totems, string source)
+        {
+            var result = new TotemsDef();
+            List<TotemLevelDef> sorted = totems?.Levels?.Where(l => l != null).OrderBy(l => l.Level).ToList() ?? new List<TotemLevelDef>();
+            foreach (TotemLevelDef level in sorted)
+            {
+                int expected = result.Levels.Count + 2;
+                if (level.Level != expected || expected > MaxTotemLevel)
+                {
+                    Log.Warning(Module, $"{source}: totem levels must run 2, 3... up to {MaxTotemLevel} (got {level.Level} where {expected} was due), the rest is ignored");
+                    break;
+                }
+                level.PaceBonus = Math.Max(0f, Math.Min(MaxTotemPace, level.PaceBonus));
+                level.ExtraPlaces = Math.Max(0, Math.Min(MaxTotemPlaces, level.ExtraPlaces));
+                level.Cost = Costs(level.Cost, $"totem level {level.Level}", source);
+                result.Levels.Add(level);
+            }
+            return result;
+        }
+
         // Item names are only checked against ObjectDB when paying: it does not exist yet while definitions load.
-        private static List<TierCost> Costs(List<TierCost> costs, int tier, string source)
+        private static List<TierCost> Costs(List<TierCost> costs, string what, string source)
         {
             var result = new List<TierCost>();
             if (costs == null)
@@ -112,12 +140,12 @@ namespace AgeOfJarls.Core.Defs
             {
                 if (cost == null || string.IsNullOrWhiteSpace(cost.Item) || cost.Amount < 1 || cost.Amount > MaxCostAmount)
                 {
-                    Log.Warning(Module, $"{source}: tier {tier} has an invalid cost entry (item and amount 1-{MaxCostAmount} required), skipped");
+                    Log.Warning(Module, $"{source}: {what} has an invalid cost entry (item and amount 1-{MaxCostAmount} required), skipped");
                     continue;
                 }
                 if (result.Count == MaxCosts)
                 {
-                    Log.Warning(Module, $"{source}: tier {tier} lists more than {MaxCosts} cost items, the rest is ignored");
+                    Log.Warning(Module, $"{source}: {what} lists more than {MaxCosts} cost items, the rest is ignored");
                     break;
                 }
                 cost.Item = cost.Item.Trim();

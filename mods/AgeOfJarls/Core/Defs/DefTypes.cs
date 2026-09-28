@@ -71,6 +71,24 @@ namespace AgeOfJarls.Core.Defs
         public Dictionary<string, List<string>> CampGuards = new Dictionary<string, List<string>>();
     }
 
+    /// <summary>A Work Totem level above the first, bought in the totem's window.</summary>
+    public sealed class TotemLevelDef
+    {
+        public int Level;
+        /// <summary>Extra work pace at this level, in total (0.3 = +30%).</summary>
+        public float PaceBonus;
+        /// <summary>Extra worker places at this level, in total.</summary>
+        public int ExtraPlaces;
+        /// <summary>Paid from the inventory of the player who raises a totem to this level.</summary>
+        public List<TierCost> Cost = new List<TierCost>();
+    }
+
+    public sealed class TotemsDef
+    {
+        /// <summary>Levels 2, 3... in order; empty = totems cannot be upgraded.</summary>
+        public List<TotemLevelDef> Levels = new List<TotemLevelDef>();
+    }
+
     public sealed class DefsBundle
     {
         public List<TraitDef> Traits = new List<TraitDef>();
@@ -78,6 +96,7 @@ namespace AgeOfJarls.Core.Defs
         public NamesDef Names = new NamesDef();
         public StorageDef Storage = new StorageDef();
         public RaidsDef Raids = new RaidsDef();
+        public TotemsDef Totems = new TotemsDef();
     }
 
     /// <summary>

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using AgeOfJarls.Core;
+using AgeOfJarls.Core.Defs;
 using AgeOfJarls.Net;
 using AgeOfJarls.Settlement;
 using AgeOfJarls.Settlers;
@@ -47,27 +48,26 @@ namespace AgeOfJarls.Work
 
         // ---------------------------------------------------------------- level
 
-        internal const int MaxLevel = 3;
-        /// <summary>Every level above the first: one more worker place and this much faster work.</summary>
-        internal const float PacePerLevel = 0.15f;
+        // Levels, their costs and bonuses come from totems.json (the server's copy in multiplayer).
+        private static List<TotemLevelDef> LevelDefs => DefsRegistry.Current.Totems.Levels;
 
-        /// <summary>What level 2, then level 3 costs (item prefab, amount): early materials, then the bronze age.</summary>
-        private static readonly (string item, int amount)[][] UpgradeCosts =
-        {
-            new[] { ("Wood", 20), ("Stone", 10), ("Resin", 5) },
-            new[] { ("FineWood", 10), ("Bronze", 4) },
-        };
+        private static TotemLevelDef LevelDef(int level) => level >= 2 && level - 2 < LevelDefs.Count ? LevelDefs[level - 2] : null;
+
+        /// <summary>The highest level the active definitions allow; 1 = totems cannot be upgraded.</summary>
+        internal static int MaxLevel => 1 + LevelDefs.Count;
 
         internal int Level => _nview != null && _nview.IsValid()
             ? Mathf.Clamp(_nview.GetZDO().GetInt(Keys.ZdoTotemLevel, 1), 1, MaxLevel)
             : 1;
 
         /// <summary>Multiplier for its workers' pace, live and in the catch-up.</summary>
-        internal float PaceBonus => 1f + PacePerLevel * (Level - 1);
+        internal float PaceBonus => 1f + (LevelDef(Level)?.PaceBonus ?? 0f);
 
-        /// <summary>The materials for <paramref name="level"/> (2 or 3); empty for any other level.</summary>
-        internal static (string item, int amount)[] UpgradeCost(int level) =>
-            level >= 2 && level <= MaxLevel ? UpgradeCosts[level - 2] : new (string, int)[0];
+        /// <summary>Worker places its level adds.</summary>
+        internal int ExtraPlaces => LevelDef(Level)?.ExtraPlaces ?? 0;
+
+        /// <summary>The materials for <paramref name="level"/>; empty when there is no such level.</summary>
+        internal static List<TierCost> UpgradeCost(int level) => LevelDef(level)?.Cost ?? new List<TierCost>();
 
         private const float LooksSeconds = 2f;
         /// <summary>The level the standard is drawn at; the prefab is built as level 1.</summary>
@@ -208,7 +208,7 @@ namespace AgeOfJarls.Work
                 return Mathf.Min(AoJConfig.TotemBaseSlots.Value + tier / 2, AoJConfig.TotemMaxSlots.Value) +
                        AoJConfig.TotemSlotsPerMember.Value * JarlTable.ExtraMembers(data) +
                        (JarlTable.HasUnlock(data, JarlTable.UnlockTotemSlot) ? 1 : 0) +
-                       (Level - 1);
+                       ExtraPlaces;
             }
         }
 
@@ -254,7 +254,7 @@ namespace AgeOfJarls.Work
             {
                 return Permissions.Denied(SettlementRight.Manage);
             }
-            (string item, int amount)[] cost = UpgradeCost(level + 1);
+            List<TierCost> cost = UpgradeCost(level + 1);
             bool free = player.NoCostCheat();
             if (!free)
             {
@@ -263,9 +263,9 @@ namespace AgeOfJarls.Work
                 {
                     return "$aoj_msg_totem_missing " + missing;
                 }
-                foreach ((string item, int amount) in cost)
+                foreach (TierCost item in cost)
                 {
-                    player.GetInventory().RemoveItem(SharedName(item), amount);
+                    player.GetInventory().RemoveItem(SharedName(item.Item), item.Amount);
                 }
                 _paidFromLevel = level;
                 _paidUntil = Time.time + RefundWaitSeconds;
@@ -275,12 +275,12 @@ namespace AgeOfJarls.Work
         }
 
         /// <summary>"20 $item_wood, 10 $item_stone" - the materials of a level, for buttons and messages.</summary>
-        internal static string CostText((string item, int amount)[] cost) =>
-            string.Join(", ", cost.Select(c => $"{c.amount} {SharedName(c.item)}"));
+        internal static string CostText(List<TierCost> cost) =>
+            string.Join(", ", cost.Select(c => $"{c.Amount} {SharedName(c.Item)}"));
 
-        private static string MissingText(Inventory inventory, (string item, int amount)[] cost) =>
-            string.Join(", ", cost.Where(c => inventory.CountItems(SharedName(c.item)) < c.amount)
-                .Select(c => $"{c.amount - inventory.CountItems(SharedName(c.item))} {SharedName(c.item)}"));
+        private static string MissingText(Inventory inventory, List<TierCost> cost) =>
+            string.Join(", ", cost.Where(c => inventory.CountItems(SharedName(c.Item)) < c.Amount)
+                .Select(c => $"{c.Amount - inventory.CountItems(SharedName(c.Item))} {SharedName(c.Item)}"));
 
         private static string SharedName(string prefab)
         {
@@ -298,9 +298,9 @@ namespace AgeOfJarls.Work
                 return;
             }
             _paidUntil = 0f;
-            foreach ((string item, int amount) in UpgradeCost(fromLevel + 1))
+            foreach (TierCost item in UpgradeCost(fromLevel + 1))
             {
-                player.GetInventory().AddItem(item, amount, 1, 0, 0L, "", false);
+                player.GetInventory().AddItem(item.Item, item.Amount, 1, 0, 0L, "", false);
             }
             player.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_totem_refund"));
         }

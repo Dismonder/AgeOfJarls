@@ -6,7 +6,8 @@
   ground or a floor anywhere (they were wall banners before and could only hang on walls). No workbench needed
   nearby; sturdier (200 health).
 - Totem levels: upgrade a totem in its window (level 2: 20 wood, 10 stone, 5 resin; level 3: 10 fine wood,
-  4 bronze). Every level adds a worker place and 15% work pace, also while you are away.
+  4 bronze). Every level adds a worker place and 15% work pace, also while you are away, and the standard grows.
+  Levels, costs and bonuses are in `totems.json` (up to 5 levels; the server's copy applies to everyone).
 - While placing a totem, a war banner or a Jarl's Table, the zones of the ones of that kind nearby are shown, like
   a workbench's circle.
 - `aoj_dump <prefab>` writes a prefab's parts, meshes, colliders and piece flags to the log (for modders).
