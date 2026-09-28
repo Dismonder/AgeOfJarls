@@ -228,7 +228,7 @@ namespace AgeOfJarls.AI
             }
             if (_carrying)
             {
-                parts.Add("carrying");
+                parts.Add(_unplaced.Length > 0 ? $"carrying ({_unplaced}: no chest)" : "carrying");
             }
             if (_activeJob != null)
             {

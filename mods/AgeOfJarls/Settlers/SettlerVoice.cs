@@ -103,11 +103,19 @@ namespace AgeOfJarls.Settlers
                 return Localize("$aoj_bark_greet_" + Random.Range(1, Greetings + 1), player.GetPlayerName());
             }
             string problem = _settler.JobProblem;
+            string problemLine = null;
             if (problem.Length > 0)
             {
                 string text = Localize(problem);
-                return text.Length > 0 ? char.ToUpper(text[0]) + text.Substring(1) + "!" : null;
+                problemLine = text.Length > 0 ? char.ToUpper(text[0]) + text.Substring(1) + "!" : null;
             }
+            string need = NeedLine(zdo, activity);
+            // Two things wrong (no trees, and nowhere to put its load): they take turns, the one said last waits.
+            return problemLine != null && need != null && problemLine == _lastLine ? need : problemLine ?? need;
+        }
+
+        private static string NeedLine(ZDO zdo, SettlerActivity activity)
+        {
             switch (activity)
             {
                 case SettlerActivity.NoFood:
