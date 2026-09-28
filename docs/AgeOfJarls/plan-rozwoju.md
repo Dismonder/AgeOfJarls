@@ -21,8 +21,10 @@
 - **Etap 2 — rozpoczęty:** `aoj_perf` mierzy koszt moda na klatkę; pierwsze liczby i wnioski w
   [architecture.md](architecture.md) §11. Poprawki: rozłożenie okresowej pracy osadników w czasie, żołnierze bez
   wolnego posterunku nie przeszukują sztandarów co klatkę, liczenie obsady bez alokacji.
-- **Po 0.4.0 (niewydane, CHANGELOG „Unreleased”):** wolnostojące totemy i sztandary wojenne, poziomy totemów w
-  `totems.json` (protokół definicji 5), komendy `aoj_perf`, `aoj_dump`, `aoj_totem`, `aoj_despawn`.
+- **0.5.0 (2026-09-28, paczka `dist/AgeOfJarls-0.5.0.zip`, nie wysłana na Thunderstore):** wolnostojące totemy i
+  sztandary wojenne, poziomy totemów w `totems.json` (protokół definicji 5), totemy poza osadą, zawody sprawdzone i
+  poprawione, niezawodność ruchu i zbierania, komendy testowe. Wersja podbita, żeby w co-op stara 0.4.0 u drugiego
+  gracza była odrzucona (`VersionStrictness.Minor`).
 - **Sprawdzone w grze 2026-09-28 (AI osadników):** praca bez przerw przy każdym zamachu, celowanie w kłodę, pełny
   cykl drwala (drzewo → kłoda → połówki → drewno → pniak, małe drzewa), totem drwala **poza osadą** (praca tam i
   odnoszenie urobku do skrzyń 46 m dalej), jedzenie ze skrzyń i z plecaka (racja do 3 porcji, bez kursów z jedną

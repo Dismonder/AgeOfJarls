@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 - Work Totems and War Banners are free-standing standards now: a pole with the banner on a crossbar, placed on the
   ground or a floor anywhere (they were wall banners before and could only hang on walls). No workbench needed
