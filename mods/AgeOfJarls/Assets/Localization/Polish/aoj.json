@@ -297,7 +297,7 @@
   "aoj_tool_hammer": "młotek",
   "aoj_tool_hint": "daj ją pracownikowi: przeciągnij na niego z ekwipunku",
   "aoj_totem": "Totem",
-  "aoj_totem_desc": "Stawiasz w osadzie; przydzieleni osadnicy pracują w jego strefie (promień 8-30 m).",
+  "aoj_totem_desc": "Stawiasz w osadzie albo niedaleko za nią (las, kopalnia); przydzieleni osadnicy pracują w jego strefie (promień 8-30 m).",
   "aoj_totem_outside": "totem stoi za daleko od osady",
   "aoj_problem_tool_too_weak": "za słabe narzędzie na to, co jest w strefie",
   "aoj_bark_greet_1": "Witaj, $1!",

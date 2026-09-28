@@ -257,6 +257,8 @@ namespace AgeOfJarls.AI.Jobs
     internal abstract class HarvestJob : JobBase
     {
         private const float StrikeDistance = 1.2f;
+        /// <summary>Where the way ends short of the strike distance, a blow still reaches this much farther.</summary>
+        private const float ReachSlack = 0.6f;
         /// <summary>About where a swing starts: blows are aimed from this height - down at a log, level at a trunk.</summary>
         private const float ChestHeight = 1f;
         private const float BaseSwingSeconds = 1.5f;
@@ -403,16 +405,25 @@ namespace AgeOfJarls.AI.Jobs
             Problem("");
 
             Vector3 point = StrikePoint();
-            if (Utils.DistanceXZ(point, Position) > StrikeDistance)
+            float distance = Utils.DistanceXZ(point, Position);
+            if (distance > StrikeDistance)
             {
                 _tripTimer += dt;
-                MoveResult move = Ctx.Mover.MoveTo(dt, point, StrikeDistance * 0.8f, StrikeDistance + 0.6f, run: false);
-                if (move == MoveResult.Blocked || _tripTimer > GiveUpSeconds)
+                // Walked to below the aim point, at the target's own height: the path measures its ends in 3D.
+                Vector3 ground = new Vector3(point.x, _target.transform.position.y, point.z);
+                MoveResult move = Ctx.Mover.MoveTo(dt, ground, StrikeDistance * 0.8f, StrikeDistance + ReachSlack, run: false);
+                if (move == MoveResult.Moving && _tripTimer <= GiveUpSeconds)
                 {
+                    return true;
+                }
+                if (move != MoveResult.Arrived || distance > StrikeDistance + ReachSlack)
+                {
+                    // No way there, too long, or the way ends out of reach: another target.
                     Ignore(_target);
                     Release();
+                    return true;
                 }
-                return true;
+                // As close as the ground allows (a log lying against something) and within reach: it swings from here.
             }
 
             Reservations.Take(_target, Uid);
