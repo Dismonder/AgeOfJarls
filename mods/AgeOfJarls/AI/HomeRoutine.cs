@@ -843,6 +843,11 @@ namespace AgeOfJarls.AI
             // A Night Owl keeps working at a day-only totem through the night.
             if (!totem.IsWorkTime && _settler.TraitSum(TraitStat.NightWork) <= 0f)
             {
+                if (_activeJob != null)
+                {
+                    // The working day is over: the day's take goes to the chests before bed, planned right away.
+                    _planTimer = Mathf.Min(_planTimer, 0.1f);
+                }
                 StopJob();
                 return false;
             }

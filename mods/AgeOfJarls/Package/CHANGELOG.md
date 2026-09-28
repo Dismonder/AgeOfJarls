@@ -29,6 +29,10 @@
 - Work is no longer interrupted at every blow: a woodcutter or miner stays with its tree or rock until it is down (it
   let go of it at each swing, and meanwhile the idle stroll could turn it, so the axe hit whatever stood there -
   stones included). Replanting felled trees works again. A worker that runs out of work goes to the chests at once.
+- Woodcutters understand their work: a blow is aimed at the target itself (down at a log on the ground - it used to
+  pass over it into the ground), a felled tree is finished before the next one falls (the log, its halves, the wood,
+  the stump), stumps and small trees are cleared too (never saplings), and a log out of reach (on a roof) is given up
+  after a few blows that leave no mark instead of being hit forever. At dusk the day's take goes to the chests first.
 - Soldiers stand at their posts and sheltering settlers stay put, instead of drifting towards their home spot and
   back; a settler sits down only after a few seconds of real idleness, not in a short gap between two tasks.
 - A place nobody walked lately (a far work zone) is waited for a moment while the game builds its paths, instead of
