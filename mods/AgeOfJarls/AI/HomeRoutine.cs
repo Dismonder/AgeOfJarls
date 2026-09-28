@@ -457,9 +457,10 @@ namespace AgeOfJarls.AI
         }
 
         // Something worth a trip to the chests: anything storable but its own food ration (a berry left over from a meal
-        // would otherwise be carried back to the chest it came from).
+        // would otherwise be carried back to the chest it came from). A cook's food is its work, for everyone: no ration.
         private bool HasLoad(Inventory bag)
         {
+            int ration = AssignedJob() is CookJob ? 0 : RationServings;
             int food = 0;
             foreach (ItemDrop.ItemData item in bag.GetAllItems())
             {
@@ -473,7 +474,7 @@ namespace AgeOfJarls.AI
                 }
                 food += item.m_stack;
             }
-            return food > RationServings;
+            return food > ration;
         }
 
         // ---------------------------------------------------------------- storing

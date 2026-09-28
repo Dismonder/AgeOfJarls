@@ -399,7 +399,13 @@ namespace AgeOfJarls.AI.Jobs
 
         internal override string DebugTarget => Describe(_target);
 
-        internal override bool Keeps(ItemDrop.ItemData item) => Crops().Values.Any(c => c.seed == PrefabName(item));
+        // Only what the replanting under way needs: a carrot is also the seed of a seed carrot, so keeping every crop's
+        // seed kept the whole harvest in the bag instead of the chests.
+        internal override bool Keeps(ItemDrop.ItemData item)
+        {
+            string name = PrefabName(item);
+            return _toPlant.Exists(spot => spot.seed == name);
+        }
 
         protected override bool Work(float dt)
         {
