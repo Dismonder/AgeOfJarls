@@ -225,6 +225,9 @@ namespace AgeOfJarls.AI
         /// </summary>
         internal bool IsCalm() => m_targetCreature == null && m_targetStatic == null && !m_character.IsDead();
 
+        /// <summary>Looks at the point from its eyes, up or down too - a swing goes where the settler looks.</summary>
+        internal void AimAt(Vector3 point) => LookAt(point);
+
         /// <summary>The player this settler follows, if any.</summary>
         internal Player Leader
         {

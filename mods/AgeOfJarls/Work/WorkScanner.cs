@@ -16,9 +16,14 @@ namespace AgeOfJarls.Work
         private static readonly Dictionary<(long, Type), (float time, List<Component> found)> s_cache =
             new Dictionary<(long, Type), (float, List<Component>)>();
         private static readonly HashSet<Component> s_seen = new HashSet<Component>();
+        private static readonly List<(long, Type)> s_stale = new List<(long, Type)>();
         private static int s_mask;
 
-        internal static List<Component> Find<T>(WorkTotem totem) where T : Component
+        /// <summary>
+        /// What lies in the zone, and up to <paramref name="margin"/> past its edge (one margin per type: the cache is
+        /// kept by totem and type).
+        /// </summary>
+        internal static List<Component> Find<T>(WorkTotem totem, float margin = 0f) where T : Component
         {
             var key = (totem.Id, typeof(T));
             if (s_cache.TryGetValue(key, out (float time, List<Component> found) cached) && Time.time - cached.time < CacheSeconds)
@@ -33,7 +38,7 @@ namespace AgeOfJarls.Work
             }
             var found = new List<Component>();
             s_seen.Clear();
-            int count = Physics.OverlapSphereNonAlloc(totem.transform.position, totem.Radius, s_hits, s_mask);
+            int count = Physics.OverlapSphereNonAlloc(totem.transform.position, totem.Radius + margin, s_hits, s_mask);
             for (int i = 0; i < count; i++)
             {
                 T component = s_hits[i].GetComponentInParent<T>();
@@ -49,6 +54,25 @@ namespace AgeOfJarls.Work
                 s_cache.Clear();
             }
             return found;
+        }
+
+        /// <summary>Something in the zone just fell or broke apart (a tree into a log...): the next search looks afresh.</summary>
+        internal static void Forget(WorkTotem totem)
+        {
+            long id = totem.Id;
+            s_stale.Clear();
+            foreach ((long, Type) key in s_cache.Keys)
+            {
+                if (key.Item1 == id)
+                {
+                    s_stale.Add(key);
+                }
+            }
+            foreach ((long, Type) key in s_stale)
+            {
+                s_cache.Remove(key);
+            }
+            s_stale.Clear();
         }
 
         private static int s_solidMask;
@@ -71,23 +95,29 @@ namespace AgeOfJarls.Work
                 c => !c.isTrigger && (s_solidMask & (1 << c.gameObject.layer)) != 0);
         }
 
-        /// <summary>A standing tree is struck at its trunk, whose radius this is about.</summary>
+        /// <summary>A standing tree is struck at its trunk, whose radius this is about...</summary>
         private const float TrunkRadius = 0.5f;
+        /// <summary>...and at least this high above its foot, when the worker stands below it on a slope.</summary>
+        private const float TrunkMinHeight = 0.4f;
 
         /// <summary>
-        /// Where to swing at a work object from <paramref name="from"/>: a standing tree at the side of its trunk facing
-        /// the worker (its colliders include branches metres wide), anything else at the nearest point of its colliders.
+        /// Where to swing at a work object from <paramref name="chest"/> (about where a swing starts): a standing tree
+        /// at the side of its trunk facing the worker, at that height (its colliders include branches metres wide);
+        /// anything else - a log on the ground, a rock - at the point of its colliders nearest to it, so the blow is
+        /// aimed down at a log rather than over it into the ground.
         /// </summary>
-        internal static Vector3 StrikePoint(Component target, Collider[] colliders, Vector3 from)
+        internal static Vector3 StrikePoint(Component target, Collider[] colliders, Vector3 chest)
         {
             if (target is TreeBase)
             {
                 Vector3 trunk = target.transform.position;
-                Vector3 away = from - trunk;
+                Vector3 away = chest - trunk;
                 away.y = 0f;
-                return away.sqrMagnitude < 0.01f ? trunk : trunk + away.normalized * TrunkRadius;
+                Vector3 point = away.sqrMagnitude < 0.01f ? trunk : trunk + away.normalized * TrunkRadius;
+                point.y = Mathf.Max(chest.y, trunk.y + TrunkMinHeight);
+                return point;
             }
-            return NearestPoint(colliders, from, target.transform.position);
+            return NearestPoint(colliders, chest, target.transform.position);
         }
 
         /// <summary>The point of these colliders nearest to <paramref name="from"/>.</summary>

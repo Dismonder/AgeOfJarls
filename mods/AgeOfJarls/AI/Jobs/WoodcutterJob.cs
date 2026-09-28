@@ -174,8 +174,8 @@ namespace AgeOfJarls.AI.Jobs
 
         protected override IEnumerable<Component> Candidates()
         {
-            // Fallen logs first: they are in the way and already half the work.
-            foreach (Component log in WorkScanner.Find<TreeLog>(Totem))
+            // Fallen logs, also those a tree felled at the edge threw past it.
+            foreach (Component log in WorkScanner.Find<TreeLog>(Totem, WorkTotem.Overreach))
             {
                 yield return log;
             }
@@ -184,6 +184,12 @@ namespace AgeOfJarls.AI.Jobs
                 yield return tree;
             }
         }
+
+        // A felled tree is finished before the next one falls: its log, then the halves, the wood gathered - nothing is
+        // left lying about.
+        protected override int Rank(Component target) => target is TreeLog ? 0 : 1;
+
+        protected override float Margin(Component target) => target is TreeLog ? WorkTotem.Overreach : 0f;
 
         protected override int MinToolTier(Component target) =>
             target is TreeLog log ? log.m_minToolTier : target is TreeBase tree ? tree.m_minToolTier : int.MaxValue;
@@ -243,30 +249,47 @@ namespace AgeOfJarls.AI.Jobs
     }
 
     /// <summary>
-    /// Shared by the woodcutter and the miner: gather what lies in the zone, otherwise pick the nearest object its
-    /// tool can break (reserved, so two workers never share one), walk up to it and swing with the tool in hand.
+    /// Shared by the woodcutter and the miner: gather what lies in the zone, otherwise pick the next object its tool
+    /// can break - the most urgent kind first (a felled tree's log before a new tree), then the nearest; reserved, so
+    /// two workers never share one - walk up to it and swing with the tool in hand, aimed at it. What it brings down
+    /// (a log, split halves) is worked next; a target its blows never reach is given up.
     /// </summary>
     internal abstract class HarvestJob : JobBase
     {
-        private const float StrikeDistance = 1.4f;
+        private const float StrikeDistance = 1.2f;
+        /// <summary>About where a swing starts: blows are aimed from this height - down at a log, level at a trunk.</summary>
+        private const float ChestHeight = 1f;
         private const float BaseSwingSeconds = 1.5f;
         private const float GiveUpSeconds = 40f;
         private const float IgnoreSeconds = 120f;
         private const float ScanSeconds = 3f;
+        /// <summary>
+        /// After bringing something down it watches it fall, counted from its last swing: the blow lands, the tree falls,
+        /// its log comes to rest. (Gathering the drops first may well take longer.)
+        /// </summary>
+        private const float SettleSeconds = 2.5f;
+        /// <summary>Swings in a row that leave no mark on the target: it is out of reach (on a roof, behind something).</summary>
+        private const int MissesBeforeGivingUp = 3;
         private const int SlotsToKeepFree = 1;
         private const float FacingDegrees = 20f;
 
         private readonly Dictionary<int, float> _ignored = new Dictionary<int, float>();
         private Component _target;
         private Collider[] _targetColliders = new Collider[0];
+        private ZNetView _targetView;
         private float _scanTimer;
         private float _swingTimer;
         private float _tripTimer;
+        private float _swungAt;
+        private float _settleUntil;
 
         // What the current target was, to tell when the swings brought it down (it is destroyed, not just released).
         private string _targetPrefab;
         private Vector3 _targetPosition;
         private bool _struck;
+        // Its ZDO's data revision at the last swing: every hit writes the target's health, so an unchanged one is a miss.
+        private uint _targetRevision;
+        private int _misses;
 
         /// <summary>The target this worker struck is gone: felled, broken or split.</summary>
         protected virtual void OnBroughtDown(string prefab, Vector3 position)
@@ -287,17 +310,23 @@ namespace AgeOfJarls.AI.Jobs
 
         protected abstract int MinToolTier(Component target);
 
+        /// <summary>Which kind of target comes first, lowest first; the nearest among equals.</summary>
+        protected virtual int Rank(Component target) => 0;
+
+        /// <summary>How far past the zone's edge such a target is still worked (see <see cref="WorkTotem.Overreach"/>).</summary>
+        protected virtual float Margin(Component target) => 0f;
+
         protected override bool Work(float dt)
         {
             if (Body.InAttack())
             {
-                // Mid-swing it holds still, facing where the blow lands: turning now - to a drop, to the next target -
+                // Mid-swing it holds still, aimed where the blow lands: turning now - to a drop, to the next target -
                 // would send the blade into whatever lies that way. A target felled by this very blow is let go after.
                 // The pause between swings runs on meanwhile: it is counted from the start of a swing.
                 _swingTimer -= dt;
                 if (_target != null)
                 {
-                    Face(WorkScanner.StrikePoint(_target, _targetColliders, Position));
+                    Aim(StrikePoint());
                 }
                 else
                 {
@@ -319,8 +348,9 @@ namespace AgeOfJarls.AI.Jobs
                 return false;
             }
 
-            // What the last swings dropped (wood, stone, ore, resin, seeds...) comes first.
-            if (Ctx.Loot.CollectInZone(dt, Totem.transform.position, Totem.Radius, item => true))
+            // What the last swings dropped (wood, stone, ore, resin, seeds...) comes first - also where a tree felled at
+            // the edge took the work past it.
+            if (Ctx.Loot.CollectInZone(dt, Totem.transform.position, Totem.Radius + WorkTotem.Overreach, item => true))
             {
                 Produced(Ctx.Loot.TakePicked());
                 Problem("");
@@ -332,10 +362,22 @@ namespace AgeOfJarls.AI.Jobs
             {
                 if (_target == null && _struck && _targetPrefab != null)
                 {
-                    // Unity's null: the object this worker was striking has been destroyed.
+                    // Unity's null: the object this worker was striking has been destroyed - felled, broken or split.
                     OnBroughtDown(_targetPrefab, _targetPosition);
+                    if (AiTrace.On)
+                    {
+                        AiTrace.Write(Ctx.Ai, $"brought down {_targetPrefab}");
+                    }
+                    // What it turned into (a log, two halves) is worked next: looked for afresh once it lies there.
+                    WorkScanner.Forget(Totem);
+                    _settleUntil = _swungAt + SettleSeconds;
                 }
                 Release();
+                if (Time.time < _settleUntil)
+                {
+                    Ctx.Ai.StopMoving();
+                    return true;
+                }
                 // The next target is looked for at once when the last one is done - a pause here would drop the worker
                 // into its chores between two trees. Only a scan that found nothing waits before the next.
                 _scanTimer -= dt;
@@ -354,11 +396,13 @@ namespace AgeOfJarls.AI.Jobs
                 }
                 _targetPrefab = Utils.GetPrefabName(_target.gameObject);
                 _targetPosition = _target.transform.position;
+                _targetView = _target.GetComponent<ZNetView>();
+                _misses = 0;
                 Ctx.Mover.Reset();
             }
             Problem("");
 
-            Vector3 point = WorkScanner.StrikePoint(_target, _targetColliders, Position);
+            Vector3 point = StrikePoint();
             if (Utils.DistanceXZ(point, Position) > StrikeDistance)
             {
                 _tripTimer += dt;
@@ -372,19 +416,41 @@ namespace AgeOfJarls.AI.Jobs
             }
 
             Reservations.Take(_target, Uid);
-            Face(point);
+            Aim(point);
             _swingTimer -= dt;
             // The swing goes where the settler faces: wait until it has turned to the target.
             Vector3 toTarget = point - Position;
             toTarget.y = 0f;
             bool facing = toTarget.sqrMagnitude < 0.01f || Ctx.Ai.IsLookingTowards(toTarget.normalized, FacingDegrees);
-            if (facing && _swingTimer <= 0f && !Body.InAttack() && Body.StartAttack(null, false))
+            if (!facing || _swingTimer > 0f)
             {
+                return true;
+            }
+            // Every hit writes the target's health into its ZDO: a swing that left no mark missed. One whose blows keep
+            // missing is out of reach (on a roof, behind a wall) and is given up for another, not swung at forever.
+            uint revision = Revision();
+            bool landed = !_struck || _targetView == null || revision != _targetRevision;
+            if (!landed && _misses + 1 >= MissesBeforeGivingUp)
+            {
+                if (AiTrace.On)
+                {
+                    AiTrace.Write(Ctx.Ai, $"its blows do not reach {Describe(_target)}: gives it up");
+                }
+                Ignore(_target);
+                Release();
+                return true;
+            }
+            if (Body.StartAttack(null, false))
+            {
+                _misses = landed ? 0 : _misses + 1;
+                _targetRevision = revision;
+                _swungAt = Time.time;
                 _swingTimer = BaseSwingSeconds / Mathf.Max(0.1f, Pace);
                 _struck = true;
                 if (AiTrace.On)
                 {
-                    AiTrace.Write(Ctx.Ai, $"swings at {Describe(_target)} (strike point {Utils.DistanceXZ(point, Position):0.0} m)");
+                    AiTrace.Write(Ctx.Ai, $"swings at {Describe(_target)} (strike point {Utils.DistanceXZ(point, Position):0.0} m, " +
+                                          $"{point.y - Position.y:0.0} m up{(landed ? "" : $", {_misses} miss(es)")})");
                 }
             }
             return true;
@@ -396,9 +462,17 @@ namespace AgeOfJarls.AI.Jobs
             base.Stop();
         }
 
+        /// <summary>Where on the target to aim, seen from about where a swing starts.</summary>
+        private Vector3 StrikePoint() => WorkScanner.StrikePoint(_target, _targetColliders, Position + Vector3.up * ChestHeight);
+
+        private uint Revision() => _targetView != null && _targetView.IsValid() ? _targetView.GetZDO().DataRevision : 0u;
+
         private bool IsWorkable(Component target, ItemDrop.ItemData tool) =>
             target != null && MinToolTier(target) <= tool.m_shared.m_toolTier && Reservations.IsFree(target, Uid) &&
-            InZone(target.transform.position);
+            InReach(target);
+
+        private bool InReach(Component target) =>
+            Utils.DistanceXZ(target.transform.position, Totem.transform.position) <= Totem.Radius + Margin(target);
 
         /// <summary>At the last scan the zone held work, but only for a better tool (birch for a stone axe...).</summary>
         private bool _toolTooWeak;
@@ -406,6 +480,7 @@ namespace AgeOfJarls.AI.Jobs
         private Component FindTarget(ItemDrop.ItemData tool)
         {
             Component best = null;
+            int bestRank = int.MaxValue;
             float bestSqr = float.MaxValue;
             float now = Time.time;
             _toolTooWeak = false;
@@ -417,13 +492,15 @@ namespace AgeOfJarls.AI.Jobs
                 }
                 if (!IsWorkable(candidate, tool))
                 {
-                    _toolTooWeak |= MinToolTier(candidate) > tool.m_shared.m_toolTier && InZone(candidate.transform.position);
+                    _toolTooWeak |= MinToolTier(candidate) > tool.m_shared.m_toolTier && InReach(candidate);
                     continue;
                 }
+                int rank = Rank(candidate);
                 float sqr = (candidate.transform.position - Position).sqrMagnitude;
-                if (sqr < bestSqr)
+                if (rank < bestRank || (rank == bestRank && sqr < bestSqr))
                 {
                     best = candidate;
+                    bestRank = rank;
                     bestSqr = sqr;
                 }
             }

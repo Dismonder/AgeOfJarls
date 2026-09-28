@@ -317,7 +317,9 @@ namespace AgeOfJarls.AI
         {
             Vector3 table = _table.transform.position;
             WorkTotem totem = _settler.JobTotem;
-            float work = totem != null && totem.Settlement == _table ? Utils.DistanceXZ(totem.transform.position, table) + totem.Radius : 0f;
+            float work = totem != null && totem.Settlement == _table
+                ? Utils.DistanceXZ(totem.transform.position, table) + totem.Radius + WorkTotem.Overreach
+                : 0f;
             return Utils.DistanceXZ(position, table) <= HomeReach(_radius, work);
         }
 
@@ -334,7 +336,7 @@ namespace AgeOfJarls.AI
             WorkTotem totem = _settler.JobTotem;
             // A totem serving a settlement that is loaded here is another settlement's.
             if (totem == null || totem.Settlement != null ||
-                Utils.DistanceXZ(_ai.transform.position, totem.transform.position) > totem.Radius + HomeMargin)
+                Utils.DistanceXZ(_ai.transform.position, totem.transform.position) > totem.Radius + WorkTotem.Overreach + HomeMargin)
             {
                 return false;
             }

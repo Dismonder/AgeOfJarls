@@ -24,6 +24,8 @@ namespace AgeOfJarls.Work
         internal const float MinRadius = 8f;
         internal const float MaxRadius = 30f;
         internal const float DefaultRadius = 15f;
+        /// <summary>Work begun in the zone is finished up to this far past its edge: a tree felled at the edge falls outwards.</summary>
+        internal const float Overreach = 10f;
         private const float MarkerSeconds = 0.5f;
 
         internal static readonly List<WorkTotem> Loaded = new List<WorkTotem>();

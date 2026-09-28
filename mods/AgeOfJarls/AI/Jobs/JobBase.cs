@@ -133,7 +133,7 @@ namespace AgeOfJarls.AI.Jobs
             return tool;
         }
 
-        /// <summary>Faces the point and stops, ready to swing.</summary>
+        /// <summary>Faces the point and stops (to repair, feed a station...).</summary>
         protected void Face(Vector3 point)
         {
             Ctx.Ai.StopMoving();
@@ -143,6 +143,16 @@ namespace AgeOfJarls.AI.Jobs
             {
                 Ctx.Ai.LookTowards(direction.normalized);
             }
+        }
+
+        /// <summary>
+        /// Stops and looks right at the point, down at a log on the ground too: a swing goes along the look, the way
+        /// vanilla aims at a structure it attacks. Level (<see cref="Face"/>) it would pass over a log and hit the ground.
+        /// </summary>
+        protected void Aim(Vector3 point)
+        {
+            Ctx.Ai.StopMoving();
+            Ctx.Ai.AimAt(point);
         }
 
         // ---------------------------------------------------------------- shared steps
