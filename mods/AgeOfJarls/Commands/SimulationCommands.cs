@@ -203,13 +203,13 @@ namespace AgeOfJarls.Commands
     internal sealed class TotemCommand : AojCommand
     {
         private const float Range = 10f;
-        private static readonly List<string> Options = new List<string> { "upgrade", "release", "priority", "radius" };
+        private static readonly List<string> Options = new List<string> { "upgrade", "release", "assign", "priority", "radius" };
 
         public override string Name => "aoj_totem";
 
         public override string Help => $"Age of Jarls: the nearest totem within {Range:0} m (level, places, next upgrade); " +
-                                       "'upgrade' buys its next level, 'release' frees its workers, 'priority low|normal|high' and " +
-                                       $"'radius <{WorkTotem.MinRadius:0}-{WorkTotem.MaxRadius:0}>' set them (like its window)";
+                                       "'upgrade' buys its next level, 'release' frees its workers, 'assign <settler>' gives one the job, " +
+                                       $"'priority low|normal|high' and 'radius <{WorkTotem.MinRadius:0}-{WorkTotem.MaxRadius:0}>' set them (like its window)";
 
         public override List<string> CommandOptionList() => Options;
 
@@ -230,6 +230,21 @@ namespace AgeOfJarls.Commands
                 List<Settler> workers = totem.Workers();
                 workers.ForEach(w => w.RequestSetJob(0L));
                 context?.AddString($"{totem.Job}: released {workers.Count} worker(s); free settlers take free places by themselves.");
+                return;
+            }
+            if (args.Length > 1 && args[0].Equals("assign", System.StringComparison.OrdinalIgnoreCase))
+            {
+                // Like choosing the job in the settler's window: its owner checks the rights.
+                string name = string.Join(" ", args.Skip(1));
+                Settler settler = Settler.Loaded.FirstOrDefault(s => s != null && s.Identity != null &&
+                                                                     s.Identity.Name.Equals(name, System.StringComparison.OrdinalIgnoreCase));
+                if (settler == null)
+                {
+                    context?.AddString($"No loaded settler called {name}.");
+                    return;
+                }
+                settler.RequestSetJob(totem.Id);
+                context?.AddString($"{settler.DisplayName} now works as {totem.Job} here.");
                 return;
             }
             if (args.Length > 1 && args[0].Equals("priority", System.StringComparison.OrdinalIgnoreCase))
@@ -268,6 +283,72 @@ namespace AgeOfJarls.Commands
                 : ", highest level";
             context?.AddString($"{totem.Job}: level {level}/{WorkTotem.MaxLevel}, pace x{totem.PaceBonus:0.00}, workers {totem.WorkerCount()}/{totem.Capacity}, " +
                                $"radius {totem.Radius:0} m, priority {ConsoleCommands.Localize(WorkTotem.PriorityToken(totem.Priority))}{next}");
+        }
+    }
+
+    /// <summary><c>aoj_tier &lt;level&gt;</c>: the tier of the settlement you stand in, without costs or boss (cheat, for testing).</summary>
+    internal sealed class TierCommand : AojCommand
+    {
+        public override string Name => "aoj_tier";
+
+        public override string Help => "Age of Jarls: set the tier of the settlement you stand in, without costs or boss (cheat, for testing): aoj_tier <level>";
+
+        public override bool IsCheat => true;
+
+        public override void Run(string[] args, Terminal context)
+        {
+            Player me = Player.m_localPlayer;
+            JarlTable table = me != null ? JarlTable.FindContaining(me.transform.position) : null;
+            if (table == null)
+            {
+                context?.AddString("Stand inside your settlement first.");
+                return;
+            }
+            if (args.Length == 0 || !int.TryParse(args[0], out int tier))
+            {
+                context?.AddString("usage: aoj_tier <level>");
+                return;
+            }
+            string problem = table.CheatSetTier(tier);
+            context?.AddString(problem ?? $"{JarlTable.DisplayName(table.Data)}: tier {table.Data?.Tier}, radius {table.Radius:0} m, " +
+                                          $"{table.Capacity} settlers.");
+        }
+    }
+
+    /// <summary>
+    /// <c>aoj_place &lt;piece&gt; [distance]</c>: a building piece on the ground in front of you, placed the way the hammer
+    /// does, without its cost (cheat, for setting up tests: a furnace, a cooking station, a totem).
+    /// </summary>
+    internal sealed class PlaceCommand : AojCommand
+    {
+        private const float DefaultDistance = 3f;
+
+        public override string Name => "aoj_place";
+
+        public override string Help => $"Age of Jarls: place a building piece on the ground in front of you, free (cheat, for tests): aoj_place <piece prefab> [distance m, default {DefaultDistance:0}]";
+
+        public override bool IsCheat => true;
+
+        public override void Run(string[] args, Terminal context)
+        {
+            Player me = Player.m_localPlayer;
+            GameObject prefab = args.Length > 0 && ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(args[0]) : null;
+            Piece piece = prefab != null ? prefab.GetComponent<Piece>() : null;
+            if (me == null || piece == null || ZoneSystem.instance == null)
+            {
+                context?.AddString(args.Length == 0 ? "usage: aoj_place <piece prefab> [distance]" : $"'{args[0]}' is no building piece.");
+                return;
+            }
+            float distance = args.Length > 1 && float.TryParse(args[1], System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float d) ? Mathf.Clamp(d, 1f, 20f) : DefaultDistance;
+            Vector3 forward = me.transform.forward;
+            forward.y = 0f;
+            Vector3 spot = me.transform.position + forward.normalized * distance;
+            spot.y = ZoneSystem.instance.GetGroundHeight(spot);
+            // Facing the player, as one usually builds.
+            Quaternion rotation = Quaternion.LookRotation(-forward.normalized, Vector3.up);
+            me.PlacePiece(piece, spot, rotation, doAttack: false);
+            context?.AddString($"Placed {prefab.name} at {spot.x:0}, {spot.z:0}.");
         }
     }
 

@@ -500,6 +500,24 @@ namespace AgeOfJarls.Settlement
             _nview.GetZDO().Set(Keys.ZdoSettlement, data.Serialize());
         }
 
+        /// <summary>
+        /// Cheat (<c>aoj_tier</c>, for testing): the tier without its costs or boss, written by the table's owner only -
+        /// so on the machine simulating the table (single player, the host, or the player standing by it). Null when set.
+        /// </summary>
+        internal string CheatSetTier(int tier)
+        {
+            SettlementData data = Data;
+            if (data == null || !_nview.IsOwner())
+            {
+                return "Only the machine that owns the table can do that (single player, the host, or stand right by it).";
+            }
+            List<TierDef> tiers = DefsRegistry.Current.Tiers;
+            data.Tier = Mathf.Clamp(tier, 0, Mathf.Max(0, tiers.Count - 1));
+            Write(data);
+            Log.Info(Module, $"{DisplayName(data)} set to tier {data.Tier} (cheat)");
+            return null;
+        }
+
         // ---------------------------------------------------------------- interaction
 
         // [E] opens the settlement window (read-only for guests), [Shift+E] accepts followers without it.

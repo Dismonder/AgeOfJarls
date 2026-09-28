@@ -30,6 +30,7 @@ namespace AgeOfJarls.AI
         private float _gearTimer;
         private Armory _armory;
         private float _accessTimer;
+        private float _askTimer;
         private WarBanner _post;
         private float _postTimer;
 
@@ -131,7 +132,14 @@ namespace AgeOfJarls.AI
                 return true;
             }
             _ai.StopMoving();
-            if (!ChestAccess.Acquire(_armory.Container, ask: true))
+            // Asked once a second, not every frame: the Armory's owner (another machine) hands it over within a moment.
+            _askTimer -= dt;
+            bool ask = _askTimer <= 0f;
+            if (ask)
+            {
+                _askTimer = 1f;
+            }
+            if (!ChestAccess.Acquire(_armory.Container, ask))
             {
                 _accessTimer += dt;
                 if (_accessTimer > 5f)

@@ -363,7 +363,7 @@ namespace AgeOfJarls.AI.Jobs
             if (tool == null)
             {
                 Release();
-                return false;
+                return FetchTool(dt, Tool);
             }
             if (Body.GetInventory().GetEmptySlots() <= SlotsToKeepFree)
             {

@@ -133,6 +133,13 @@ namespace AgeOfJarls.AI.Jobs
             return tool;
         }
 
+        /// <summary>
+        /// Without a tool of the kind on it (a settler given a new job, or one whose tool went to the chests with an
+        /// earlier load), one is fetched from the settlement's chests. True while at it; the "no tool" problem stays up
+        /// when no chest has one.
+        /// </summary>
+        protected bool FetchTool(float dt, ToolKind kind) => Fetch(dt, item => JobInfo.Fits(item, kind), 1) == Step.Busy;
+
         /// <summary>Faces the point and stops (to repair, feed a station...).</summary>
         protected void Face(Vector3 point)
         {

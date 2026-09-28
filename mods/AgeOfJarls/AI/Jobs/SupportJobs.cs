@@ -14,9 +14,16 @@ namespace AgeOfJarls.AI.Jobs
     {
         private const int SlotsToKeepFree = 2;
         private const float InputRefreshSeconds = 5f;
+        private const float AskSeconds = 1f;
+        /// <summary>A player keeps the input chest open this long: the hauler does something else meanwhile.</summary>
+        private const float AccessGiveUpSeconds = 5f;
+        private const float BusyChestPauseSeconds = 15f;
 
         private Container _input;
         private float _inputTimer;
+        private float _askTimer;
+        private float _accessTimer;
+        private float _pauseUntil;
 
         internal HaulerJob(JobContext context) : base(context)
         {
@@ -55,8 +62,9 @@ namespace AgeOfJarls.AI.Jobs
             }
             Problem("");
             System.Predicate<ItemDrop.ItemData> sortable = item => SettlementStorage.HasDestination(item, chests, Position);
-            if (!SettlementStorage.IsUsable(input) || !input.GetInventory().GetAllItems().Exists(sortable))
+            if (Time.time < _pauseUntil || !SettlementStorage.IsUsable(input) || !input.GetInventory().GetAllItems().Exists(sortable))
             {
+                _accessTimer = 0f;
                 return false;
             }
             Step walk = WalkTo(dt, input.transform.position, 2.5f);
@@ -64,10 +72,24 @@ namespace AgeOfJarls.AI.Jobs
             {
                 return walk == Step.Busy;
             }
-            if (!ChestAccess.Acquire(input, ask: true))
+            // The chest's owner (another machine) hands it over within a moment; asked once a second, not every frame.
+            _askTimer -= dt;
+            bool ask = _askTimer <= 0f;
+            if (ask)
             {
+                _askTimer = AskSeconds;
+            }
+            if (!ChestAccess.Acquire(input, ask))
+            {
+                _accessTimer += dt;
+                if (_accessTimer > AccessGiveUpSeconds)
+                {
+                    _accessTimer = 0f;
+                    _pauseUntil = Time.time + BusyChestPauseSeconds;
+                }
                 return true;
             }
+            _accessTimer = 0f;
             Produced(SettlementStorage.TakeFrom(input, bag, sortable, int.MaxValue));
             Settler.FlushInventory();
             return true;
@@ -135,7 +157,7 @@ namespace AgeOfJarls.AI.Jobs
         {
             if (TakeTool(ToolKind.Hammer) == null)
             {
-                return false;
+                return FetchTool(dt, ToolKind.Hammer);
             }
             // Damage first, unless a rebuild is under way; then what a siege destroyed.
             if (_rebuild == null && Repair(dt))
