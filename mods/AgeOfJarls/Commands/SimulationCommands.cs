@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using AgeOfJarls.Core;
 using AgeOfJarls.Settlement;
@@ -195,6 +196,50 @@ namespace AgeOfJarls.Commands
         }
     }
 
+    /// <summary>
+    /// <c>aoj_totem [upgrade]</c>: the nearest Work Totem - level, pace, places and the next level's cost; "upgrade"
+    /// buys that level exactly like the button in its window (same rights, same payment), so not a cheat.
+    /// </summary>
+    internal sealed class TotemCommand : AojCommand
+    {
+        private const float Range = 10f;
+        private static readonly List<string> Options = new List<string> { "upgrade" };
+
+        public override string Name => "aoj_totem";
+
+        public override string Help => $"Age of Jarls: the nearest totem within {Range:0} m (level, places, next upgrade); 'aoj_totem upgrade' buys its next level";
+
+        public override List<string> CommandOptionList() => Options;
+
+        public override void Run(string[] args, Terminal context)
+        {
+            Player me = Player.m_localPlayer;
+            WorkTotem totem = me == null ? null : WorkTotem.Loaded
+                .Where(t => t != null && Vector3.Distance(t.transform.position, me.transform.position) <= Range)
+                .OrderBy(t => Vector3.Distance(t.transform.position, me.transform.position))
+                .FirstOrDefault();
+            if (totem == null)
+            {
+                context?.AddString($"No totem within {Range:0} m.");
+                return;
+            }
+            if (args.Length > 0 && args[0].Equals("upgrade", System.StringComparison.OrdinalIgnoreCase))
+            {
+                // Read before: the owner (this machine, alone) raises the level while the request is sent.
+                int target = totem.Level + 1;
+                string problem = totem.TryUpgrade(me);
+                context?.AddString(problem == null ? $"{totem.Job}: upgrade to level {target} sent." : ConsoleCommands.Localize(problem));
+                return;
+            }
+            int level = totem.Level;
+            string next = level < WorkTotem.MaxLevel
+                ? ", next level: " + ConsoleCommands.Localize(WorkTotem.CostText(WorkTotem.UpgradeCost(level + 1)))
+                : ", highest level";
+            context?.AddString($"{totem.Job}: level {level}/{WorkTotem.MaxLevel}, pace x{totem.PaceBonus:0.00}, workers {totem.WorkerCount()}/{totem.Capacity}, " +
+                               $"radius {totem.Radius:0} m{next}");
+        }
+    }
+
     /// <summary><c>aoj_info</c>: the settlement you stand in, its work, food and defence at a glance.</summary>
     internal sealed class InfoCommand : AojCommand
     {
@@ -224,7 +269,7 @@ namespace AgeOfJarls.Commands
                 }
                 ZDO zdo = settler.Zdo;
                 context.AddString($"  {settler.DisplayName}: satiety {Needs.Satiety(zdo):0}, morale {Needs.Morale(zdo):0}, job {(settler.JobTotem?.Job.ToString() ?? "-")}, role {settler.Role}, " +
-                                  $"activity {(SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)}{(settler.JobProblem.Length > 0 ? ", problem " + settler.JobProblem : "")}");
+                                  $"activity {(SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)}{(settler.JobProblem.Length > 0 ? ", problem: " + ConsoleCommands.Localize(settler.JobProblem) : "")}");
             }
         }
     }
