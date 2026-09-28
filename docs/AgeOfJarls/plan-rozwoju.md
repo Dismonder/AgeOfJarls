@@ -32,9 +32,11 @@
   (mielerz → węgiel, piec → miedź), kucharz (ruszt nad ogniskiem, upieczone mięso do skrzyń/kotła), rolnik (zbiór
   marchwi, plon do skrzyń), tragarz (luźne kamienie i krzemień do skrzyń). Naprawione po drodze: górnik krążył wokół
   dużych skał, kilof celował w ziemię, stacje „nieosiągalne” co 4 s, rolnik trzymał plon w plecaku.
-- **Do sprawdzenia w grze (kolejność):** opróżnianie skrzyni wejściowej przez tragarza (włożyć rzeczy do skrzyni przy
-  totemie), przesadzanie przez rolnika (uprawiona ziemia + nasiona), odbudowa wyłomów po oblężeniu, żołnierze
-  (posterunki, zbrojownia), co-op, serwer dedykowany. Uwaga: gra działająca w tle między testami
+- **Niezawodność sprawdzona w grze 2026-09-28 (drugi przebieg):** łuczniczka bierze ze Zbrojowni łuk, strzały i
+  brakującą zbroję; alarm w nocy bez migotania sen↔schronienie; budowniczy odbudowuje wyłom (`aoj_breach`) i naprawia
+  dach oraz ścianę domu na palach z ziemi (`aoj_breach damage`); drwal sadzi buk z nasion ze skrzyni
+  (`aoj_totem replant on`); osadnik nie porzuca celu przy pierwszym utknięciu; podejście do skrzyni z dostępnej strony.
+- **Do sprawdzenia w grze:** co-op (dwóch graczy), serwer dedykowany. Uwaga: gra działająca w tle między testami
   to upływ czasu świata (doba = 30 min) — osadnicy w tym czasie jedzą zapasy.
 - **Świat `testo` po testach:** Totem Tragarza poziom 3 przy osadzie, krata jeńca i 2 greydwarfy (świat ma pasywne
   potwory), postać „test” z odblokowanymi przepisami na brąz (przedmioty z `spawn`).

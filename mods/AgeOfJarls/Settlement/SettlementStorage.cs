@@ -109,8 +109,19 @@ namespace AgeOfJarls.Settlement
             s_pieces.Clear();
         }
 
+        /// <summary>
+        /// The Obliterator, an Armory, a Settlement Cauldron: chests with a purpose of their own, never a Hauler's input
+        /// chest (a hauler would empty the troop's gear or the settlement's food into the chests).
+        /// </summary>
+        internal static bool HasOwnPurpose(Container chest) =>
+            chest.GetComponent<Incinerator>() != null || chest.GetComponent<Army.Armory>() != null || IsCauldron(chest);
+
         internal static bool IsInputChest(Container chest)
         {
+            if (HasOwnPurpose(chest))
+            {
+                return false;
+            }
             foreach (Work.WorkTotem totem in Work.WorkTotem.Loaded)
             {
                 if (totem.Job == Work.JobType.Hauler && Vector3.Distance(totem.transform.position, chest.transform.position) <= InputChestRange)

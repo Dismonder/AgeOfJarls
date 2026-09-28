@@ -200,8 +200,18 @@ Każdy krok zapisuje w ZDO typ zadania, krok i cel (ZDOID), więc zadanie trwa d
 ### 7.4 Znane problemy i odpowiedzi
 - **Drzwi.** AI vanilla nie otwiera drzwi. `Nav` wykrywa `Door` na drodze, otwiera je RPC drzwi (`Door.RPC_UseDoor`)
   i zamyka po przejściu.
-- **Zablokowanie.** Brak postępu przez N s → porzucenie celu i zwolnienie rezerwacji; przy uporczywym — teleport
-  do najbliższego wolnego punktu.
+- **Zablokowanie.** Brak postępu przez 3 s (albo 6 s krążenia przy punkcie trasy) to „utknięcie”, ale nie porażka:
+  pierwsze → nowa ścieżka i dalej, drugie w tym samym miejscu → przejście przez meble (łóżko, skrzynia, ława), trzecie
+  → krok na następny punkt trasy (≤ 2 m, na navmeshu). Dopiero gdy nic z tego nie działa, `PathMover` zgłasza
+  `Blocked`, a zadanie porzuca cel i zwalnia rezerwację (wcześniej porzucało go przy pierwszym utknięciu).
+- **Podejście do obiektu.** Skrzynia, stacja, piec, uszkodzony element: strona najbliższa osadnikowi bywa zamurowana
+  (skrzynia między stołem a ławą, wewnętrzna strona ściany domu). `WorkScanner.FindApproach` sprawdza 8 stron obiektu,
+  przy jego podstawie i na gruncie pod nim (dom na palach, dach), i wybiera najkrótszą z pełną ścieżką i obiektem w
+  zasięgu; bez takiej (navmesh jeszcze się buduje) idzie do najbliższego punktu i szuka znów co 2 s.
+- **Cele nieosiągalne.** Skrzynia, stacja, uszkodzony element, plon, wyłom bez drogi — odłożone na minutę
+  (`JobBase.MarkUnreachable`), następne wybierane są inne; nigdy ten sam cel w kółko.
+- **Powrót do domu z histerezą.** Powrót zaczyna się dalej niż 12 m od kotwicy domu i trwa do 8 m — osadnik pchany na
+  granicy (kłoda) przełączał się co klatkę między powrotem a spacerem vanilla.
 - **Rezerwacje.** W pamięci właściciela totemu, z czasem wygaśnięcia — znikają same, gdy pracownik zniknie.
 - **Zamach to praca, nie walka.** `SettlerAI.IsCalm` nie patrzy na `InAttack`: własny zamach siekierą czy kilofem nie
   zatrzymuje zadania (wcześniej każdy cios zwalniał cel). W trakcie zamachu `HarvestJob` trzyma osadnika w miejscu,

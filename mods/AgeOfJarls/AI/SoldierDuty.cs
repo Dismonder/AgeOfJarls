@@ -31,6 +31,10 @@ namespace AgeOfJarls.AI
         private Armory _armory;
         private Armory _armoryColliderOwner;
         private Collider[] _armoryColliders = new Collider[0];
+        private const float ApproachReach = 0.8f;
+        private const float ApproachRetrySeconds = 2f;
+        private Vector3? _approach;
+        private float _approachAt;
         private float _accessTimer;
         private float _askTimer;
         private WarBanner _post;
@@ -95,6 +99,18 @@ namespace AgeOfJarls.AI
             _armory = null;
         }
 
+        /// <summary>
+        /// The gear of its role stays with a soldier: a worker's weapon leaves its hand for the tool, and must not go to
+        /// the chests with the loot (it would stand at its post without it at the next alarm).
+        /// </summary>
+        internal bool Keeps(ItemDrop.ItemData item)
+        {
+            CombatRole role = _settler.Role;
+            return role != CombatRole.None && !Posts.IsBroken(item) &&
+                   (Posts.WeaponFor(role)(item) || Posts.IsArmor(item) ||
+                    (Posts.IsShield(item) && role != CombatRole.Archer && role != CombatRole.Berserker));
+        }
+
         // Gear is checked every few seconds; fetching walks to the nearest Armory holding what is missing.
         private bool Arm(float dt, JarlTable table, CombatRole role)
         {
@@ -109,10 +125,21 @@ namespace AgeOfJarls.AI
                 System.Predicate<ItemDrop.ItemData> wanted = Wanted(role);
                 if (wanted == null)
                 {
+                    // Nothing missing, but a worker called to its post still holds its tool: the role's gear goes on.
+                    if (EquipBest(role))
+                    {
+                        _settler.MarkInventoryDirty();
+                    }
                     return false;
                 }
                 _armory = NearestArmoryWith(table, wanted);
                 _accessTimer = 0f;
+                if (AiTrace.On)
+                {
+                    AiTrace.Write(_ai, _armory != null
+                        ? $"lacks gear: to the Armory {Vector3.Distance(_ai.transform.position, _armory.transform.position):0} m away"
+                        : $"lacks gear, no Armory has it ({Armory.Loaded.Count} loaded)");
+                }
                 if (_armory == null)
                 {
                     return false;
@@ -124,18 +151,35 @@ namespace AgeOfJarls.AI
                 _armory = null;
                 return false;
             }
-            // Its side, not its middle: a rack's middle lies in a hole of the navmesh.
+            // Its side, not its middle: a rack's middle lies in a hole of the navmesh. A side a path reaches: the one
+            // facing the soldier may stand against a wall (see WorkScanner.FindApproach).
+            Vector3 position = _ai.transform.position;
             if (_armoryColliderOwner != _armory)
             {
                 _armoryColliderOwner = _armory;
                 _armoryColliders = Work.WorkScanner.SolidColliders(_armory);
+                _approach = null;
+                _approachAt = 0f;
             }
-            Vector3 target = Work.WorkScanner.NearestPoint(_armoryColliders, _ai.transform.position, _armory.transform.position);
-            if (Vector3.Distance(_ai.transform.position, target) > ArmoryReach)
+            Vector3 target = Work.WorkScanner.NearestPoint(_armoryColliders, position, _armory.transform.position);
+            bool atApproach = _approach != null && Vector3.Distance(position, _approach.Value) <= ApproachReach;
+            if (Vector3.Distance(position, target) > ArmoryReach && !atApproach)
             {
-                if (_mover.MoveTo(dt, target, ArmoryReach * 0.6f, ArmoryReach, run: false) == MoveResult.Blocked)
+                if (_approach == null && Time.time >= _approachAt)
+                {
+                    _approachAt = Time.time + ApproachRetrySeconds;
+                    if (Work.WorkScanner.FindApproach(position, _armoryColliders, _armory.transform.position, ArmoryReach, _ai.m_pathAgentType, out Vector3 spot))
+                    {
+                        _approach = spot;
+                    }
+                }
+                MoveResult move = _approach != null
+                    ? _mover.MoveTo(dt, _approach.Value, ApproachReach * 0.6f, ApproachReach, run: false)
+                    : _mover.MoveTo(dt, target, ArmoryReach * 0.6f, ArmoryReach, run: false);
+                if (move == MoveResult.Blocked)
                 {
                     _armory = null;
+                    _approach = null;
                 }
                 return true;
             }
@@ -212,32 +256,34 @@ namespace AgeOfJarls.AI
                 .FirstOrDefault();
         }
 
-        // The best of each kind goes in hand or on the body.
-        private void EquipBest(CombatRole role)
+        // The best of each kind goes in hand or on the body. True when anything was put on.
+        private bool EquipBest(CombatRole role)
         {
+            bool changed = false;
             List<ItemDrop.ItemData> bag = _body.GetInventory().GetAllItems();
             System.Func<ItemDrop.ItemData, bool> roleWeapon = Posts.WeaponFor(role);
             ItemDrop.ItemData weapon = bag.Where(i => roleWeapon(i) && !Posts.IsBroken(i)).OrderByDescending(i => i.GetDamage().GetTotalDamage()).FirstOrDefault();
             if (weapon != null && !weapon.m_equipped)
             {
-                _body.EquipItem(weapon, triggerEquipEffects: false);
+                changed |= _body.EquipItem(weapon, triggerEquipEffects: false);
             }
             if (Posts.UsesShield(role, weapon))
             {
                 ItemDrop.ItemData shield = bag.Where(Posts.IsShield).OrderByDescending(i => i.m_shared.m_blockPower).FirstOrDefault();
                 if (shield != null && !shield.m_equipped)
                 {
-                    _body.EquipItem(shield, triggerEquipEffects: false);
+                    changed |= _body.EquipItem(shield, triggerEquipEffects: false);
                 }
             }
             foreach (ItemDrop.ItemData armor in bag.Where(Posts.IsArmor).GroupBy(i => i.m_shared.m_itemType)
-                         .Select(g => g.OrderByDescending(i => i.m_shared.m_armor).First()))
+                         .Select(g => g.OrderByDescending(i => i.m_shared.m_armor).First()).ToList())
             {
                 if (!armor.m_equipped)
                 {
-                    _body.EquipItem(armor, triggerEquipEffects: false);
+                    changed |= _body.EquipItem(armor, triggerEquipEffects: false);
                 }
             }
+            return changed;
         }
     }
 }

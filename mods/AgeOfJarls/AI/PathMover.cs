@@ -188,6 +188,12 @@ namespace AgeOfJarls.AI
             {
                 return MoveResult.Moving;
             }
+            if (step == Step.Stuck && _stuckCount < StuckBeforeHop)
+            {
+                // Not given up at the first stall (another settler in the way, a crowded corner by the table): a fresh
+                // path is on its way, and slipping past furniture, then the step over, get their turn (see Unstick).
+                return MoveResult.Moving;
+            }
             if (step == Step.Blocked)
             {
                 // No way yet and no door to open: it waits for the navmesh a moment (standing, see Follow).

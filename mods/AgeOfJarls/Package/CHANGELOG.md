@@ -50,6 +50,25 @@
   being given up at once.
 - A starving settler whose settlement has no food at all picks wild berries and mushrooms nearby and eats them -
   never a player's crops.
+- Soldiers keep the gear of their role: a worker's weapon that leaves its hand for a tool no longer goes to the chests
+  with the loot, and a worker called to its post by the alarm takes its role's weapon in hand again.
+- A Hauler never takes an Armory, the Obliterator or a Settlement Cauldron for its input chest (standing next to its
+  totem, the troop's gear or the food was emptied into the chests).
+- During a night alarm settlers sheltering in bed (and the wounded recovering there) stay put quietly: their state
+  switched between sleeping and sheltering at every frame.
+- Woodcutters keep the seeds for the trees still to plant, instead of carrying them back after each sapling.
+- A settler that stalls on its way (another settler in the way, a crowded corner by the table) no longer drops its
+  task at once: it takes a fresh path, then slips past the furniture, then steps over onto its path, and gives up only
+  when all that fails (a builder carrying wood to a breach turned back with it at the first stall).
+- Workers walk up to a chest, station or kiln from a side a path reaches: the side facing them may be walled in (a
+  chest between the table and a bench) - they gave it up as unreachable and went without the tool or materials.
+- Builders repair what they can reach from where they stand, as far as a player's hammer (a roof or the top of a
+  wall from the ground), and leave a piece they cannot get to for a minute instead of trying it again and again; a
+  breach they cannot reach no longer holds up the others. Farmers leave an unreachable crop for a minute too.
+- `aoj_info` shows where each totem stands. Test commands: `aoj_fill <item> [n]` (cheat, into the nearest chest),
+  `aoj_role <settler> <role>`, `aoj_alarm on|off`, `aoj_breach` (cheat, breaks the nearest building piece as a siege
+  would, for the Builders to put back), `aoj_totem replant on|off`. `aoj_trace` also names the chest a worker fetches
+  from and the one it gives up as unreachable.
 
 - `aoj_perf [seconds]` measures what the mod costs per frame on your machine (settler AI with planning, jobs,
   paths and inventory saves, ticks, windows, and the game's own AI for comparison).

@@ -100,7 +100,7 @@ namespace AgeOfJarls.AI
             _planTimer = UnityEngine.Random.Range(0f, PlanSeconds);
             _hasChest = item => SettlementStorage.HasDestination(item, _chests, _ai.transform.position);
             _avoided = chest => _avoidUntil.TryGetValue(chest.m_nview.GetZDO().m_uid, out float until) && Time.time < until;
-            _keep = item => AssignedJob()?.Keeps(item) ?? false;
+            _keep = item => (AssignedJob()?.Keeps(item) ?? false) || _duty.Keeps(item);
         }
 
         internal void Update(float dt)
@@ -572,8 +572,7 @@ namespace AgeOfJarls.AI
             }
             if (_bed != null)
             {
-                GoToBed(dt);
-                _settler.SetActivity(SettlerActivity.Sheltering);
+                GoToBed(dt, SettlerActivity.Sheltering);
                 return true;
             }
             // No shelter and no bed: stay by the Jarl's Table, among the defenders.
@@ -993,16 +992,16 @@ namespace AgeOfJarls.AI
                 return false;
             }
             StopJob();
-            GoToBed(dt);
-            _settler.SetActivity(SettlerActivity.Recovering);
+            GoToBed(dt, SettlerActivity.Recovering);
             return true;
         }
 
         // ---------------------------------------------------------------- sleep and idling
 
-        private void GoToBed(float dt)
+        // One activity per frame: set twice (sleeping, then sheltering) the ZDO would be written, and sent, every frame.
+        private void GoToBed(float dt, SettlerActivity activity = SettlerActivity.Sleeping)
         {
-            _settler.SetActivity(SettlerActivity.Sleeping);
+            _settler.SetActivity(activity);
             if (_character.IsLyingDown)
             {
                 return;
@@ -1029,18 +1028,31 @@ namespace AgeOfJarls.AI
         // walks back with its own path. Where even that fails, vanilla gets its turn again for a while.
         private bool ReturnHome(float dt)
         {
-            if (Time.time < _returnRetryAt || Utils.DistanceXZ(_anchor, _ai.transform.position) <= ReturnDistance())
+            // Once on its way it walks well inside, where vanilla strolling takes over - not in and out at the edge:
+            // pushed back by a log lying right there, it switched between the two at every frame.
+            float distance = Utils.DistanceXZ(_anchor, _ai.transform.position);
+            if (Time.time < _returnRetryAt || distance <= (_returning ? ReturnDistance() - ReturnHysteresis : ReturnDistance()))
             {
+                _returning = false;
                 return false;
             }
+            _returning = true;
             MoveResult move = _mover.MoveTo(dt, _anchor, ReturnStopDistance, ReturnReach, run: false);
             if (move == MoveResult.Blocked)
             {
                 _returnRetryAt = Time.time + ReturnRetrySeconds;
+                _returning = false;
                 return false;
+            }
+            if (move != MoveResult.Moving)
+            {
+                _returning = false;
             }
             return move == MoveResult.Moving;
         }
+
+        private const float ReturnHysteresis = 4f;
+        private bool _returning;
 
         private static float ReturnDistance() => AoJConfig.SettlerWanderRange.Value * 2f + ReturnMargin;
 

@@ -240,6 +240,11 @@ namespace AgeOfJarls.AI.Jobs
                 _unreachableUntil.Clear();
             }
             _unreachableUntil[target.GetInstanceID()] = Time.time + UnreachableSeconds;
+            if (AiTrace.On)
+            {
+                Vector3 at = target.transform.position;
+                AiTrace.Write(Ctx.Ai, $"gives up {Utils.GetPrefabName(target.gameObject)} @{at.x:0},{at.z:0} for a minute: no way there");
+            }
         }
 
         /// <summary>
@@ -252,9 +257,36 @@ namespace AgeOfJarls.AI.Jobs
             {
                 _walkObject = target;
                 _walkColliders = WorkScanner.SolidColliders(target);
+                _approach = null;
+                _approachAt = 0f;
             }
-            return WalkTo(dt, WorkScanner.NearestPoint(_walkColliders, Position, target.transform.position), reach);
+            Vector3 nearest = WorkScanner.NearestPoint(_walkColliders, Position, target.transform.position);
+            if (Vector3.Distance(Position, nearest) <= reach)
+            {
+                return WalkTo(dt, nearest, reach);
+            }
+            // To the side a path reaches (see WorkScanner.FindApproach); straight at the nearest side only while none
+            // is found - the navmesh out there may still be being built, so it is looked for again every few seconds.
+            if (_approach == null && Time.time >= _approachAt)
+            {
+                _approachAt = Time.time + ApproachRetrySeconds;
+                if (WorkScanner.FindApproach(Position, _walkColliders, target.transform.position, reach, Ctx.Ai.m_pathAgentType, out Vector3 spot))
+                {
+                    _approach = spot;
+                }
+            }
+            Step walk = _approach != null ? WalkTo(dt, _approach.Value, ApproachReach) : WalkTo(dt, nearest, reach);
+            if (walk == Step.Failed)
+            {
+                _approach = null;
+            }
+            return walk;
         }
+
+        private const float ApproachRetrySeconds = 2f;
+        private const float ApproachReach = 0.8f;
+        private Vector3? _approach;
+        private float _approachAt;
 
         /// <summary>The settlement's chests (refreshed every few seconds), for fetching supplies.</summary>
         protected List<Container> SettlementChests()
@@ -295,6 +327,11 @@ namespace AgeOfJarls.AI.Jobs
                 {
                     _fetchRetryAt = Time.time + FetchRetrySeconds;
                     return Step.Failed;
+                }
+                if (AiTrace.On)
+                {
+                    Vector3 at = _fetchChest.transform.position;
+                    AiTrace.Write(Ctx.Ai, $"fetches from the chest @{at.x:0},{at.z:0} ({Vector3.Distance(at, Position):0} m)");
                 }
             }
             Step walk = WalkToObject(dt, _fetchChest, 2f);

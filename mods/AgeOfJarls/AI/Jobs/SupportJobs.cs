@@ -108,7 +108,8 @@ namespace AgeOfJarls.AI.Jobs
             {
                 Container chest = piece.GetComponent<Container>();
                 float distance = chest != null ? Vector3.Distance(chest.transform.position, Totem.transform.position) : float.MaxValue;
-                if (chest != null && chest.m_privacy == Container.PrivacySetting.Public && distance <= bestDistance)
+                if (chest != null && chest.m_privacy == Container.PrivacySetting.Public && distance <= bestDistance &&
+                    !SettlementStorage.HasOwnPurpose(chest))
                 {
                     best = chest;
                     bestDistance = distance;
@@ -136,6 +137,8 @@ namespace AgeOfJarls.AI.Jobs
     {
         private const float RepairSeconds = 2f;
         private const float Reach = 2.8f;
+        // A player's hammer repairs what it points at up to 5 m away: a roof or the top of a wall from the ground.
+        private const float RepairReach = 4f;
         private const float ScanSeconds = 4f;
         private const float RebuildRetrySeconds = 60f;
 
@@ -149,6 +152,7 @@ namespace AgeOfJarls.AI.Jobs
         private Collider[] _colliders = new Collider[0];
         private Settlement.Breaches.Entry? _rebuild;
         private float _rebuildScanAt;
+        private readonly Dictionary<long, float> _unreachableSpots = new Dictionary<long, float>();
 
         internal BuilderJob(JobContext context) : base(context)
         {
@@ -193,10 +197,12 @@ namespace AgeOfJarls.AI.Jobs
                 _colliders = WorkScanner.SolidColliders(_target);
             }
             Problem("");
-            Vector3 point = WorkScanner.NearestPoint(_colliders, Position, _target.transform.position);
-            Step walk = WalkTo(dt, point, Reach);
+            // From a side it can get to: the side of a house wall facing it may be its inside, behind a closed door.
+            Step walk = WalkToObject(dt, _target, RepairReach);
             if (walk == Step.Failed)
             {
+                // Seen from the wrong side, or no way up: the next most damaged piece first, this one again in a minute.
+                MarkUnreachable(_target);
                 Reservations.Release(_target, Uid);
                 _target = null;
                 return false;
@@ -205,7 +211,7 @@ namespace AgeOfJarls.AI.Jobs
             {
                 return true;
             }
-            Face(point);
+            Face(WorkScanner.NearestPoint(_colliders, Position, _target.transform.position));
             _timer -= dt;
             if (_timer <= 0f)
             {
@@ -213,6 +219,10 @@ namespace AgeOfJarls.AI.Jobs
                 if (_target.Repair())
                 {
                     Produced(1);
+                    if (AiTrace.On)
+                    {
+                        AiTrace.Write(Ctx.Ai, $"repairs {Describe(_target)}");
+                    }
                 }
             }
             return true;
@@ -234,7 +244,8 @@ namespace AgeOfJarls.AI.Jobs
                 _rebuildScanAt = Time.time + ScanSeconds;
                 foreach (Settlement.Breaches.Entry entry in table.BreachList.OrderBy(e => e.Position.y))
                 {
-                    if (InZone(entry.Position) && s_claimed.Add(SpotKey(entry.Position)))
+                    long key = SpotKey(entry.Position);
+                    if (InZone(entry.Position) && !(_unreachableSpots.TryGetValue(key, out float until) && Time.time < until) && s_claimed.Add(key))
                     {
                         _rebuild = entry;
                         break;
@@ -284,8 +295,13 @@ namespace AgeOfJarls.AI.Jobs
             {
                 if (walk == Step.Failed)
                 {
+                    // No way to this spot: the other breaches meanwhile, not a minute of nothing and then the same one.
+                    if (_unreachableSpots.Count > 64)
+                    {
+                        _unreachableSpots.Clear();
+                    }
+                    _unreachableSpots[SpotKey(spot.Position)] = Time.time + RebuildRetrySeconds;
                     ForgetRebuild();
-                    _rebuildScanAt = Time.time + RebuildRetrySeconds;
                 }
                 return walk == Step.Busy;
             }
@@ -301,6 +317,10 @@ namespace AgeOfJarls.AI.Jobs
                     built.GetComponent<Piece>()?.SetCreator(jarl, default);
                 }
                 recipe.m_placeEffect.Create(spot.Position, spot.Rotation, built.transform);
+                if (AiTrace.On)
+                {
+                    AiTrace.Write(Ctx.Ai, $"rebuilds {spot.Prefab}");
+                }
                 foreach (Piece.Requirement need in recipe.m_resources)
                 {
                     if (need.m_resItem != null && need.m_amount > 0)
@@ -357,7 +377,7 @@ namespace AgeOfJarls.AI.Jobs
             foreach (Piece piece in HaulerJob.Nearby(Totem.transform.position, Totem.Radius))
             {
                 WearNTear wear = piece.GetComponent<WearNTear>();
-                if (wear == null || !Reservations.IsFree(wear, Uid))
+                if (wear == null || !Reservations.IsFree(wear, Uid) || !IsReachable(wear))
                 {
                     continue;
                 }
@@ -447,6 +467,8 @@ namespace AgeOfJarls.AI.Jobs
             {
                 if (walk == Step.Failed)
                 {
+                    // Fenced off or across water: the other crops first, this one again in a minute.
+                    MarkUnreachable(_target);
                     Reservations.Release(_target, Uid);
                     _target = null;
                 }
@@ -523,6 +545,10 @@ namespace AgeOfJarls.AI.Jobs
                 bag.RemoveItem(seed, 1);
                 Settler.FlushInventory();
                 Produced(1);
+                if (AiTrace.On)
+                {
+                    AiTrace.Write(Ctx.Ai, $"plants {spot.sapling.name}");
+                }
             }
             _toPlant.RemoveAt(0);
             return true;
@@ -537,7 +563,7 @@ namespace AgeOfJarls.AI.Jobs
             {
                 var pickable = (Pickable)component;
                 if (pickable == null || !crops.ContainsKey(Utils.GetPrefabName(pickable.gameObject)) || !pickable.CanBePicked() ||
-                    !Reservations.IsFree(pickable, Uid))
+                    !Reservations.IsFree(pickable, Uid) || !IsReachable(pickable))
                 {
                     continue;
                 }

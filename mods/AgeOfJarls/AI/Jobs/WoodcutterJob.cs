@@ -40,6 +40,17 @@ namespace AgeOfJarls.AI.Jobs
 
         protected override string NothingToDo => "$aoj_problem_no_trees";
 
+        // Seeds for the trees still to plant stay in the bag: a batch is fetched once, not carried back after each sapling.
+        internal override bool Keeps(ItemDrop.ItemData item)
+        {
+            if (base.Keeps(item))
+            {
+                return true;
+            }
+            string name = PrefabName(item);
+            return _toPlant.Exists(spot => spot.seed == name);
+        }
+
         protected override void OnBroughtDown(string prefab, Vector3 position)
         {
             if (Totem != null && Totem.Replants && _toPlant.Count < MaxQueued && Saplings().TryGetValue(prefab, out (GameObject sapling, string seed) kind))
@@ -105,6 +116,10 @@ namespace AgeOfJarls.AI.Jobs
                 Object.Instantiate(next.sapling, _spot.Value, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
                 bag.RemoveItem(seed, 1);
                 Settler.FlushInventory();
+                if (AiTrace.On)
+                {
+                    AiTrace.Write(Ctx.Ai, $"plants {next.sapling.name}");
+                }
             }
             Done();
             return true;

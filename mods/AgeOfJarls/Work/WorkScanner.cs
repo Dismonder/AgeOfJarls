@@ -162,5 +162,80 @@ namespace AgeOfJarls.Work
             return bounds.ClosestPoint(from);
         }
 
+        private const int ApproachSides = 8;
+        /// <summary>How far from an object's side a worker stands: about its own radius, clear of the object.</summary>
+        private const float StandOff = 0.8f;
+        private static readonly List<Vector3> s_approachPath = new List<Vector3>();
+
+        /// <summary>
+        /// Where to stand to reach an object: beside it on the navmesh, within <paramref name="reach"/> of it, with a
+        /// full path from <paramref name="from"/> - the nearest by path of the spots around it. The side facing the
+        /// worker may be walled in (a chest between the table and a bench), where a path only ever gets part-way while
+        /// another side is open. False when no side can be reached, or the navmesh there is not built yet.
+        /// </summary>
+        internal static bool FindApproach(Vector3 from, Collider[] colliders, Vector3 fallback, float reach, Pathfinding.AgentType agent, out Vector3 spot)
+        {
+            spot = fallback;
+            if (Pathfinding.instance == null)
+            {
+                return false;
+            }
+            var bounds = new Bounds(fallback, Vector3.zero);
+            foreach (Collider collider in colliders)
+            {
+                if (collider != null && collider.enabled && collider.gameObject.activeInHierarchy)
+                {
+                    bounds.Encapsulate(collider.bounds);
+                }
+            }
+            Vector3 center = bounds.center;
+            // Far enough out that each direction meets the side facing it, not a corner around from it.
+            float radius = new Vector2(bounds.extents.x, bounds.extents.z).magnitude + 2f;
+            float shortest = float.MaxValue;
+            for (int i = 0; i < ApproachSides; i++)
+            {
+                Vector3 outside = center + Quaternion.Euler(0f, i * 360f / ApproachSides, 0f) * Vector3.forward * radius;
+                Vector3 side = NearestPoint(colliders, outside, fallback);
+                Vector3 away = outside - side;
+                away.y = 0f;
+                Vector3 stand = away.sqrMagnitude > 0.0001f ? side + away.normalized * StandOff : outside;
+                // At the object's foot; for a wall of a house on stilts or a roof also on the ground below it - the
+                // navmesh nearest its foot may be the floor inside, with no way in.
+                stand.y = bounds.min.y + 0.2f;
+                TryApproach(from, stand, colliders, fallback, reach, agent, ref shortest, ref spot);
+                if (ZoneSystem.instance != null && ZoneSystem.instance.GetGroundHeight(stand, out float ground) && ground < bounds.min.y - 1f)
+                {
+                    stand.y = ground;
+                    TryApproach(from, stand, colliders, fallback, reach, agent, ref shortest, ref spot);
+                }
+            }
+            s_approachPath.Clear();
+            return shortest < float.MaxValue;
+        }
+
+        private static void TryApproach(Vector3 from, Vector3 stand, Collider[] colliders, Vector3 fallback, float reach,
+                                        Pathfinding.AgentType agent, ref float shortest, ref Vector3 spot)
+        {
+            if (!Pathfinding.instance.GetPath(from, stand, s_approachPath, agent, requireFullPath: true, cleanup: false) || s_approachPath.Count == 0)
+            {
+                return;
+            }
+            // The game moves the goal to the nearest navmesh, maybe onto a floor above: the end must reach the object.
+            Vector3 end = s_approachPath[s_approachPath.Count - 1];
+            if (Vector3.Distance(end, NearestPoint(colliders, end, fallback)) > reach)
+            {
+                return;
+            }
+            float length = 0f;
+            for (int k = 1; k < s_approachPath.Count; k++)
+            {
+                length += Vector3.Distance(s_approachPath[k - 1], s_approachPath[k]);
+            }
+            if (length < shortest)
+            {
+                shortest = length;
+                spot = end;
+            }
+        }
     }
 }

@@ -397,8 +397,14 @@ namespace AgeOfJarls.Commands
             }
             int amount = args.Length > 1 && int.TryParse(args[1], out int n) ? Mathf.Clamp(n, 1, 999) : 1;
             chest.Load();
+            // Checked first: the game drops at the player's feet what a full inventory cannot take.
+            if (!chest.GetInventory().CanAddItem(prefab, amount))
+            {
+                context?.AddString($"The chest at {chest.transform.position.x:0},{chest.transform.position.z:0} has no room for {amount}x {prefab.name}.");
+                return;
+            }
             ItemDrop.ItemData added = chest.GetInventory().AddItem(prefab.name, amount, 1, 0, 0L, "", false);
-            context?.AddString(added != null ? $"Put {amount}x {prefab.name} into the chest." : "The chest has no room for it.");
+            context?.AddString(added != null ? $"Put {amount}x {prefab.name} into the chest at {chest.transform.position.x:0},{chest.transform.position.z:0}." : "The chest has no room for it.");
         }
     }
 
@@ -458,7 +464,8 @@ namespace AgeOfJarls.Commands
 
         public override string Name => "aoj_breach";
 
-        public override string Help => $"Age of Jarls: break the nearest building piece within {Range:0} m as a siege would, for the Builders to put back (cheat, for tests)";
+        public override string Help => $"Age of Jarls: break the nearest building piece within {Range:0} m as a siege would, for the Builders to put back; " +
+                                       "'damage [name part]' only halves its health, for them to repair (cheat, for tests)";
 
         public override bool IsCheat => true;
 
@@ -471,10 +478,13 @@ namespace AgeOfJarls.Commands
                 context?.AddString("Stand inside your settlement first.");
                 return;
             }
+            bool damage = args.Length > 0 && args[0].Equals("damage", System.StringComparison.OrdinalIgnoreCase);
+            string part = damage && args.Length > 1 ? args[1] : "";
             var pieces = new List<Piece>();
             Piece.GetAllPiecesInRadius(me.transform.position, Range, pieces);
             Piece piece = pieces
-                .Where(p => p != null && p.GetComponent<WearNTear>() != null && Breaches.IsRebuildable(Utils.GetPrefabName(p.gameObject)))
+                .Where(p => p != null && p.GetComponent<WearNTear>() != null && Breaches.IsRebuildable(Utils.GetPrefabName(p.gameObject)) &&
+                            Utils.GetPrefabName(p.gameObject).IndexOf(part, System.StringComparison.OrdinalIgnoreCase) >= 0)
                 .OrderBy(p => Vector3.Distance(p.transform.position, me.transform.position))
                 .FirstOrDefault();
             if (piece == null)
@@ -483,6 +493,19 @@ namespace AgeOfJarls.Commands
                 return;
             }
             string name = Utils.GetPrefabName(piece.gameObject);
+            if (damage)
+            {
+                WearNTear wear = piece.GetComponent<WearNTear>();
+                if (!wear.m_nview.IsValid() || !wear.m_nview.IsOwner())
+                {
+                    context?.AddString($"{name} belongs to another machine: stand closer to it.");
+                    return;
+                }
+                wear.ApplyDamage(wear.m_health * 0.5f);
+                Vector3 at = piece.transform.position;
+                context?.AddString($"{name} at {at.x:0},{at.y:0},{at.z:0} damaged to {wear.GetHealthPercentage():P0}; a Builder repairs it.");
+                return;
+            }
             string problem = table.CheatBreach(piece);
             context?.AddString(problem ?? $"{name} broken; a Builder with materials in the chests puts it back.");
         }
@@ -563,7 +586,8 @@ namespace AgeOfJarls.Commands
             context.AddString($"{JarlTable.DisplayName(data)}: tier {data.Tier}, {data.Settlers.Count} settler(s), alarm {(table.AlarmOn ? "ON" : "off")}, fame {table.Fame}, besieged {table.UnderSiege}, breaches {table.BreachList.Count}");
             foreach (WorkTotem totem in WorkTotem.Loaded.Where(t => t != null && t.Settlement == table))
             {
-                context.AddString($"  totem {totem.Job}: {string.Join(", ", totem.Workers().Select(w => w.DisplayName))} ({totem.Workers().Count}/{totem.Capacity}), radius {totem.Radius:0} m");
+                Vector3 at = totem.transform.position;
+                context.AddString($"  totem {totem.Job} @{at.x:0},{at.z:0}: {string.Join(", ", totem.Workers().Select(w => w.DisplayName))} ({totem.Workers().Count}/{totem.Capacity}), radius {totem.Radius:0} m");
             }
             foreach (RosterEntry entry in data.Settlers)
             {
