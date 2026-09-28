@@ -170,12 +170,15 @@ namespace AgeOfJarls.AI.Jobs
         private float _askTimer;
         private float _fetchRetryAt;
 
-        /// <summary>Walks until within reach; Failed when there is no way or it takes too long.</summary>
+        /// <summary>Walks until within reach, then stands; Failed when there is no way or it takes too long.</summary>
         protected Step WalkTo(float dt, Vector3 point, float reach)
         {
             if (Vector3.Distance(Position, point) <= reach)
             {
                 _walkTimer = 0f;
+                // There, and maybe waiting (for a chest's owner, a station): vanilla idle movement must not stroll off
+                // meanwhile - out at a far totem it would head back home.
+                Ctx.Ai.StopMoving();
                 return Step.Done;
             }
             if ((point - _walkGoal).sqrMagnitude > 1f)

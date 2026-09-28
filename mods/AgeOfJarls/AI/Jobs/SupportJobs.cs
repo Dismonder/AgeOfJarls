@@ -149,15 +149,16 @@ namespace AgeOfJarls.AI.Jobs
         {
             if (_target == null || _target.GetHealthPercentage() >= 0.999f || !Reservations.IsFree(_target, Uid))
             {
+                // Straight on to the next damaged piece; only a search that found none waits before the next.
                 _scanTimer -= dt;
                 if (_scanTimer > 0f)
                 {
                     return false;
                 }
-                _scanTimer = ScanSeconds;
                 _target = FindDamaged();
                 if (_target == null)
                 {
+                    _scanTimer = ScanSeconds;
                     Problem("");
                     return false;
                 }
@@ -394,15 +395,16 @@ namespace AgeOfJarls.AI.Jobs
         {
             if (_target == null || !_target.CanBePicked() || !Reservations.IsFree(_target, Uid))
             {
+                // Straight on to the next ripe crop; only a search that found none waits before the next.
                 _scanTimer -= dt;
                 if (_scanTimer > 0f)
                 {
                     return false;
                 }
-                _scanTimer = ScanSeconds;
                 _target = FindRipe();
                 if (_target == null)
                 {
+                    _scanTimer = ScanSeconds;
                     return false;
                 }
                 Reservations.Take(_target, Uid);
@@ -547,8 +549,9 @@ namespace AgeOfJarls.AI.Jobs
             {
                 Plant plant = prefab != null ? prefab.GetComponent<Plant>() : null;
                 Piece piece = prefab != null ? prefab.GetComponent<Piece>() : null;
-                if (plant == null || piece == null || piece.m_resources == null || piece.m_resources.Length == 0 ||
-                    piece.m_resources[0].m_resItem == null)
+                // Plants other mods build in code may lack the lists.
+                if (plant == null || plant.m_grownPrefabs == null || piece == null || piece.m_resources == null ||
+                    piece.m_resources.Length == 0 || piece.m_resources[0].m_resItem == null)
                 {
                     continue;
                 }

@@ -1214,6 +1214,20 @@ namespace AgeOfJarls.Settlers
             return true;
         }
 
+        /// <summary>Hands an item over through the owner, the way a player's [use item] does (aoj_give).</summary>
+        internal bool Give(ItemDrop.ItemData item)
+        {
+            var parcel = new Inventory("aoj_give", null, 1, 1);
+            if (_nview == null || !_nview.IsValid() || !parcel.AddItem(item))
+            {
+                return false;
+            }
+            var package = new ZPackage();
+            parcel.Save(package);
+            _nview.InvokeRPC(Keys.RpcSettlerGive, package);
+            return true;
+        }
+
         private void RPC_Give(long sender, ZPackage package)
         {
             if (!_nview.IsOwner())

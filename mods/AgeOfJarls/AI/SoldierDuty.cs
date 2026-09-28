@@ -79,6 +79,11 @@ namespace AgeOfJarls.AI
             {
                 _mover.MoveTo(dt, post.transform.position, PostReach * 0.6f, PostReach + 1f, run: alarm);
             }
+            else
+            {
+                // At its post it stands guard: vanilla idle movement would stroll around its home spot instead.
+                _ai.StopMoving();
+            }
             return true;
         }
 
@@ -125,6 +130,7 @@ namespace AgeOfJarls.AI
                 }
                 return true;
             }
+            _ai.StopMoving();
             if (!ChestAccess.Acquire(_armory.Container, ask: true))
             {
                 _accessTimer += dt;

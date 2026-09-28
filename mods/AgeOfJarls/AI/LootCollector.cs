@@ -74,6 +74,13 @@ namespace AgeOfJarls.AI
 
         internal void Reset() => _target = null;
 
+        /// <summary>Something was just dropped on purpose (a plant picked): look for it at the next call.</summary>
+        internal void ScanNow()
+        {
+            _target = null;
+            _scanTimer = 0f;
+        }
+
         private float _busyAt = float.MinValue;
 
         /// <summary>Whether it went for or picked up loot in the last <paramref name="seconds"/> (still gathering).</summary>
@@ -129,7 +136,9 @@ namespace AgeOfJarls.AI
                     return true;
                 }
             }
-            // Like the player's auto-pickup: take ownership of the drop first, pick it up once it arrives.
+            // At the drop: stand while it is handed over. Like the player's auto-pickup: take ownership of the drop
+            // first, pick it up once it arrives.
+            _ai.StopMoving();
             if (!_target.CanPickup(false))
             {
                 _target.RequestOwn();

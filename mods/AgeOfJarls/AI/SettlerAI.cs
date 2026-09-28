@@ -131,12 +131,15 @@ namespace AgeOfJarls.AI
             }
 
             // Talked to (its window open on this machine): it stops and faces the player, and takes up its chores
-            // where it left them once the window closes.
+            // where it left them once the window closes. A swing under way finishes where it was aimed.
             Player talker = Player.m_localPlayer;
             if (talker != null && IsCalm() && UI.SettlerWindow.IsOpenFor(_settler))
             {
                 StopMoving();
-                LookAt(talker.transform.position);
+                if (!m_character.InAttack())
+                {
+                    LookAt(talker.transform.position);
+                }
                 _settler.FlushInventory();
                 return;
             }
@@ -216,9 +219,11 @@ namespace AgeOfJarls.AI
             return $"{fight}{ordered}\nhome: {home}\npath: {path} · loot: {loot}";
         }
 
-        /// <summary>No enemy or structure targeted and not mid-swing: free to do settler things.</summary>
-        internal bool IsCalm() =>
-            m_targetCreature == null && m_targetStatic == null && !m_character.InAttack() && !m_character.IsDead();
+        /// <summary>
+        /// No enemy or structure targeted: free to do settler things. A swing is no fight - at work (an axe at a tree)
+        /// it is the work itself, and the job holds the settler still until it lands.
+        /// </summary>
+        internal bool IsCalm() => m_targetCreature == null && m_targetStatic == null && !m_character.IsDead();
 
         /// <summary>The player this settler follows, if any.</summary>
         internal Player Leader

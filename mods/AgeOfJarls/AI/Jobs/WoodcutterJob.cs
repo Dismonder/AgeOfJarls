@@ -49,7 +49,8 @@ namespace AgeOfJarls.AI.Jobs
 
         protected override bool Work(float dt)
         {
-            if (_toPlant.Count > 0 && Time.time >= _toPlant[0].readyAt && Totem.Replants && Plant(dt))
+            // Never mid-swing: the swing is finished (see HarvestJob) before anything else.
+            if (_toPlant.Count > 0 && Time.time >= _toPlant[0].readyAt && Totem.Replants && !Body.InAttack() && Plant(dt))
             {
                 return true;
             }
@@ -154,8 +155,8 @@ namespace AgeOfJarls.AI.Jobs
             {
                 Plant plant = prefab != null ? prefab.GetComponent<Plant>() : null;
                 Piece piece = prefab != null ? prefab.GetComponent<Piece>() : null;
-                if (plant == null || piece == null || piece.m_resources == null || piece.m_resources.Length == 0 ||
-                    piece.m_resources[0].m_resItem == null)
+                if (plant == null || plant.m_grownPrefabs == null || piece == null || piece.m_resources == null ||
+                    piece.m_resources.Length == 0 || piece.m_resources[0].m_resItem == null)
                 {
                     continue;
                 }
@@ -288,6 +289,22 @@ namespace AgeOfJarls.AI.Jobs
 
         protected override bool Work(float dt)
         {
+            if (Body.InAttack())
+            {
+                // Mid-swing it holds still, facing where the blow lands: turning now - to a drop, to the next target -
+                // would send the blade into whatever lies that way. A target felled by this very blow is let go after.
+                // The pause between swings runs on meanwhile: it is counted from the start of a swing.
+                _swingTimer -= dt;
+                if (_target != null)
+                {
+                    Face(WorkScanner.StrikePoint(_target, _targetColliders, Position));
+                }
+                else
+                {
+                    Ctx.Ai.StopMoving();
+                }
+                return true;
+            }
             ItemDrop.ItemData tool = TakeTool(Tool);
             if (tool == null)
             {
@@ -319,18 +336,20 @@ namespace AgeOfJarls.AI.Jobs
                     OnBroughtDown(_targetPrefab, _targetPosition);
                 }
                 Release();
+                // The next target is looked for at once when the last one is done - a pause here would drop the worker
+                // into its chores between two trees. Only a scan that found nothing waits before the next.
                 _scanTimer -= dt;
                 if (_scanTimer > 0f)
                 {
                     return false;
                 }
-                _scanTimer = ScanSeconds;
                 _target = FindTarget(tool);
                 _tripTimer = 0f;
                 _targetColliders = WorkScanner.SolidColliders(_target);
                 if (_target == null)
                 {
-                    Problem(NothingToDo);
+                    _scanTimer = ScanSeconds;
+                    Problem(_toolTooWeak ? "$aoj_problem_tool_too_weak" : NothingToDo);
                     return false;
                 }
                 _targetPrefab = Utils.GetPrefabName(_target.gameObject);
@@ -339,7 +358,7 @@ namespace AgeOfJarls.AI.Jobs
             }
             Problem("");
 
-            Vector3 point = WorkScanner.NearestPoint(_targetColliders, Position, _target.transform.position);
+            Vector3 point = WorkScanner.StrikePoint(_target, _targetColliders, Position);
             if (Utils.DistanceXZ(point, Position) > StrikeDistance)
             {
                 _tripTimer += dt;
@@ -363,6 +382,10 @@ namespace AgeOfJarls.AI.Jobs
             {
                 _swingTimer = BaseSwingSeconds / Mathf.Max(0.1f, Pace);
                 _struck = true;
+                if (AiTrace.On)
+                {
+                    AiTrace.Write(Ctx.Ai, $"swings at {Describe(_target)} (strike point {Utils.DistanceXZ(point, Position):0.0} m)");
+                }
             }
             return true;
         }
@@ -377,16 +400,24 @@ namespace AgeOfJarls.AI.Jobs
             target != null && MinToolTier(target) <= tool.m_shared.m_toolTier && Reservations.IsFree(target, Uid) &&
             InZone(target.transform.position);
 
+        /// <summary>At the last scan the zone held work, but only for a better tool (birch for a stone axe...).</summary>
+        private bool _toolTooWeak;
+
         private Component FindTarget(ItemDrop.ItemData tool)
         {
             Component best = null;
             float bestSqr = float.MaxValue;
             float now = Time.time;
+            _toolTooWeak = false;
             foreach (Component candidate in Candidates())
             {
-                if (candidate == null || (_ignored.TryGetValue(candidate.GetInstanceID(), out float until) && now < until) ||
-                    !IsWorkable(candidate, tool))
+                if (candidate == null || (_ignored.TryGetValue(candidate.GetInstanceID(), out float until) && now < until))
                 {
+                    continue;
+                }
+                if (!IsWorkable(candidate, tool))
+                {
+                    _toolTooWeak |= MinToolTier(candidate) > tool.m_shared.m_toolTier && InZone(candidate.transform.position);
                     continue;
                 }
                 float sqr = (candidate.transform.position - Position).sqrMagnitude;

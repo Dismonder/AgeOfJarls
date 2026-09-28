@@ -35,6 +35,7 @@ namespace AgeOfJarls.Commands
             CommandManager.Instance.AddConsoleCommand(new DumpCommand());
             CommandManager.Instance.AddConsoleCommand(new TotemCommand());
             CommandManager.Instance.AddConsoleCommand(new TraceCommand());
+            CommandManager.Instance.AddConsoleCommand(new GiveCommand());
         }
 
         internal static string Localize(string text, params string[] words) =>

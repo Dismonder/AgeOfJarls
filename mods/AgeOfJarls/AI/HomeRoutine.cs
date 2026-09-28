@@ -17,6 +17,7 @@ namespace AgeOfJarls.AI
     /// during an alarm, eating from the Settlement Cauldron when hungry, working at its Work Totem in working hours,
     /// sleeping in its bed at night, standing guard (soldiers without a job), clearing loot by day, and otherwise
     /// strolling around its home spot (<see cref="Settler.HomeAnchor"/>), walking back on its own path from afar.
+    /// Home is the settlement and, for a worker whose totem stands outside it, the land out to that totem's zone.
     /// Runs on the ZDO owner inside <see cref="SettlerAI.UpdateAI"/> while the settler is calm and at home.
     /// </summary>
     internal sealed class HomeRoutine
@@ -64,6 +65,8 @@ namespace AgeOfJarls.AI
         private readonly System.Predicate<ItemDrop.ItemData> _keep;
 
         private JarlTable _table;
+        /// <summary>Its settlement's table is loaded here (at the last plan); <see cref="_table"/> is also null far from home.</summary>
+        private bool _homeLoaded;
         private float _radius;
         private Vector3 _anchor;
         private float _returnRetryAt;
@@ -103,10 +106,15 @@ namespace AgeOfJarls.AI
         internal void Update(float dt)
         {
             _sitRequested = false;
+            _idleThisFrame = false;
             UpdateInner(dt);
             if (!_sitRequested)
             {
                 StopSitting();
+            }
+            if (!_idleThisFrame)
+            {
+                _idleTime = 0f;
             }
         }
 
@@ -122,8 +130,13 @@ namespace AgeOfJarls.AI
             }
             if (_table == null)
             {
-                // Away from home or the table is not loaded: vanilla idle movement walks back to the home anchor.
-                Stop();
+                // Its settlement is not loaded here (a player is out at a far totem with it): the work there goes on
+                // while there is some. Otherwise, or far from home, vanilla idle movement walks it back to its home spot.
+                if (!_homeLoaded && WorkAway(dt))
+                {
+                    return;
+                }
+                Stop(FarFromHomeSpot() ? SettlerActivity.Returning : SettlerActivity.Idle);
                 return;
             }
 
@@ -190,6 +203,9 @@ namespace AgeOfJarls.AI
                 _settler.SetActivity(SettlerActivity.Returning);
                 return;
             }
+            // Nothing to do: vanilla idle movement strolls around the home spot, and after a while it sits down.
+            _idleThisFrame = true;
+            _idleTime += dt;
             IdleSit(dt);
             bool hungry = _starving && zdo != null && Needs.IsHungry(zdo);
             _settler.SetActivity(_carrying ? SettlerActivity.NoChest : hungry ? SettlerActivity.NoFood : SettlerActivity.Idle);
@@ -203,7 +219,7 @@ namespace AgeOfJarls.AI
         {
             if (_table == null)
             {
-                return "not home";
+                return _activeJob != null ? $"working away: {_activeJob.Job}{(_jobIdle ? " (idle)" : "")}" : _homeLoaded ? "far from home" : "home not loaded";
             }
             var parts = new List<string>();
             if (_chest != null)
@@ -231,7 +247,9 @@ namespace AgeOfJarls.AI
         }
 
         /// <summary>Orders, fights and journeys come first: out of bed and no half-finished trip or job step.</summary>
-        internal void Stop()
+        internal void Stop() => Stop(SettlerActivity.Idle);
+
+        private void Stop(SettlerActivity activity)
         {
             _chest = null;
             StopSitting();
@@ -240,8 +258,12 @@ namespace AgeOfJarls.AI
             StopJob();
             _duty.Stop();
             _character.GetUp();
-            _settler.SetActivity(SettlerActivity.Idle);
+            _settler.SetActivity(activity);
         }
+
+        /// <summary>Beyond a stroll from where vanilla idle movement takes it (the home spot, or home from afar).</summary>
+        private bool FarFromHomeSpot() =>
+            _ai.GetPatrolPoint(out Vector3 spot) && Utils.DistanceXZ(spot, _ai.transform.position) > ReturnDistance();
 
         // ---------------------------------------------------------------- planning
 
@@ -249,13 +271,14 @@ namespace AgeOfJarls.AI
         {
             _table = _settler.HomeTable;
             SettlementData data = _table != null ? _table.Data : null;
+            _homeLoaded = data != null;
             if (data == null)
             {
                 _table = null;
                 return;
             }
             _radius = JarlTable.RadiusOf(data);
-            if (Vector3.Distance(_ai.transform.position, _table.transform.position) > _radius + HomeMargin)
+            if (!IsHome(_ai.transform.position))
             {
                 _table = null;
                 return;
@@ -286,6 +309,39 @@ namespace AgeOfJarls.AI
             {
                 _avoidUntil.Clear();
             }
+        }
+
+        // Within the settlement and a margin - or, for a worker whose totem stands outside it, as far out as that totem's
+        // zone reaches: the way there and back is home life too, not a journey for vanilla idle movement to cut short.
+        private bool IsHome(Vector3 position)
+        {
+            Vector3 table = _table.transform.position;
+            WorkTotem totem = _settler.JobTotem;
+            float work = totem != null && totem.Settlement == _table ? Utils.DistanceXZ(totem.transform.position, table) + totem.Radius : 0f;
+            return Utils.DistanceXZ(position, table) <= HomeReach(_radius, work);
+        }
+
+        /// <summary>
+        /// How far from its table a settler still counts as at home: its settlement or its work, whichever reaches
+        /// farther (<paramref name="workReach"/>: the far edge of its totem's zone, from the table), and a margin.
+        /// </summary>
+        internal static float HomeReach(float settlementRadius, float workReach) => Mathf.Max(settlementRadius, workReach) + HomeMargin;
+
+        // Out at its totem while its settlement is not loaded here (a player went there with it): it works on as long
+        // as there is work and room in its bag - storing, meals and bed wait until it is home, where it then heads.
+        private bool WorkAway(float dt)
+        {
+            WorkTotem totem = _settler.JobTotem;
+            // A totem serving a settlement that is loaded here is another settlement's.
+            if (totem == null || totem.Settlement != null ||
+                Utils.DistanceXZ(_ai.transform.position, totem.transform.position) > totem.Radius + HomeMargin)
+            {
+                return false;
+            }
+            long perf = Perf.Start();
+            bool working = Work(dt);
+            Perf.Stop(Perf.Section.Jobs, perf);
+            return working;
         }
 
         private const float AutoWorkSeconds = 10f;
@@ -451,6 +507,11 @@ namespace AgeOfJarls.AI
                 {
                     _mover.MoveTo(dt, shelter.transform.position, ShelterReach * 0.6f, ShelterReach + 1f, run: true);
                 }
+                else
+                {
+                    // Sheltering, not strolling off towards its home spot.
+                    _ai.StopMoving();
+                }
                 return true;
             }
             if (_bed != null)
@@ -465,6 +526,10 @@ namespace AgeOfJarls.AI
             if (Vector3.Distance(_ai.transform.position, table) > ShelterReach + 2f)
             {
                 _mover.MoveTo(dt, table, ShelterReach, ShelterReach + 3f, run: true);
+            }
+            else
+            {
+                _ai.StopMoving();
             }
             return true;
         }
@@ -507,6 +572,15 @@ namespace AgeOfJarls.AI
                 _mealRetryAt = Time.time + MealRetrySeconds;
                 return false;
             }
+            if (_forage != null || Time.time < _forageGatherUntil)
+            {
+                if (Forage(dt))
+                {
+                    return true;
+                }
+                _mealRetryAt = Time.time + MealRetrySeconds;
+                return false;
+            }
             if (Time.time < _mealRetryAt)
             {
                 return false;
@@ -524,7 +598,7 @@ namespace AgeOfJarls.AI
                 _starving = _cauldron == null;
                 if (_cauldron == null)
                 {
-                    if (FetchFood(dt))
+                    if (FetchFood(dt) || Forage(dt))
                     {
                         _starving = false;
                         return true;
@@ -648,6 +722,92 @@ namespace AgeOfJarls.AI
             return taken > 0;
         }
 
+        // ---------------------------------------------------------------- foraging
+
+        /// <summary>Beyond the settlement's edge by at most this much: the trip stays well within home (HomeMargin).</summary>
+        private const float ForageMargin = 2f;
+        private const float ForageReach = 1.6f;
+        private const float ForageScanSeconds = 5f;
+        /// <summary>After picking, the food that dropped is gathered for at most this long.</summary>
+        private const float ForageGatherSeconds = 6f;
+        private const float ForageGatherRadius = 4f;
+        /// <summary>The drops appear (on the plant's owner) and are looked for within this; then an empty spot ends it.</summary>
+        private const float ForageSettleSeconds = 1.5f;
+        private Pickable _forage;
+        private float _forageTimer;
+        private float _forageScanAt;
+        private Vector3 _forageSpot;
+        private float _forageGatherStart;
+        private float _forageGatherUntil;
+
+        // The last resort of a hungry settler when the settlement has no food at all (no cauldron with any, no chest
+        // with any, nothing in its bag): it picks what grows wild nearby - berries, mushrooms, never a player's crops -
+        // gathers what drops and eats it from its bag. True while busy with it.
+        private bool Forage(float dt)
+        {
+            if (Time.time < _forageGatherUntil)
+            {
+                // Its own pick, so gathered whatever the loot setting says; eaten from the bag (see Eat).
+                _settler.SetActivity(SettlerActivity.Eating);
+                if (_loot.CollectInZone(dt, _forageSpot, ForageGatherRadius, Needs.IsFood))
+                {
+                    return true;
+                }
+                if (Time.time < _forageGatherStart + ForageSettleSeconds)
+                {
+                    _ai.StopMoving();
+                    return true;
+                }
+                _forageGatherUntil = 0f;
+                return false;
+            }
+            if (_forage == null || !_forage.CanBePicked())
+            {
+                _forage = null;
+                if (Time.time < _forageScanAt)
+                {
+                    return false;
+                }
+                _forageScanAt = Time.time + ForageScanSeconds;
+                _forage = FindForage();
+                _forageTimer = 0f;
+                if (_forage == null)
+                {
+                    return false;
+                }
+                if (AiTrace.On)
+                {
+                    AiTrace.Write(_ai, $"hungry, no food in the settlement: forages {Utils.GetPrefabName(_forage.gameObject)} {Vector3.Distance(_ai.transform.position, _forage.transform.position):0} m away");
+                }
+            }
+
+            _character.GetUp();
+            _settler.SetActivity(SettlerActivity.Eating);
+            Vector3 target = _forage.transform.position;
+            _forageTimer += dt;
+            MoveResult move = _mover.MoveTo(dt, target, ForageReach * 0.7f, ForageReach + 1f, run: false);
+            if (move == MoveResult.Moving && _forageTimer < TripSeconds)
+            {
+                return true;
+            }
+            if (move != MoveResult.Arrived || Vector3.Distance(_ai.transform.position, target) > ForageReach + 1f)
+            {
+                _forage = null;
+                return false;
+            }
+            _ai.StopMoving();
+            _forage.Interact(_character, false, false);
+            _forageSpot = target;
+            _forageGatherStart = Time.time;
+            _forageGatherUntil = Time.time + ForageGatherSeconds;
+            _forage = null;
+            _loot.ScanNow();
+            return true;
+        }
+
+        // The nearest wild plant that gives food and can be picked now, within the settlement and a margin around it.
+        private Pickable FindForage() => WildFood.Nearest(_ai.transform.position, _table.transform.position, _radius + ForageMargin);
+
         // ---------------------------------------------------------------- work
 
         private JobBase AssignedJob()
@@ -691,13 +851,15 @@ namespace AgeOfJarls.AI
                 StopJob();
                 return false;
             }
-            if (totem.Settlement != _table)
+            // At home the totem must serve this settlement and its job be unlocked there. Out at the totem with the
+            // settlement not loaded (WorkAway), that cannot be looked at: the job was given when it held.
+            if (_table != null && totem.Settlement != _table)
             {
                 _settler.SetJobProblem("$aoj_totem_outside");
                 StopJob();
                 return false;
             }
-            if (!JobInfo.IsUnlocked(totem.Job, _table.Data?.Tier ?? 0))
+            if (_table != null && !JobInfo.IsUnlocked(totem.Job, _table.Data?.Tier ?? 0))
             {
                 _settler.SetJobProblem("$aoj_job_locked");
                 StopJob();
@@ -709,10 +871,10 @@ namespace AgeOfJarls.AI
             {
                 return false;
             }
-            // A job with nothing to do is asked again only after a pause, and a chore under way (a drop it walks to)
-            // is finished first: otherwise job and chores take turns every frame and the settler keeps changing course.
-            if (_activeJob == job && _jobIdle &&
-                (Time.time < _jobRecheckAt || (_collecting && (_loot.HasTarget || _loot.BusyWithin(GatherPauseSeconds)))))
+            // A chore under way (gathering what lies around) is finished first: otherwise job and chores take turns
+            // over the same drops and the settler keeps changing course. The job itself is asked every frame - its own
+            // timers (the scan for the next tree or rock) only run while it is.
+            if (_activeJob == job && _jobIdle && _collecting && (_loot.HasTarget || _loot.BusyWithin(GatherPauseSeconds)))
             {
                 return false;
             }
@@ -723,20 +885,19 @@ namespace AgeOfJarls.AI
             }
             _character.GetUp();
             bool busy = job.Update(dt, totem);
+            if (!busy && !_jobIdle)
+            {
+                // Out of work (or of room in its bag) just now: the trip to the chests is planned in a moment, not after
+                // up to a whole planning period of chores.
+                _planTimer = Mathf.Min(_planTimer, GatherPauseSeconds);
+            }
             _jobIdle = !busy;
             if (busy)
             {
                 _settler.SetActivity(SettlerActivity.Working);
             }
-            else
-            {
-                _jobRecheckAt = Time.time + JobRecheckSeconds;
-            }
             return busy;
         }
-
-        private const float JobRecheckSeconds = 4f;
-        private float _jobRecheckAt;
 
         private void StopJob()
         {
@@ -824,14 +985,19 @@ namespace AgeOfJarls.AI
 
         // ---------------------------------------------------------------- idle pose
 
+        /// <summary>Only a settler idle this long in one go sits down: not in a short gap between two tasks.</summary>
+        private const float SitAfterIdleSeconds = 6f;
         private bool _sitRequested;
         private bool _sitting;
         private float _sitTimer = 30f;
+        private bool _idleThisFrame;
+        private float _idleTime;
 
         // Now and then an idle settler sits down near its home spot for a while (every machine sees the pose).
         private void IdleSit(float dt)
         {
-            if (_carrying || Utils.DistanceXZ(_anchor, _ai.transform.position) > AoJConfig.SettlerWanderRange.Value + 1f)
+            if (_carrying || _idleTime < SitAfterIdleSeconds ||
+                Utils.DistanceXZ(_anchor, _ai.transform.position) > AoJConfig.SettlerWanderRange.Value + 1f)
             {
                 return;
             }

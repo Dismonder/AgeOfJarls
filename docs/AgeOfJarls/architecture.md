@@ -203,6 +203,18 @@ Każdy krok zapisuje w ZDO typ zadania, krok i cel (ZDOID), więc zadanie trwa d
 - **Zablokowanie.** Brak postępu przez N s → porzucenie celu i zwolnienie rezerwacji; przy uporczywym — teleport
   do najbliższego wolnego punktu.
 - **Rezerwacje.** W pamięci właściciela totemu, z czasem wygaśnięcia — znikają same, gdy pracownik zniknie.
+- **Zamach to praca, nie walka.** `SettlerAI.IsCalm` nie patrzy na `InAttack`: własny zamach siekierą czy kilofem nie
+  zatrzymuje zadania (wcześniej każdy cios zwalniał cel). W trakcie zamachu `HarvestJob` trzyma osadnika w miejscu,
+  zwróconego do celu — inaczej vanilla `IdleMovement` obracała go w połowie zamachu i cios trafiał w co popadnie.
+- **Klatki bez polecenia ruchu.** Vanilla najpierw sama wybiera ruch (`IdleMovement` wokół punktu patrolu = domu,
+  bieg, gdy dalej niż 2× zasięg), zachowanie osadnika go nadpisuje. Każdy stan „na miejscu” (przy skrzyni, na
+  posterunku, w schronieniu, przy łupie) woła `StopMoving`, inaczej osadnik dryfuje do domu i z powrotem.
+- **Totemy poza osadą.** `WorkTotem.Settlement` = osada, w której stoi, albo ta z najbliższą krawędzią w zasięgu
+  `Work/TotemReach`. Dla pracownika takiego totemu „dom” sięga do dalszej krawędzi strefy (`HomeRoutine.HomeReach`),
+  więc droga tam i z powrotem nie jest „oddaleniem się”. Gdy stół nie jest wczytany (gracz przy dalekim totemie),
+  osadnik pracuje dalej (`WorkAway`), a z pełnym plecakiem wraca.
+- **Navmesh na żądanie.** `Pathfinding` buduje kafle 32 m dopiero po pierwszym zapytaniu o ścieżkę; `PathMover` czeka
+  do 4 s (pytając co 1 s), zanim uzna cel za nieosiągalny — inaczej daleka strefa traciła wszystkie cele naraz.
 - **Skanowanie.** `Physics.OverlapSphere` z maską warstw, wynik trzymany kilka sekund w cache; żadnego
   `FindObjectsOfType` w pętli.
 

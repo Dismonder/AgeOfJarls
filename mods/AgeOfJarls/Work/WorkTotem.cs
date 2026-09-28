@@ -16,7 +16,7 @@ namespace AgeOfJarls.Work
     /// A Work Totem: one job, a work zone around it and the settlers assigned to it. The totem only holds its settings
     /// (stable id, radius, working hours) in its ZDO; a worker keeps the totem's id in its own ZDO, so assignments
     /// survive owner changes and world reloads. Settings change by RPC on the totem's owner, who checks the sender's
-    /// role in the settlement the totem stands in.
+    /// role in the settlement the totem serves (it may stand outside it, see <see cref="Settlement"/>).
     /// </summary>
     public class WorkTotem : MonoBehaviour, Hoverable, Interactable
     {
@@ -117,8 +117,11 @@ namespace AgeOfJarls.Work
         /// <summary>Whether its workers should be at it now (world time, the same on every machine).</summary>
         internal bool IsWorkTime => AllDay || !EnvMan.IsNight();
 
-        /// <summary>The settlement the totem stands in (its table loaded here), or null.</summary>
-        internal JarlTable Settlement => JarlTable.FindContaining(transform.position);
+        /// <summary>
+        /// The settlement the totem serves (its table loaded here): the one it stands in, else the nearest whose edge
+        /// is within <see cref="AoJConfig.TotemReach"/> - work often lies outside, by a forest or a mine. Null beyond.
+        /// </summary>
+        internal JarlTable Settlement => JarlTable.FindServing(transform.position, AoJConfig.TotemReach.Value);
 
         internal static WorkTotem FindById(long id)
         {
@@ -313,7 +316,7 @@ namespace AgeOfJarls.Work
             _nview.InvokeRPC(Keys.RpcTotemConfig, package);
         }
 
-        /// <summary>Hersirs and Jarls of the settlement it stands in; outside any settlement, its builder.</summary>
+        /// <summary>Hersirs and Jarls of the settlement it serves; away from any settlement, its builder.</summary>
         internal bool MayManage(Player player)
         {
             if (player == null)

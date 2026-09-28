@@ -23,6 +23,18 @@
 - Hungry settlers no longer starve next to food: they eat what they carry, and when no cauldron has food they fetch
   it from a settlement chest - enough for everyone when there is a cauldron, the rest goes into it.
 - A settler you talk to ([E]) stops and faces you, and carries on where it left off.
+- Work Totems may stand outside the settlement, by a forest or a mine: up to `Work/TotemReach` (50 m) past its edge
+  they serve the nearest settlement. Its workers walk out, work the zone and carry the take home without turning back
+  halfway; if you go out there with them (the settlement unloads), they work on until their bags are full.
+- Work is no longer interrupted at every blow: a woodcutter or miner stays with its tree or rock until it is down (it
+  let go of it at each swing, and meanwhile the idle stroll could turn it, so the axe hit whatever stood there -
+  stones included). Replanting felled trees works again. A worker that runs out of work goes to the chests at once.
+- Soldiers stand at their posts and sheltering settlers stay put, instead of drifting towards their home spot and
+  back; a settler sits down only after a few seconds of real idleness, not in a short gap between two tasks.
+- A place nobody walked lately (a far work zone) is waited for a moment while the game builds its paths, instead of
+  being given up at once.
+- A starving settler whose settlement has no food at all picks wild berries and mushrooms nearby and eats them -
+  never a player's crops.
 
 - `aoj_perf [seconds]` measures what the mod costs per frame on your machine (settler AI with planning, jobs,
   paths and inventory saves, ticks, windows, and the game's own AI for comparison).

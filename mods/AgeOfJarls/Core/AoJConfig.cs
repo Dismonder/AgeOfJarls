@@ -38,6 +38,7 @@ namespace AgeOfJarls.Core
         internal static ConfigEntry<int> TotemBaseSlots;
         internal static ConfigEntry<int> TotemMaxSlots;
         internal static ConfigEntry<int> TotemSlotsPerMember;
+        internal static ConfigEntry<float> TotemReach;
         internal static ConfigEntry<float> WorkSpeed;
         internal static ConfigEntry<int> CarryLimit;
 
@@ -141,6 +142,11 @@ namespace AgeOfJarls.Core
             TotemSlotsPerMember = config.BindConfig("Work", "TotemSlotsPerMember", 1,
                 "Extra workers every Work Totem takes for each settlement member beyond the first.", synced: true,
                 acceptableValues: new AcceptableValueRange<int>(0, 5));
+            TotemReach = config.BindConfig("Work", "TotemReach", 50f,
+                "How far (m) beyond a settlement's edge its Work Totems may stand (a forest, a mine nearby); a totem serves " +
+                "the settlement it stands in, else the one whose edge is nearest. Workers only go to a totem that is loaded, " +
+                "so one far from where players are works only while somebody is around.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0f, 150f));
             WorkSpeed = config.BindConfig("Work", "WorkSpeed", 1f,
                 "Multiplier for how fast settlers work (swings, repairs, loading), live and while nobody is around.", synced: true,
                 acceptableValues: new AcceptableValueRange<float>(0.1f, 5f));

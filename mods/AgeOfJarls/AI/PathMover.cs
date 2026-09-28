@@ -34,6 +34,15 @@ namespace AgeOfJarls.AI
 
         private const float SameWaypoint = 0.1f;
 
+        /// <summary>
+        /// The navmesh of an area nobody walked lately is built on demand, a tile at a time, from the first path asked
+        /// for (a far work zone, a chest across the settlement): a goal counts as unreachable only after it stayed so
+        /// for this long, asked again every <see cref="NoPathRepathSeconds"/>.
+        /// </summary>
+        private const float NoPathGraceSeconds = 4f;
+        private const float NoPathRepathSeconds = 1f;
+        private float _noPathTimer;
+
         private Vector3 _waypointPoint;
         private float _waypointBest = float.MaxValue;
         private float _waypointTimer;
@@ -159,13 +168,10 @@ namespace AgeOfJarls.AI
             }
 
             Step step = Follow(dt, position, goal, reach, run, _doorPhase == DoorPhase.Through ? ThroughRepathSeconds : RepathSeconds);
-            if (step == Step.Moving)
+            if (step == Step.Moving || step == Step.Arrived)
             {
-                return MoveResult.Moving;
-            }
-            if (step == Step.Arrived)
-            {
-                return MoveResult.Arrived;
+                _noPathTimer = 0f;
+                return step == Step.Moving ? MoveResult.Moving : MoveResult.Arrived;
             }
 
             if (_doorPhase == DoorPhase.Through)
@@ -178,7 +184,20 @@ namespace AgeOfJarls.AI
                 }
                 GiveUpDoor();
             }
-            return TryDoor(position, goal, step == Step.Stuck) ? MoveResult.Moving : MoveResult.Blocked;
+            if (TryDoor(position, goal, step == Step.Stuck))
+            {
+                return MoveResult.Moving;
+            }
+            if (step == Step.Blocked)
+            {
+                // No way yet and no door to open: it waits for the navmesh a moment (standing, see Follow).
+                _noPathTimer += dt;
+                if (_noPathTimer < NoPathGraceSeconds)
+                {
+                    return MoveResult.Moving;
+                }
+            }
+            return MoveResult.Blocked;
         }
 
         /// <summary>The goal changed or the trip ended: forget the route and close a door left open behind.</summary>
@@ -188,6 +207,7 @@ namespace AgeOfJarls.AI
             _hasPath = false;
             _repathTimer = 0f;
             _stuckTimer = 0f;
+            _noPathTimer = 0f;
             _jogging = false;
             if (_door != null && Vector3.Distance(_ai.transform.position, _door.transform.position) > DoorClearance)
             {
@@ -202,7 +222,9 @@ namespace AgeOfJarls.AI
         {
             if (Utils.DistanceXZ(target, _target) > TargetMoved)
             {
+                // Another goal (or it moved): a path right away, and a fresh wait for one if there is none yet.
                 _repathTimer = 0f;
+                _noPathTimer = 0f;
             }
             _repathTimer -= dt;
             if (_repathTimer <= 0f)
@@ -221,7 +243,9 @@ namespace AgeOfJarls.AI
             }
             if (!_hasPath || !_pathReaches)
             {
+                // Asked again soon: the navmesh there may still be being built (see NoPathGraceSeconds).
                 _ai.StopMoving();
+                _repathTimer = Mathf.Min(_repathTimer, NoPathRepathSeconds);
                 return Step.Blocked;
             }
 

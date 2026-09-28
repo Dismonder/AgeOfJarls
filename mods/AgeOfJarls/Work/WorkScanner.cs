@@ -51,14 +51,49 @@ namespace AgeOfJarls.Work
             return found;
         }
 
-        /// <summary>The solid colliders of a work object, fetched once when the object is chosen.</summary>
-        internal static Collider[] SolidColliders(Component target) =>
-            target == null ? new Collider[0] : System.Array.FindAll(target.GetComponentsInChildren<Collider>(), c => !c.isTrigger);
+        private static int s_solidMask;
 
-        /// <summary>The point of these colliders nearest to <paramref name="from"/> (bounds-based, cheap and safe).</summary>
+        /// <summary>
+        /// The colliders of a work object a swing can hit, fetched once when the object is chosen: not triggers, and
+        /// not the "viewblock" canopy a tree carries to block the view - its box reaches some ten metres around.
+        /// </summary>
+        internal static Collider[] SolidColliders(Component target)
+        {
+            if (target == null)
+            {
+                return new Collider[0];
+            }
+            if (s_solidMask == 0)
+            {
+                s_solidMask = LayerMask.GetMask("Default", "static_solid", "Default_small", "piece", "piece_nonsolid", "terrain", "vehicle");
+            }
+            return System.Array.FindAll(target.GetComponentsInChildren<Collider>(),
+                c => !c.isTrigger && (s_solidMask & (1 << c.gameObject.layer)) != 0);
+        }
+
+        /// <summary>A standing tree is struck at its trunk, whose radius this is about.</summary>
+        private const float TrunkRadius = 0.5f;
+
+        /// <summary>
+        /// Where to swing at a work object from <paramref name="from"/>: a standing tree at the side of its trunk facing
+        /// the worker (its colliders include branches metres wide), anything else at the nearest point of its colliders.
+        /// </summary>
+        internal static Vector3 StrikePoint(Component target, Collider[] colliders, Vector3 from)
+        {
+            if (target is TreeBase)
+            {
+                Vector3 trunk = target.transform.position;
+                Vector3 away = from - trunk;
+                away.y = 0f;
+                return away.sqrMagnitude < 0.01f ? trunk : trunk + away.normalized * TrunkRadius;
+            }
+            return NearestPoint(colliders, from, target.transform.position);
+        }
+
+        /// <summary>The point of these colliders nearest to <paramref name="from"/>.</summary>
         internal static Vector3 NearestPoint(Collider[] colliders, Vector3 from, Vector3 fallback)
         {
-            Collider best = null;
+            Vector3 best = fallback;
             float bestSqr = float.MaxValue;
             foreach (Collider collider in colliders)
             {
@@ -66,35 +101,21 @@ namespace AgeOfJarls.Work
                 {
                     continue;
                 }
-                float sqr = (collider.bounds.ClosestPoint(from) - from).sqrMagnitude;
+                Vector3 point = ClosestOn(collider, from);
+                float sqr = (point - from).sqrMagnitude;
                 if (sqr < bestSqr)
                 {
-                    best = collider;
+                    best = point;
                     bestSqr = sqr;
                 }
             }
-            return best != null ? best.bounds.ClosestPoint(from) : fallback;
+            return best;
         }
 
-        /// <summary>The point of the object's colliders nearest to <paramref name="from"/> (bounds-based, cheap and safe).</summary>
-        internal static Vector3 NearestPoint(Component target, Vector3 from)
-        {
-            Collider best = null;
-            float bestSqr = float.MaxValue;
-            foreach (Collider collider in target.GetComponentsInChildren<Collider>())
-            {
-                if (collider.isTrigger || !collider.enabled)
-                {
-                    continue;
-                }
-                float sqr = (collider.bounds.ClosestPoint(from) - from).sqrMagnitude;
-                if (sqr < bestSqr)
-                {
-                    best = collider;
-                    bestSqr = sqr;
-                }
-            }
-            return best != null ? best.bounds.ClosestPoint(from) : target.transform.position;
-        }
+        // On the collider itself where Unity can tell (boxes, spheres, capsules, convex meshes): the box around a log
+        // lying at an angle is mostly empty air. Other meshes fall back to their bounds.
+        private static Vector3 ClosestOn(Collider collider, Vector3 from) =>
+            collider is MeshCollider mesh && !mesh.convex ? collider.bounds.ClosestPoint(from) : collider.ClosestPoint(from);
+
     }
 }

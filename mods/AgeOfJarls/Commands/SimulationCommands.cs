@@ -203,11 +203,12 @@ namespace AgeOfJarls.Commands
     internal sealed class TotemCommand : AojCommand
     {
         private const float Range = 10f;
-        private static readonly List<string> Options = new List<string> { "upgrade" };
+        private static readonly List<string> Options = new List<string> { "upgrade", "release", "priority" };
 
         public override string Name => "aoj_totem";
 
-        public override string Help => $"Age of Jarls: the nearest totem within {Range:0} m (level, places, next upgrade); 'aoj_totem upgrade' buys its next level";
+        public override string Help => $"Age of Jarls: the nearest totem within {Range:0} m (level, places, next upgrade); " +
+                                       "'upgrade' buys its next level, 'release' frees its workers, 'priority low|normal|high' sets it";
 
         public override List<string> CommandOptionList() => Options;
 
@@ -221,6 +222,22 @@ namespace AgeOfJarls.Commands
             if (totem == null)
             {
                 context?.AddString($"No totem within {Range:0} m.");
+                return;
+            }
+            if (args.Length > 0 && args[0].Equals("release", System.StringComparison.OrdinalIgnoreCase))
+            {
+                List<Settler> workers = totem.Workers();
+                workers.ForEach(w => w.RequestSetJob(0L));
+                context?.AddString($"{totem.Job}: released {workers.Count} worker(s); free settlers take free places by themselves.");
+                return;
+            }
+            if (args.Length > 1 && args[0].Equals("priority", System.StringComparison.OrdinalIgnoreCase))
+            {
+                int priority = args[1].ToLowerInvariant() == "high" ? WorkTotem.HighPriority
+                    : args[1].ToLowerInvariant() == "low" ? WorkTotem.LowPriority
+                    : WorkTotem.NormalPriority;
+                totem.RequestPriority(priority);
+                context?.AddString($"{totem.Job}: priority {ConsoleCommands.Localize(WorkTotem.PriorityToken(priority))}.");
                 return;
             }
             if (args.Length > 0 && args[0].Equals("upgrade", System.StringComparison.OrdinalIgnoreCase))
@@ -237,6 +254,48 @@ namespace AgeOfJarls.Commands
                 : ", highest level";
             context?.AddString($"{totem.Job}: level {level}/{WorkTotem.MaxLevel}, pace x{totem.PaceBonus:0.00}, workers {totem.WorkerCount()}/{totem.Capacity}, " +
                                $"radius {totem.Radius:0} m{next}");
+        }
+    }
+
+    /// <summary><c>aoj_give &lt;item&gt; [amount]</c>: an item for the nearest settler, handed over like a player does (cheat).</summary>
+    internal sealed class GiveCommand : AojCommand
+    {
+        private const float Range = 10f;
+
+        public override string Name => "aoj_give";
+
+        public override string Help => "Age of Jarls: give the nearest settler (or the one named) an item, as if handed over (cheat): aoj_give <item> [amount] [name]";
+
+        public override bool IsCheat => true;
+
+        public override void Run(string[] args, Terminal context)
+        {
+            Player me = Player.m_localPlayer;
+            GameObject prefab = args.Length > 0 && ObjectDB.instance != null ? ObjectDB.instance.GetItemPrefab(args[0]) : null;
+            ItemDrop drop = prefab != null ? prefab.GetComponent<ItemDrop>() : null;
+            if (me == null || drop == null)
+            {
+                context?.AddString(args.Length == 0 ? "usage: aoj_give <item prefab> [amount]" : $"Unknown item '{args[0]}'.");
+                return;
+            }
+            string name = args.Length > 2 ? args[2] : null;
+            Settler settler = Settler.Loaded
+                .Where(s => s != null && s.Identity != null && (name != null
+                    ? s.Identity.Name.Equals(name, System.StringComparison.OrdinalIgnoreCase)
+                    : Vector3.Distance(s.transform.position, me.transform.position) <= Range))
+                .OrderBy(s => Vector3.Distance(s.transform.position, me.transform.position))
+                .FirstOrDefault();
+            if (settler == null)
+            {
+                context?.AddString(name != null ? $"No loaded settler called {name}." : $"No settler within {Range:0} m.");
+                return;
+            }
+            ItemDrop.ItemData item = drop.m_itemData.Clone();
+            item.m_dropPrefab = prefab;
+            item.m_stack = Mathf.Clamp(args.Length > 1 && int.TryParse(args[1], out int amount) ? amount : 1, 1, item.m_shared.m_maxStackSize);
+            context?.AddString(settler.Give(item)
+                ? $"Gave {settler.DisplayName} {item.m_stack}x {prefab.name}."
+                : $"{settler.DisplayName} could not take it.");
         }
     }
 

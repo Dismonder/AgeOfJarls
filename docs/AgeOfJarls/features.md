@@ -103,7 +103,8 @@ Konkretne lokacje vanilla (nazwy prefabów) potwierdzimy w grze na etapie M5.
 ## D. Totemy Zadań i logistyka
 
 ### D1. Wspólne dla wszystkich totemów — MVP
-- Budowla w obrębie osady; promień strefy regulowany (8–30 m) z podglądem okręgu.
+- Budowla w osadzie albo poza nią (las, kopalnia) — do `Work/TotemReach` (domyślnie 50 m) za jej granicą; służy
+  najbliższej osadzie. Promień strefy regulowany (8–30 m) z podglądem okręgu.
 - Sloty na pracowników (zależne od poziomu osady), priorytet, godziny pracy (dzień / cała doba).
 - Połączone magazyny: automatycznie skrzynie w strefie + ręczne dołączenie; filtr kategorii dla każdej skrzyni.
 - Status w podpowiedzi: obsada x/y i ostatni problem („brak siekiery”, „magazyn pełny”, „brak drzew w strefie”).

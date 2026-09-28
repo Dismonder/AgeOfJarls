@@ -247,6 +247,33 @@ namespace AgeOfJarls.Settlement
         internal static JarlTable FindContaining(Vector3 position) =>
             Loaded.FirstOrDefault(t => Utils.DistanceXZ(t.transform.position, position) <= t.Radius);
 
+        /// <summary>
+        /// The settlement a point works for: the one it lies in, else the one whose edge is nearest, if at most
+        /// <paramref name="beyondEdge"/> away - a Work Totem by a forest or a mine outside serves that settlement.
+        /// </summary>
+        internal static JarlTable FindServing(Vector3 position, float beyondEdge)
+        {
+            JarlTable best = null;
+            float bestGap = float.MaxValue;
+            foreach (JarlTable table in Loaded)
+            {
+                if (table == null)
+                {
+                    continue;
+                }
+                float gap = EdgeGap(table.transform.position, table.Radius, position);
+                if (gap <= beyondEdge && gap < bestGap)
+                {
+                    best = table;
+                    bestGap = gap;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>How far past a settlement's edge a point lies; negative inside.</summary>
+        internal static float EdgeGap(Vector3 table, float radius, Vector3 point) => Utils.DistanceXZ(table, point) - radius;
+
         private void Awake()
         {
             _nview = GetComponent<ZNetView>();
