@@ -27,9 +27,14 @@
   cykl drwala (drzewo → kłoda → połówki → drewno → pniak, małe drzewa), totem drwala **poza osadą** (praca tam i
   odnoszenie urobku do skrzyń 46 m dalej), jedzenie ze skrzyń i z plecaka (racja do 3 porcji, bez kursów z jedną
   jagodą), osadnik nazywa przedmiot bez skrzyni („Pióra: postaw pustą skrzynię”).
-- **Do sprawdzenia w grze (kolejność):** górnik (ten sam kod celowania co drwal; w `testo` zablokowany poziomem
-  osady), skrzynia wejściowa tragarza (problem „brak wejścia”) i czy gracz wie, jak ją ustawić,
-  hutnik/kucharz/rolnik, oblężenie i odbudowa, co-op, serwer dedykowany. Uwaga: gra działająca w tle między testami
+- **Wszystkie zawody sprawdzone w grze 2026-09-28** (komendy `aoj_tier`, `aoj_place`, `aoj_totem assign`): drwal,
+  górnik (złoże miedzi, skały), budowniczy (sam wziął młotek ze skrzyni, naprawił podłogę i skrzynię), hutnik
+  (mielerz → węgiel, piec → miedź), kucharz (ruszt nad ogniskiem, upieczone mięso do skrzyń/kotła), rolnik (zbiór
+  marchwi, plon do skrzyń), tragarz (luźne kamienie i krzemień do skrzyń). Naprawione po drodze: górnik krążył wokół
+  dużych skał, kilof celował w ziemię, stacje „nieosiągalne” co 4 s, rolnik trzymał plon w plecaku.
+- **Do sprawdzenia w grze (kolejność):** opróżnianie skrzyni wejściowej przez tragarza (włożyć rzeczy do skrzyni przy
+  totemie), przesadzanie przez rolnika (uprawiona ziemia + nasiona), odbudowa wyłomów po oblężeniu, żołnierze
+  (posterunki, zbrojownia), co-op, serwer dedykowany. Uwaga: gra działająca w tle między testami
   to upływ czasu świata (doba = 30 min) — osadnicy w tym czasie jedzą zapasy.
 - **Świat `testo` po testach:** Totem Tragarza poziom 3 przy osadzie, krata jeńca i 2 greydwarfy (świat ma pasywne
   potwory), postać „test” z odblokowanymi przepisami na brąz (przedmioty z `spawn`).

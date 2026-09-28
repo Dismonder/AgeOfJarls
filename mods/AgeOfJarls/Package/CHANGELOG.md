@@ -36,6 +36,14 @@
 - A settler keeps up to three servings of food on it and eats them when hungry, instead of carrying a berry left
   over from a meal back to the chest. Resin sorts with wood (it comes with every tree), so woodcutters no longer carry
   it around for want of a chest.
+- Every job checked in game and fixed where it failed: miners reach big rocks (they circled them without a blow)
+  and never swing into the ground (a pickaxe dug holes); smelter hands, cooks and haulers walk to the side of a big
+  station or chest and give up an unreachable one for a minute instead of trying every few seconds; a farmer brings
+  the harvest to the chests (carrots counted as seeds and stayed in its bag); a cook's food goes to the cauldron.
+- A worker without its tool (a new job, or its tool went to the chests) takes one from the settlement's chests.
+- Haulers and soldiers at the Armory ask for chest access once a second, not every frame (network traffic).
+- Test commands: `aoj_tier <n>` (cheat), `aoj_place <piece> [m]` (cheat, placed like the hammer does), `aoj_totem
+  assign <settler>` and `aoj_totem radius <m>`.
 - Soldiers stand at their posts and sheltering settlers stay put, instead of drifting towards their home spot and
   back; a settler sits down only after a few seconds of real idleness, not in a short gap between two tasks.
 - A place nobody walked lately (a far work zone) is waited for a moment while the game builds its paths, instead of
