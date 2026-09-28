@@ -203,7 +203,7 @@ namespace AgeOfJarls.Commands
     internal sealed class TotemCommand : AojCommand
     {
         private const float Range = 10f;
-        private static readonly List<string> Options = new List<string> { "upgrade", "release", "assign", "priority", "radius" };
+        private static readonly List<string> Options = new List<string> { "upgrade", "release", "assign", "priority", "radius", "replant" };
 
         public override string Name => "aoj_totem";
 
@@ -254,6 +254,13 @@ namespace AgeOfJarls.Commands
                     : WorkTotem.NormalPriority;
                 totem.RequestPriority(priority);
                 context?.AddString($"{totem.Job}: priority {ConsoleCommands.Localize(WorkTotem.PriorityToken(priority))}.");
+                return;
+            }
+            if (args.Length > 1 && args[0].Equals("replant", System.StringComparison.OrdinalIgnoreCase))
+            {
+                bool replant = args[1].Equals("on", System.StringComparison.OrdinalIgnoreCase);
+                totem.RequestReplant(replant);
+                context?.AddString($"{totem.Job}: replanting {(replant ? "on" : "off")}{(totem.Job == JobType.Woodcutter ? "" : " (only woodcutters replant)")}.");
                 return;
             }
             if (args.Length > 1 && args[0].Equals("radius", System.StringComparison.OrdinalIgnoreCase))
@@ -349,6 +356,135 @@ namespace AgeOfJarls.Commands
             Quaternion rotation = Quaternion.LookRotation(-forward.normalized, Vector3.up);
             me.PlacePiece(piece, spot, rotation, doAttack: false);
             context?.AddString($"Placed {prefab.name} at {spot.x:0}, {spot.z:0}.");
+        }
+    }
+
+    /// <summary><c>aoj_fill &lt;item&gt; [amount]</c>: items into the nearest chest within reach (cheat, for testing haulers).</summary>
+    internal sealed class FillCommand : AojCommand
+    {
+        private const float Range = 5f;
+
+        public override string Name => "aoj_fill";
+
+        public override string Help => $"Age of Jarls: put items into the nearest chest within {Range:0} m (cheat, for tests): aoj_fill <item prefab> [amount]";
+
+        public override bool IsCheat => true;
+
+        public override void Run(string[] args, Terminal context)
+        {
+            Player me = Player.m_localPlayer;
+            GameObject prefab = args.Length > 0 && ObjectDB.instance != null ? ObjectDB.instance.GetItemPrefab(args[0]) : null;
+            if (me == null || prefab == null || prefab.GetComponent<ItemDrop>() == null)
+            {
+                context?.AddString(args.Length == 0 ? "usage: aoj_fill <item prefab> [amount]" : $"Unknown item '{args[0]}'.");
+                return;
+            }
+            var pieces = new List<Piece>();
+            Piece.GetAllPiecesInRadius(me.transform.position, Range, pieces);
+            Container chest = pieces.Select(p => p.GetComponent<Container>())
+                .Where(c => c != null && c.m_nview != null && c.m_nview.IsValid())
+                .OrderBy(c => Vector3.Distance(c.transform.position, me.transform.position))
+                .FirstOrDefault();
+            if (chest == null)
+            {
+                context?.AddString($"No chest within {Range:0} m.");
+                return;
+            }
+            if (!ChestAccess.Acquire(chest, ask: true))
+            {
+                context?.AddString("The chest belongs to another machine: asked for it, try again in a moment.");
+                return;
+            }
+            int amount = args.Length > 1 && int.TryParse(args[1], out int n) ? Mathf.Clamp(n, 1, 999) : 1;
+            chest.Load();
+            ItemDrop.ItemData added = chest.GetInventory().AddItem(prefab.name, amount, 1, 0, 0L, "", false);
+            context?.AddString(added != null ? $"Put {amount}x {prefab.name} into the chest." : "The chest has no room for it.");
+        }
+    }
+
+    /// <summary><c>aoj_role &lt;settler&gt; &lt;role&gt;</c>: a settler's combat role, as in its window (its owner checks the rights).</summary>
+    internal sealed class RoleCommand : AojCommand
+    {
+        public override string Name => "aoj_role";
+
+        public override string Help => "Age of Jarls: give a settler a combat role, as in its window: aoj_role <settler> <none|warrior|archer|shieldbearer|spearman|berserker>";
+
+        public override void Run(string[] args, Terminal context)
+        {
+            if (args.Length < 2 || !System.Enum.TryParse(args[args.Length - 1], true, out Army.CombatRole role))
+            {
+                context?.AddString("usage: aoj_role <settler> <none|warrior|archer|shieldbearer|spearman|berserker>");
+                return;
+            }
+            string name = string.Join(" ", args.Take(args.Length - 1));
+            Settler settler = Settler.Loaded.FirstOrDefault(s => s != null && s.Identity != null &&
+                                                                 s.Identity.Name.Equals(name, System.StringComparison.OrdinalIgnoreCase));
+            if (settler == null)
+            {
+                context?.AddString($"No loaded settler called {name}.");
+                return;
+            }
+            settler.RequestSetRole(role);
+            context?.AddString($"{settler.DisplayName}: {role}.");
+        }
+    }
+
+    /// <summary><c>aoj_alarm on|off</c>: the alarm of the settlement you stand in, as the table's window sounds it.</summary>
+    internal sealed class AlarmCommand : AojCommand
+    {
+        public override string Name => "aoj_alarm";
+
+        public override string Help => "Age of Jarls: sound or end the alarm of the settlement you stand in, as its window does: aoj_alarm on|off";
+
+        public override void Run(string[] args, Terminal context)
+        {
+            Player me = Player.m_localPlayer;
+            JarlTable table = me != null ? JarlTable.FindContaining(me.transform.position) : null;
+            if (table == null || args.Length == 0)
+            {
+                context?.AddString(table == null ? "Stand inside your settlement first." : "usage: aoj_alarm on|off");
+                return;
+            }
+            bool on = args[0].Equals("on", System.StringComparison.OrdinalIgnoreCase);
+            table.RequestAlarm(on);
+            context?.AddString($"Alarm {(on ? "sounded" : "ended")}.");
+        }
+    }
+
+    /// <summary><c>aoj_breach</c>: the nearest building breaks as in a siege, listed for the Builders (cheat, for testing).</summary>
+    internal sealed class BreachCommand : AojCommand
+    {
+        private const float Range = 6f;
+
+        public override string Name => "aoj_breach";
+
+        public override string Help => $"Age of Jarls: break the nearest building piece within {Range:0} m as a siege would, for the Builders to put back (cheat, for tests)";
+
+        public override bool IsCheat => true;
+
+        public override void Run(string[] args, Terminal context)
+        {
+            Player me = Player.m_localPlayer;
+            JarlTable table = me != null ? JarlTable.FindContaining(me.transform.position) : null;
+            if (table == null)
+            {
+                context?.AddString("Stand inside your settlement first.");
+                return;
+            }
+            var pieces = new List<Piece>();
+            Piece.GetAllPiecesInRadius(me.transform.position, Range, pieces);
+            Piece piece = pieces
+                .Where(p => p != null && p.GetComponent<WearNTear>() != null && Breaches.IsRebuildable(Utils.GetPrefabName(p.gameObject)))
+                .OrderBy(p => Vector3.Distance(p.transform.position, me.transform.position))
+                .FirstOrDefault();
+            if (piece == null)
+            {
+                context?.AddString($"No building a Builder puts back within {Range:0} m.");
+                return;
+            }
+            string name = Utils.GetPrefabName(piece.gameObject);
+            string problem = table.CheatBreach(piece);
+            context?.AddString(problem ?? $"{name} broken; a Builder with materials in the chests puts it back.");
         }
     }
 

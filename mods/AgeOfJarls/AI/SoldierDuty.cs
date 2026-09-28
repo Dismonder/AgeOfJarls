@@ -29,6 +29,8 @@ namespace AgeOfJarls.AI
 
         private float _gearTimer;
         private Armory _armory;
+        private Armory _armoryColliderOwner;
+        private Collider[] _armoryColliders = new Collider[0];
         private float _accessTimer;
         private float _askTimer;
         private WarBanner _post;
@@ -122,7 +124,13 @@ namespace AgeOfJarls.AI
                 _armory = null;
                 return false;
             }
-            Vector3 target = _armory.transform.position;
+            // Its side, not its middle: a rack's middle lies in a hole of the navmesh.
+            if (_armoryColliderOwner != _armory)
+            {
+                _armoryColliderOwner = _armory;
+                _armoryColliders = Work.WorkScanner.SolidColliders(_armory);
+            }
+            Vector3 target = Work.WorkScanner.NearestPoint(_armoryColliders, _ai.transform.position, _armory.transform.position);
             if (Vector3.Distance(_ai.transform.position, target) > ArmoryReach)
             {
                 if (_mover.MoveTo(dt, target, ArmoryReach * 0.6f, ArmoryReach, run: false) == MoveResult.Blocked)

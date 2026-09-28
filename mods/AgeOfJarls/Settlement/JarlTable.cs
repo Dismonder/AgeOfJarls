@@ -501,6 +501,38 @@ namespace AgeOfJarls.Settlement
         }
 
         /// <summary>
+        /// Cheat (<c>aoj_breach</c>, for testing the Builders): the piece is destroyed as if a siege broke it, and listed
+        /// for rebuilding - on the table's owner only. Null when done.
+        /// </summary>
+        internal string CheatBreach(Piece piece)
+        {
+            if (Data == null || !_nview.IsOwner())
+            {
+                return "Only the machine that owns the table can do that (single player, the host, or stand right by it).";
+            }
+            string prefab = Utils.GetPrefabName(piece.gameObject);
+            if (!Breaches.IsRebuildable(prefab))
+            {
+                return $"{prefab} is nothing a Builder puts back.";
+            }
+            List<Breaches.Entry> entries = Breaches.Read(_nview.GetZDO());
+            entries.Add(new Breaches.Entry { Prefab = prefab, Position = piece.transform.position, Rotation = piece.transform.rotation });
+            Breaches.Write(_nview.GetZDO(), entries);
+            WearNTear wear = piece.GetComponent<WearNTear>();
+            if (wear != null)
+            {
+                // Broken, not taken down: nothing comes back from it.
+                wear.Remove(blockDrop: true);
+            }
+            else
+            {
+                ZNetScene.instance.Destroy(piece.gameObject);
+            }
+            Log.Info(Module, $"{prefab} broken for a rebuild test (cheat)");
+            return null;
+        }
+
+        /// <summary>
         /// Cheat (<c>aoj_tier</c>, for testing): the tier without its costs or boss, written by the table's owner only -
         /// so on the machine simulating the table (single player, the host, or the player standing by it). Null when set.
         /// </summary>
