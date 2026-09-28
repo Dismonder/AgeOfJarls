@@ -5,9 +5,10 @@ using UnityEngine;
 namespace AgeOfJarls.AI.Jobs
 {
     /// <summary>
-    /// Woodcutter: fells trees in the zone with its axe, chops the fallen logs and gathers the wood; the home routine
-    /// carries the load to the sorted chests. Swings are real attacks with the axe in hand, so the game's own rules
-    /// apply (tool tier against the tree, damage, effects, drops). Logs come before new trees, so nothing is left lying.
+    /// Woodcutter: fells trees in the zone with its axe, chops the fallen logs, clears stumps and small trees and gathers
+    /// the wood; the home routine carries the load to the sorted chests. Swings are real attacks with the axe in hand, so
+    /// the game's own rules apply (tool tier against the tree, damage, effects, drops). A felled tree is finished - log,
+    /// halves, stump - before the next one falls, so nothing is left lying.
     /// At a totem set to replant, every tree it fells is followed by a sapling of the same kind a few metres away,
     /// from the seeds in the chests (pine cones, beech seeds...), so the forest grows back.
     /// </summary>
@@ -183,16 +184,38 @@ namespace AgeOfJarls.AI.Jobs
             {
                 yield return tree;
             }
+            // Stumps and small trees are no TreeBase but tree-like Destructibles an axe clears - never a sapling or
+            // anything else a player planted or built.
+            foreach (Component small in WorkScanner.Find<Destructible>(Totem))
+            {
+                if (small is Destructible d && d.m_destructibleType == DestructibleType.Tree &&
+                    d.m_damages.m_chop != HitData.DamageModifier.Immune && d.GetComponent<Plant>() == null && d.GetComponent<Piece>() == null)
+                {
+                    yield return small;
+                }
+            }
         }
 
-        // A felled tree is finished before the next one falls: its log, then the halves, the wood gathered - nothing is
-        // left lying about.
-        protected override int Rank(Component target) => target is TreeLog ? 0 : 1;
+        // A felled tree is finished before the next one falls: its log, then the halves, the wood gathered, then its
+        // stump (and small trees) - nothing is left lying about.
+        protected override int Rank(Component target) => target is TreeLog ? 0 : target is Destructible ? 1 : 2;
 
         protected override float Margin(Component target) => target is TreeLog ? WorkTotem.Overreach : 0f;
 
-        protected override int MinToolTier(Component target) =>
-            target is TreeLog log ? log.m_minToolTier : target is TreeBase tree ? tree.m_minToolTier : int.MaxValue;
+        protected override int MinToolTier(Component target)
+        {
+            switch (target)
+            {
+                case TreeLog log:
+                    return log.m_minToolTier;
+                case TreeBase tree:
+                    return tree.m_minToolTier;
+                case Destructible small:
+                    return small.m_minToolTier;
+                default:
+                    return int.MaxValue;
+            }
+        }
     }
 
     /// <summary>
