@@ -240,6 +240,22 @@ namespace AgeOfJarls.Commands
         }
     }
 
+    /// <summary><c>aoj_trace</c>: settler decisions into the BepInEx log, for judging behaviour over minutes (read only).</summary>
+    internal sealed class TraceCommand : AojCommand
+    {
+        public override string Name => "aoj_trace";
+
+        public override string Help => "Age of Jarls: toggle a timeline of settler decisions (activities, chest trips, loot, stuck paths) in the BepInEx log";
+
+        public override void Run(string[] args, Terminal context)
+        {
+            AI.AiTrace.On = !AI.AiTrace.On;
+            context?.AddString(AI.AiTrace.On
+                ? "Settler trace ON: decisions of the settlers this machine simulates go to the BepInEx log as [Trace]. aoj_trace again to stop."
+                : "Settler trace OFF.");
+        }
+    }
+
     /// <summary><c>aoj_info</c>: the settlement you stand in, its work, food and defence at a glance.</summary>
     internal sealed class InfoCommand : AojCommand
     {

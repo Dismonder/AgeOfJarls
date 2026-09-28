@@ -346,6 +346,10 @@ namespace AgeOfJarls.Settlers
             if (_nview != null && _nview.IsValid() && _nview.IsOwner() &&
                 _nview.GetZDO().GetInt(Keys.ZdoSettlerActivity) != (int)activity)
             {
+                if (AI.AiTrace.On)
+                {
+                    AI.AiTrace.Write(this, $"{(SettlerActivity)_nview.GetZDO().GetInt(Keys.ZdoSettlerActivity)} -> {activity}");
+                }
                 _nview.GetZDO().Set(Keys.ZdoSettlerActivity, (int)activity);
             }
         }
@@ -629,7 +633,16 @@ namespace AgeOfJarls.Settlers
             {
                 Needs.Update(_nview.GetZDO(), this, HomeTable);
             }
+            // aoj_trace: what it is doing, every few seconds, between the decisions that are traced as they happen.
+            if (AI.AiTrace.On && Time.time >= _nextSnapshot)
+            {
+                _nextSnapshot = Time.time + SnapshotSeconds;
+                AI.AiTrace.Write(this, "now: " + DebugText().Replace('\n', '|'));
+            }
         }
+
+        private const float SnapshotSeconds = 10f;
+        private float _nextSnapshot;
 
         /// <summary>Healing in bed in a settlement that unlocked healers (tiers.json "fast_healing").</summary>
         private const float FastHealing = 2f;
@@ -1459,9 +1472,14 @@ namespace AgeOfJarls.Settlers
             {
                 text.Append("<color=#e0c080>").Append(TraitToken(id, Identity.Female)).Append("</color>");
                 TraitDef trait = DefsRegistry.Current.Traits.Find(t => t.Id == id);
-                if (trait != null && trait.Modifiers.Count > 0)
+                // Carry weight only matters when the server limits what workers carry (Work/CarryLimit).
+                string[] effects = trait == null ? new string[0] : trait.Modifiers
+                    .Where(m => m.Key != TraitStat.CarryWeight || AoJConfig.CarryLimit.Value > 0)
+                    .Select(m => StatText(m.Key, m.Value))
+                    .ToArray();
+                if (effects.Length > 0)
                 {
-                    text.Append(": ").Append(string.Join(", ", trait.Modifiers.Select(m => StatText(m.Key, m.Value))));
+                    text.Append(": ").Append(string.Join(", ", effects));
                 }
                 text.Append('\n');
             }

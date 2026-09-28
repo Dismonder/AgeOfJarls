@@ -39,7 +39,7 @@ namespace AgeOfJarls.Core
         internal static ConfigEntry<int> TotemMaxSlots;
         internal static ConfigEntry<int> TotemSlotsPerMember;
         internal static ConfigEntry<float> WorkSpeed;
-        internal static ConfigEntry<int> WorkerLoad;
+        internal static ConfigEntry<int> CarryLimit;
 
         internal static ConfigEntry<float> SatietyPerDay;
         internal static ConfigEntry<float> HungryBelow;
@@ -144,9 +144,11 @@ namespace AgeOfJarls.Core
             WorkSpeed = config.BindConfig("Work", "WorkSpeed", 1f,
                 "Multiplier for how fast settlers work (swings, repairs, loading), live and while nobody is around.", synced: true,
                 acceptableValues: new AcceptableValueRange<float>(0.1f, 5f));
-            WorkerLoad = config.BindConfig("Work", "WorkerLoad", 40,
-                "Items a worker gathers before carrying them to the chests (it also goes when its bag is nearly full).", synced: true,
-                acceptableValues: new AcceptableValueRange<int>(5, 500));
+            // A new key, not WorkerLoad: existing config files kept the old default of 40 and would never get "no limit".
+            CarryLimit = config.BindConfig("Work", "CarryLimit", 0,
+                "Items a worker gathers before carrying them to the chests; 0 = no limit: it carries its whole take and goes " +
+                "when its bag is nearly full or its work is done (Strong settlers carry more when there is a limit).", synced: true,
+                acceptableValues: new AcceptableValueRange<int>(0, 1000));
 
             SatietyPerDay = config.BindConfig("Needs", "SatietyPerDay", 100f,
                 "How much satiety (0-100) a settler loses per game day. Two good meals a day cover 100.", synced: true,

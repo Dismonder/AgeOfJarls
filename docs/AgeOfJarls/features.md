@@ -19,7 +19,7 @@ Osadnik ma 1–3 cechy, co najmniej jedną pozytywną.
 |---|---|---|
 | Pracowity | +15% szybkości pracy | Łąki |
 | Leniwy | −15% szybkości pracy, szybciej odzyskuje morale | dowolne |
-| Silny | +50% udźwigu, +10% obrażeń wręcz | Góry |
+| Silny | +50% udźwigu (gdy serwer ustawi `Work/CarryLimit`; domyślnie osadnicy noszą bez limitu), +10% obrażeń wręcz | Góry |
 | Zręczny | +20% szybkości chodu | dowolne |
 | Oszczędny | −20% zużycia jedzenia | Bagna |
 | Żarłok | +30% zużycia jedzenia, +10% zdrowia | dowolne |

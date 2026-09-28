@@ -169,7 +169,21 @@ namespace AgeOfJarls.AI
             if (!night && !_character.IsLyingDown && _loot.CollectAtHome(dt, _table.transform.position, _radius, _hasChest))
             {
                 _settler.SetActivity(SettlerActivity.Collecting);
+                _collecting = true;
                 return;
+            }
+            if (_collecting && _loot.BusyWithin(GatherPauseSeconds))
+            {
+                // Between two drops (the next one is being looked for): stay put rather than set off home for a step.
+                _ai.StopMoving();
+                return;
+            }
+            if (_collecting)
+            {
+                // The last thing lying around is picked up: the trip to the chests is planned right after the pause,
+                // instead of sitting down first and getting up again.
+                _collecting = false;
+                _planTimer = Mathf.Min(_planTimer, 0.1f);
             }
             if (ReturnHome(dt))
             {
@@ -177,8 +191,12 @@ namespace AgeOfJarls.AI
                 return;
             }
             IdleSit(dt);
-            _settler.SetActivity(_carrying ? SettlerActivity.NoChest : SettlerActivity.Idle);
+            bool hungry = _starving && zdo != null && Needs.IsHungry(zdo);
+            _settler.SetActivity(_carrying ? SettlerActivity.NoChest : hungry ? SettlerActivity.NoFood : SettlerActivity.Idle);
         }
+
+        /// <summary>Hungry and no cauldron with food at the last look.</summary>
+        private bool _starving;
 
         /// <summary>For aoj_debug: home, trip, job and its target.</summary>
         internal string DebugState()
@@ -258,6 +276,10 @@ namespace AgeOfJarls.AI
                     _accessTimer = 0f;
                     _askTimer = 0f;
                     _mover.Reset();
+                    if (AiTrace.On)
+                    {
+                        AiTrace.Write(_ai, $"to chest {Vector3.Distance(_ai.transform.position, _chest.transform.position):0} m carrying {CarriedCount()} item(s)");
+                    }
                 }
             }
             if (_avoidUntil.Count > MaxAvoided)
@@ -309,17 +331,30 @@ namespace AgeOfJarls.AI
             }
         }
 
-        // A worker gathers a load before walking to the chests (a Strong one carries more); everyone else stores right away.
+        /// <summary>Storable items in the bag, the job's own tools and seeds left out.</summary>
+        private int CarriedCount() =>
+            _character.GetInventory().GetAllItems().Where(i => SettlementStorage.IsStorable(i) && !_keep(i)).Sum(i => i.m_stack);
+
+        /// <summary>A settler doing chores carries its gathering to the chests once nothing new was picked up for this long.</summary>
+        private const float GatherPauseSeconds = 1.5f;
+        private bool _collecting;
+
+        // Nobody walks to the chests with a single item. A worker carries its whole take - or up to Work/CarryLimit, more
+        // for a Strong one - and goes when its bag is nearly full or its work is done (the evening, nothing left to do);
+        // a settler doing chores first picks up everything lying around, then makes one trip.
         private bool ShouldStore()
         {
             Inventory bag = _character.GetInventory();
-            if (_activeJob == null || _jobIdle)
+            if (bag.GetEmptySlots() <= FreeSlotsBeforeStoring)
             {
                 return true;
             }
-            int carried = bag.GetAllItems().Where(i => SettlementStorage.IsStorable(i) && !_keep(i)).Sum(i => i.m_stack);
-            float load = AoJConfig.WorkerLoad.Value * Mathf.Max(0.25f, 1f + _settler.TraitSum(TraitStat.CarryWeight));
-            return carried >= load || bag.GetEmptySlots() <= FreeSlotsBeforeStoring;
+            if (_activeJob != null && !_jobIdle)
+            {
+                int limit = AoJConfig.CarryLimit.Value;
+                return limit > 0 && CarriedCount() >= limit * Mathf.Max(0.25f, 1f + _settler.TraitSum(TraitStat.CarryWeight));
+            }
+            return !_loot.BusyWithin(GatherPauseSeconds);
         }
 
         // ---------------------------------------------------------------- storing
@@ -350,6 +385,10 @@ namespace AgeOfJarls.AI
                 // No way there (a door it cannot open, a wall) or stuck: the other chests first.
                 _avoidUntil[chestId] = Time.time + UnreachableSeconds;
                 Log.Debug(Module, $"{_settler.DisplayName} cannot reach the chest at {target:F0}");
+                if (AiTrace.On)
+                {
+                    AiTrace.Write(_ai, $"chest unreachable ({move}, {_tripTimer:0} s)");
+                }
             }
             else if (!ChestAccess.Acquire(_chest, ask: TimeToAsk(dt)))
             {
@@ -441,9 +480,10 @@ namespace AgeOfJarls.AI
                     .OrderBy(c => Vector3.Distance(c.transform.position, _ai.transform.position))
                     .FirstOrDefault();
                 _mealTimer = 0f;
+                _starving = _cauldron == null;
                 if (_cauldron == null)
                 {
-                    _settler.SetActivity(SettlerActivity.NoFood);
+                    // Shown while it idles until the next look (see UpdateInner), not for a single frame.
                     _mealRetryAt = Time.time + MealRetrySeconds;
                     return false;
                 }
@@ -549,6 +589,13 @@ namespace AgeOfJarls.AI
             {
                 return false;
             }
+            // A job with nothing to do is asked again only after a pause, and a chore under way (a drop it walks to)
+            // is finished first: otherwise job and chores take turns every frame and the settler keeps changing course.
+            if (_activeJob == job && _jobIdle &&
+                (Time.time < _jobRecheckAt || (_collecting && (_loot.HasTarget || _loot.BusyWithin(GatherPauseSeconds)))))
+            {
+                return false;
+            }
             if (_activeJob != job)
             {
                 StopJob();
@@ -561,8 +608,15 @@ namespace AgeOfJarls.AI
             {
                 _settler.SetActivity(SettlerActivity.Working);
             }
+            else
+            {
+                _jobRecheckAt = Time.time + JobRecheckSeconds;
+            }
             return busy;
         }
+
+        private const float JobRecheckSeconds = 4f;
+        private float _jobRecheckAt;
 
         private void StopJob()
         {
@@ -681,14 +735,15 @@ namespace AgeOfJarls.AI
             _ai.StopMoving();
         }
 
+        // Always clears the pose in the ZDO, not only one this routine set: a settler that sat down before the world was
+        // saved (or on its previous owner's machine) would otherwise stay seated - and a seated character cannot walk.
         private void StopSitting()
         {
-            if (!_sitting)
+            if (_sitting)
             {
-                return;
+                _sitting = false;
+                _sitTimer = Random.Range(40f, 120f);
             }
-            _sitting = false;
-            _sitTimer = Random.Range(40f, 120f);
             _settler.SetSitting(false);
         }
     }

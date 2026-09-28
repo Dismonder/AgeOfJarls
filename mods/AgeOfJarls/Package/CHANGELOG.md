@@ -11,6 +11,10 @@
 - While placing a totem, a war banner or a Jarl's Table, the zones of the ones of that kind nearby are shown, like
   a workbench's circle.
 - `aoj_dump <prefab>` writes a prefab's parts, meshes, colliders and piece flags to the log (for modders).
+- Settlers carry without a limit by default: a worker brings its whole take when its bag is nearly full or its
+  work is done (`Work/CarryLimit`, 0 = no limit, replaces `WorkerLoad`); a settler doing chores picks up everything
+  lying around before one trip to the chests, instead of walking there with every single item.
+- `aoj_trace` writes what the settlers decide (activities, chest trips, loot, stuck paths) to the log.
 
 - `aoj_perf [seconds]` measures what the mod costs per frame on your machine (settler AI with planning, jobs,
   paths and inventory saves, ticks, windows, and the game's own AI for comparison).

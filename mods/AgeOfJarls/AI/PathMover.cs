@@ -25,6 +25,18 @@ namespace AgeOfJarls.AI
         private const float TargetMoved = 1f;
         private const float StuckSeconds = 3f;
         private const float StuckDistance = 0.5f;
+        /// <summary>Everyday trips are walked; a far goal is jogged to, walking again for the last stretch.</summary>
+        private const float JogAbove = 20f;
+        private const float WalkBelow = 12f;
+        /// <summary>Not getting this much closer to the current waypoint for this long means stuck, however much it moves.</summary>
+        private const float WaypointProgress = 0.3f;
+        private const float NoProgressSeconds = 6f;
+
+        private const float SameWaypoint = 0.1f;
+
+        private Vector3 _waypointPoint;
+        private float _waypointBest = float.MaxValue;
+        private float _waypointTimer;
 
         private const float DoorSearchRadius = 10f;
         /// <summary>A settler stuck on its path looks for a closed door this close.</summary>
@@ -70,6 +82,7 @@ namespace AgeOfJarls.AI
         private Vector3 _progressPoint;
         private float _stuckTimer;
 
+        private bool _jogging;
         private Door _door;
         private DoorPhase _doorPhase;
         private float _doorTimer;
@@ -118,11 +131,15 @@ namespace AgeOfJarls.AI
             _lastMoveTime = Time.time;
             Vector3 position = _ai.transform.position;
             CloseDoorBehind(position);
-            if (Utils.DistanceXZ(goal, position) <= stopDistance)
+            float distance = Utils.DistanceXZ(goal, position);
+            if (distance <= stopDistance)
             {
                 _ai.StopMoving();
+                _jogging = false;
                 return MoveResult.Arrived;
             }
+            _jogging = distance > JogAbove || (_jogging && distance > WalkBelow);
+            run = run || _jogging;
 
             if (_doorPhase == DoorPhase.Approach && ApproachDoor(dt, position, run))
             {
@@ -171,6 +188,7 @@ namespace AgeOfJarls.AI
             _hasPath = false;
             _repathTimer = 0f;
             _stuckTimer = 0f;
+            _jogging = false;
             if (_door != null && Vector3.Distance(_ai.transform.position, _door.transform.position) > DoorClearance)
             {
                 CloseDoor();
@@ -196,6 +214,10 @@ namespace AgeOfJarls.AI
                 _pathReaches = _hasPath && _path.Count > 0 && Vector3.Distance(_path[_path.Count - 1], target) <= reach;
                 _progressPoint = position;
                 _stuckTimer = 0f;
+                if (AiTrace.On && !_pathReaches)
+                {
+                    AiTrace.Write(_ai, $"no path to a goal {Vector3.Distance(position, target):0} m away ({(_hasPath ? "partial" : "none")})");
+                }
             }
             if (!_hasPath || !_pathReaches)
             {
@@ -203,6 +225,10 @@ namespace AgeOfJarls.AI
                 return Step.Blocked;
             }
 
+            // A corner counts as reached once passed: cutting it (see below) may never bring the settler within
+            // WaypointReached of it, and it would turn back for it.
+            // Corners are walked to, never cut: they lie right at the corners of what the path goes around (a table, a
+            // door frame), and cutting them walks the settler into it. The character turns gradually on its own.
             while (_path.Count > 0 && Utils.DistanceXZ(_path[0], position) < WaypointReached)
             {
                 _path.RemoveAt(0);
@@ -213,7 +239,26 @@ namespace AgeOfJarls.AI
                 return Vector3.Distance(position, target) <= reach ? Step.Arrived : Step.Blocked;
             }
 
-            if (Vector3.Distance(position, _progressPoint) > StuckDistance)
+            // Moving is not progress: circling or pacing near a waypoint without getting closer is stuck too. Measured
+            // per waypoint; a repath that leads somewhere else starts over.
+            if (Utils.DistanceXZ(_path[0], _waypointPoint) > SameWaypoint)
+            {
+                _waypointPoint = _path[0];
+                _waypointBest = float.MaxValue;
+                _waypointTimer = 0f;
+            }
+            float toWaypoint = Utils.DistanceXZ(_path[0], position);
+            if (toWaypoint < _waypointBest - WaypointProgress)
+            {
+                _waypointBest = toWaypoint;
+                _waypointTimer = 0f;
+            }
+            else
+            {
+                _waypointTimer += dt;
+            }
+
+            if (Vector3.Distance(position, _progressPoint) > StuckDistance && _waypointTimer <= NoProgressSeconds)
             {
                 _progressPoint = position;
                 _stuckTimer = 0f;
@@ -221,16 +266,150 @@ namespace AgeOfJarls.AI
             else
             {
                 _stuckTimer += dt;
-                if (_stuckTimer > StuckSeconds)
+                if (_stuckTimer > StuckSeconds || _waypointTimer > NoProgressSeconds)
                 {
+                    _waypointBest = float.MaxValue;
+                    _waypointTimer = 0f;
+                    if (AiTrace.On)
+                    {
+                        AiTrace.Write(_ai, $"stuck, {Vector3.Distance(position, target):0} m from the goal, next waypoint " +
+                                           $"{Utils.DistanceXZ(_path[0], position):0.0} m away{DescribeSurroundings(position)}");
+                    }
                     _stuckTimer = 0f;
                     _repathTimer = 0f;
+                    if (Unstick(position))
+                    {
+                        return Step.Moving;
+                    }
                     _ai.StopMoving();
                     return Step.Stuck;
                 }
             }
             _ai.MoveTowards(_path[0] - position, run);
             return Step.Moving;
+        }
+
+        // Stuck again and again on one spot. The second time, a settler wedged against furniture (the bed it got up from,
+        // a chest, a bench) slips past what it touches until it is clear of it - walls, floors and roofs stay solid.
+        // From the third time, with the way on right next to it, it takes a short step over to that waypoint, which
+        // lies on the navmesh: at most MaxHop, so never through a wall and never across the world like a teleport.
+        private const int StuckBeforeSlip = 2;
+        private const int StuckBeforeHop = 3;
+        private const float MaxHop = 2f;
+        private const float SameStuckSpot = 1f;
+        private Vector3 _stuckAt;
+        private int _stuckCount;
+        private static int s_pieceMask;
+
+        private bool Unstick(Vector3 position)
+        {
+            if (Vector3.Distance(position, _stuckAt) < SameStuckSpot)
+            {
+                _stuckCount++;
+            }
+            else
+            {
+                _stuckAt = position;
+                _stuckCount = 1;
+            }
+            if (_stuckCount == StuckBeforeSlip && SlipPastFurniture(position))
+            {
+                return true;
+            }
+            if (_stuckCount < StuckBeforeHop || _path.Count == 0 || Utils.DistanceXZ(_path[0], position) > MaxHop)
+            {
+                return false;
+            }
+            _stuckCount = 0;
+            Vector3 hop = _path[0] + Vector3.up * 0.1f;
+            if (AiTrace.On)
+            {
+                AiTrace.Write(_ai, $"stuck {StuckBeforeHop} times here, steps over to the next waypoint {Utils.DistanceXZ(hop, position):0.0} m away");
+            }
+            _ai.transform.position = hop;
+            Rigidbody body = _ai.GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.position = hop;
+                body.linearVelocity = Vector3.zero;
+            }
+            return true;
+        }
+
+        private bool SlipPastFurniture(Vector3 position)
+        {
+            if (!(_ai.GetComponent<Character>() is Settlers.SettlerCharacter body))
+            {
+                return false;
+            }
+            if (s_pieceMask == 0)
+            {
+                s_pieceMask = LayerMask.GetMask("piece", "piece_nonsolid");
+            }
+            int count = Physics.OverlapSphereNonAlloc(position + Vector3.up * 0.9f, 1f, s_near, s_pieceMask);
+            var furniture = new List<Collider>();
+            for (int i = 0; i < count; i++)
+            {
+                Piece piece = s_near[i] != null ? s_near[i].GetComponentInParent<Piece>() : null;
+                if (piece != null && IsFurniture(piece))
+                {
+                    furniture.Add(s_near[i]);
+                }
+            }
+            if (furniture.Count == 0)
+            {
+                return false;
+            }
+            body.PassThrough(furniture, position);
+            if (AiTrace.On)
+            {
+                AiTrace.Write(_ai, $"wedged: slips past {furniture.Count} piece(s) of furniture");
+            }
+            return true;
+        }
+
+        private static bool IsFurniture(Piece piece) =>
+            piece.m_category == Piece.PieceCategory.Furniture || piece.m_comfort > 0 || piece.GetComponent<Bed>() != null ||
+            piece.GetComponent<Container>() != null || piece.GetComponent<CraftingStation>() != null;
+
+        // For aoj_trace: what a stuck settler touches and the nearest door, to tell a wall from a shut door.
+        private static readonly Collider[] s_near = new Collider[16];
+
+        private string DescribeSurroundings(Vector3 position)
+        {
+            int count = Physics.OverlapSphereNonAlloc(position + Vector3.up, 1.2f, s_near);
+            var names = new List<string>();
+            for (int i = 0; i < count && names.Count < 6; i++)
+            {
+                Collider collider = s_near[i];
+                if (collider == null || collider.attachedRigidbody != null && collider.attachedRigidbody.gameObject == _ai.gameObject)
+                {
+                    continue;
+                }
+                string name = Utils.GetPrefabName(collider.transform.root.gameObject) + "/" + LayerMask.LayerToName(collider.gameObject.layer);
+                if (!names.Contains(name))
+                {
+                    names.Add(name);
+                }
+            }
+            s_pieces.Clear();
+            Piece.GetAllPiecesInRadius(position, DoorSearchRadius, s_pieces);
+            Door nearest = null;
+            float nearestDistance = float.MaxValue;
+            foreach (Piece piece in s_pieces)
+            {
+                Door door = piece.GetComponent<Door>();
+                float distance = door != null ? Vector3.Distance(door.transform.position, position) : float.MaxValue;
+                if (distance < nearestDistance)
+                {
+                    nearest = door;
+                    nearestDistance = distance;
+                }
+            }
+            s_pieces.Clear();
+            string doorText = nearest == null ? "no door within 10 m"
+                : $"door {nearestDistance:0.0} m {(IsUsable(nearest) ? (IsOpen(nearest) ? "open" : "closed") : "not usable")}";
+            return $"; touching: {string.Join(", ", names)}; {doorText}";
         }
 
         // ---------------------------------------------------------------- doors

@@ -74,6 +74,14 @@ namespace AgeOfJarls.AI
 
         internal void Reset() => _target = null;
 
+        private float _busyAt = float.MinValue;
+
+        /// <summary>Whether it went for or picked up loot in the last <paramref name="seconds"/> (still gathering).</summary>
+        internal bool BusyWithin(float seconds) => Time.time - _busyAt < seconds;
+
+        /// <summary>On its way to a drop: finished before anything else takes over.</summary>
+        internal bool HasTarget => _target != null;
+
         private bool Collect(float dt, Vector3 scanCenter, float scanRadius, Vector3 leashCenter, float leash, Predicate<ItemDrop.ItemData> wanted)
         {
             _forgetTimer -= dt;
@@ -90,6 +98,10 @@ namespace AgeOfJarls.AI
                 if (found != null && found != _target)
                 {
                     _mover.Reset();
+                    if (AiTrace.On)
+                    {
+                        AiTrace.Write(_ai, $"loot {found.m_itemData.m_shared.m_name} x{found.m_itemData.m_stack} {Vector3.Distance(_ai.transform.position, found.transform.position):0} m");
+                    }
                 }
                 _target = found;
             }
@@ -98,11 +110,13 @@ namespace AgeOfJarls.AI
                 _target = null;
                 return false;
             }
+            _busyAt = Time.time;
 
             float distance = Vector3.Distance(_ai.transform.position, _target.transform.position);
             if (distance > PickupDistance)
             {
-                MoveResult move = _mover.MoveTo(dt, _target.transform.position, PickupDistance * 0.5f, ReachDistance, run: true);
+                // Walked like any chore: PathMover jogs to far loot by itself.
+                MoveResult move = _mover.MoveTo(dt, _target.transform.position, PickupDistance * 0.5f, ReachDistance, run: false);
                 if (move == MoveResult.Moving)
                 {
                     return true;
@@ -127,6 +141,8 @@ namespace AgeOfJarls.AI
                 _picked += stack;
             }
             _target = null;
+            // Straight on to the next drop instead of standing there until the next scan.
+            _scanTimer = 0f;
             return true;
         }
 

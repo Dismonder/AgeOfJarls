@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using AgeOfJarls.Core;
 using UnityEngine;
 
@@ -46,6 +47,7 @@ namespace AgeOfJarls.Settlers
             {
                 return;
             }
+            FinishPassingThrough();
             _lying = true;
             _bedPoint = bed.m_spawnPoint != null ? bed.m_spawnPoint : bed.transform;
             _bedColliders = bed.GetComponentsInChildren<Collider>();
@@ -89,6 +91,11 @@ namespace AgeOfJarls.Settlers
         public override void CustomFixedUpdate(float fixedDeltaTime)
         {
             base.CustomFixedUpdate(fixedDeltaTime);
+            if (_passThrough != null &&
+                (Utils.DistanceXZ(transform.position, _passThroughFrom) > PassThroughClearance || Time.time - _passThroughSince > PassThroughSeconds))
+            {
+                FinishPassingThrough();
+            }
             if (Down && m_nview.IsValid() && m_nview.IsOwner())
             {
                 // Lies where it fell until the time is up.
@@ -138,13 +145,59 @@ namespace AgeOfJarls.Settlers
             m_maxAirAltitude = transform.position.y;
         }
 
+        // Collisions with the bed come back only once the settler is clear of it: restored at once, it could stand
+        // wedged between the bed and a wall where it got up, unable to take a step.
         private void Release()
         {
-            SetBedCollisions(ignore: false);
+            FinishPassingThrough();
+            _passThrough = _bedColliders;
+            _passThroughFrom = _bedPoint != null ? _bedPoint.position : transform.position;
+            _passThroughSince = Time.time;
             _lying = false;
             _bedPoint = null;
             _bedColliders = null;
             m_body.useGravity = true;
+        }
+
+        /// <summary>
+        /// Owner only: walks through these colliders (furniture it is wedged against) until it is clear of the spot
+        /// it started from, as it does when leaving its bed.
+        /// </summary>
+        internal void PassThrough(List<Collider> colliders, Vector3 from)
+        {
+            FinishPassingThrough();
+            foreach (Collider collider in colliders)
+            {
+                if (collider != null)
+                {
+                    Physics.IgnoreCollision(m_collider, collider, true);
+                }
+            }
+            _passThrough = colliders.ToArray();
+            _passThroughFrom = from;
+            _passThroughSince = Time.time;
+        }
+
+        private const float PassThroughClearance = 1.5f;
+        private const float PassThroughSeconds = 10f;
+        private Collider[] _passThrough;
+        private Vector3 _passThroughFrom;
+        private float _passThroughSince;
+
+        private void FinishPassingThrough()
+        {
+            if (_passThrough == null)
+            {
+                return;
+            }
+            foreach (Collider collider in _passThrough)
+            {
+                if (collider != null)
+                {
+                    Physics.IgnoreCollision(m_collider, collider, false);
+                }
+            }
+            _passThrough = null;
         }
 
         // ---------------------------------------------------------------- knocked out
