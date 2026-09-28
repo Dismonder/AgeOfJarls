@@ -40,6 +40,56 @@ namespace AgeOfJarls.Settlement
             }
         }
 
+        // Like a workbench's circle while building: placing a totem, a war banner or a table shows the zones of the
+        // ones of that kind nearby, so new zones can be laid out next to them instead of on top.
+        [HarmonyPatch(typeof(Player), nameof(Player.UpdatePlacementGhost))]
+        private static class ZonesWhileBuilding
+        {
+            private const float Range = 60f;
+            private const float EverySeconds = 0.25f;
+            private static float s_next;
+
+            private static void Postfix(Player __instance, GameObject ___m_placementGhost)
+            {
+                if (___m_placementGhost == null || __instance != Player.m_localPlayer || Time.time < s_next)
+                {
+                    return;
+                }
+                s_next = Time.time + EverySeconds;
+                Vector3 spot = ___m_placementGhost.transform.position;
+                if (___m_placementGhost.GetComponent<Work.WorkTotem>() != null)
+                {
+                    foreach (Work.WorkTotem totem in Work.WorkTotem.Loaded)
+                    {
+                        if (totem != null && Utils.DistanceXZ(totem.transform.position, spot) <= Range)
+                        {
+                            totem.ShowMarker();
+                        }
+                    }
+                }
+                else if (___m_placementGhost.GetComponent<Army.WarBanner>() != null)
+                {
+                    foreach (Army.WarBanner banner in Army.WarBanner.Loaded)
+                    {
+                        if (banner != null && Utils.DistanceXZ(banner.transform.position, spot) <= Range)
+                        {
+                            banner.ShowMarker();
+                        }
+                    }
+                }
+                else if (___m_placementGhost.GetComponent<JarlTable>() != null)
+                {
+                    foreach (JarlTable table in JarlTable.Loaded)
+                    {
+                        if (table != null && Utils.DistanceXZ(table.transform.position, spot) <= Range + table.Radius)
+                        {
+                            table.ShowMarker();
+                        }
+                    }
+                }
+            }
+        }
+
         // Only a Jarl may take the table down, and with it the whole settlement.
         [HarmonyPatch(typeof(Piece), nameof(Piece.CanBeRemoved))]
         private static class RemovalGuard

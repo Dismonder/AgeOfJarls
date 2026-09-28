@@ -1120,7 +1120,7 @@ namespace AgeOfJarls.Settlement
         internal static string DisplayName(SettlementData data) =>
             data.Name.Length > 0 ? data.Name : Localize("$aoj_settlement_default", data.Jarl?.Name ?? "?");
 
-        private void ShowMarker()
+        internal void ShowMarker()
         {
             if (m_areaMarker == null)
             {

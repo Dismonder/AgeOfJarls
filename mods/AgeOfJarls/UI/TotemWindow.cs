@@ -16,7 +16,7 @@ namespace AgeOfJarls.UI
     internal sealed class TotemWindow : AojWindow
     {
         private const float Width = 640f;
-        private const float Height = 600f;
+        private const float Height = 660f;
         private const float MaxDistance = 12f;
         private const int WorkerRows = 6;
         private const float RadiusStep = 5f;
@@ -33,6 +33,7 @@ namespace AgeOfJarls.UI
         private Text _priorityLabel;
         private Text _replantLabel;
         private GameObject _replantButton;
+        private Text _upgradeLabel;
         private GameObject _controls;
 
         internal static void Open(WorkTotem totem)
@@ -52,8 +53,8 @@ namespace AgeOfJarls.UI
         protected override void Build(Transform root)
         {
             Color beige = GUIManager.Instance.ValheimBeige;
-            _title = Label(root, new Vector2(0f, 265f), 26, GUIManager.Instance.ValheimOrange, Width - 40f, 40f, TextAnchor.MiddleCenter);
-            _info = Label(root, new Vector2(0f, 175f), 16, beige, Width - 60f, 130f, TextAnchor.UpperLeft);
+            _title = Label(root, new Vector2(0f, 290f), 26, GUIManager.Instance.ValheimOrange, Width - 40f, 40f, TextAnchor.MiddleCenter);
+            _info = Label(root, new Vector2(0f, 190f), 16, beige, Width - 60f, 150f, TextAnchor.UpperLeft);
 
             _controls = Page(root, "Controls").gameObject;
             Transform controls = _controls.transform;
@@ -73,7 +74,8 @@ namespace AgeOfJarls.UI
             // Woodcutters only: replant felled trees, or clear the land for good.
             _replantLabel = Button(controls, "", new Vector2(212f, -160f), 196f, ToggleReplant);
             _replantButton = _replantLabel.GetComponentInParent<Button>().gameObject;
-            Button(root, "$aoj_close", new Vector2(0f, -262f), 200f, Hide);
+            _upgradeLabel = Button(controls, "", new Vector2(0f, -256f), 560f, Upgrade, RowButtonHeight);
+            Button(root, "$aoj_close", new Vector2(0f, -294f), 200f, Hide);
         }
 
         protected override bool IsTargetValid()
@@ -90,6 +92,13 @@ namespace AgeOfJarls.UI
             var info = new StringBuilder();
             info.Append($"$aoj_workers: {workers.Count}/{_totem.Capacity} · $aoj_radius {Mathf.RoundToInt(_totem.Radius)} m · ")
                 .Append(_totem.AllDay ? "$aoj_hours_allday" : "$aoj_hours_day");
+            int level = _totem.Level;
+            info.Append($"\n$aoj_totem_level {level}/{WorkTotem.MaxLevel}");
+            if (level > 1)
+            {
+                string bonus = Localize("$aoj_totem_bonus", Mathf.RoundToInt((_totem.PaceBonus - 1f) * 100f).ToString(), (level - 1).ToString());
+                info.Append(" <color=#b0b0b0>(").Append(bonus).Append(")</color>");
+            }
             ToolKind tool = JobInfo.RequiredTool(_totem.Job);
             if (tool != ToolKind.None)
             {
@@ -124,6 +133,22 @@ namespace AgeOfJarls.UI
             _priorityLabel.text = Localize("$aoj_priority: " + WorkTotem.PriorityToken(_totem.Priority));
             _replantButton.SetActive(_totem.Job == JobType.Woodcutter);
             _replantLabel.text = Localize(_totem.Replants ? "$aoj_replant_on" : "$aoj_replant_off");
+            _upgradeLabel.text = Localize(level >= WorkTotem.MaxLevel
+                ? "$aoj_totem_max_level"
+                : $"$aoj_totem_upgrade {level + 1}: {WorkTotem.CostText(WorkTotem.UpgradeCost(level + 1))}");
+        }
+
+        private void Upgrade()
+        {
+            if (_totem == null || Player.m_localPlayer == null)
+            {
+                return;
+            }
+            int target = _totem.Level + 1;
+            string problem = _totem.TryUpgrade(Player.m_localPlayer);
+            Player.m_localPlayer.Message(MessageHud.MessageType.Center, Localize(problem ??
+                Localize("$aoj_msg_totem_upgraded", Localize(JobInfo.Token(_totem.Job)), target.ToString())));
+            RefreshNow();
         }
 
         private void ToggleReplant()

@@ -21,9 +21,10 @@ server and in co-op. Works in new **and existing** worlds.
   what they find into **sorted chests** (same item → same kind → an empty chest, never mixing; [Shift+E] on a chest
   sets what it is for), open and close doors, and heal in bed when wounded. Morale (food, bed, variety, feasts) sets
   their work pace.
-- **Work Totems** — Woodcutter, Hauler, Miner, Smelter, Builder, Farmer and Cook. Set the zone (8–30 m), the hours
-  and a priority: free settlers take free places by themselves (or assign them by hand). Woodcutters can replant.
-  Tools come from you (axe, pickaxe, hammer).
+- **Work Totems** — Woodcutter, Hauler, Miner, Smelter, Builder, Farmer and Cook: standards you plant anywhere in
+  the settlement, no workbench needed. Set the zone (8–30 m), the hours and a priority: free settlers take free places
+  by themselves (or assign them by hand). Upgrade a totem (3 levels) for more places and faster work. Woodcutters can
+  replant. Tools come from you (axe, pickaxe, hammer).
 - **While you are away** — when you come back, the settlement credits the work of your absence (up to 2 days): wood,
   stone, bars from the smelters, cooked food, the harvest.
 - **Recruitment** — castaways reach the shore after your first table; captives wait behind bars in enemy camps (also
@@ -47,6 +48,6 @@ catch-up, captive camps, sieges, gear wear, the members' bonuses and the number 
 
 ## Console (devcommands)
 
-`aoj_info`, `aoj_settlers`, `aoj_settlement`, `aoj_debug`, `aoj_perf [seconds]`, `aoj_rank <rank> <player>`,
+`aoj_info`, `aoj_settlers`, `aoj_settlement`, `aoj_debug`, `aoj_perf [seconds]`, `aoj_dump <prefab>`, `aoj_rank <rank> <player>`,
 `aoj_jarl <player>`, `aoj_spawn`, `aoj_despawn [radius]`, `aoj_catchup <hours>`, `aoj_siege`, `aoj_morale <0-100>`,
 `aoj_captive`, `aoj_reload_defs`.

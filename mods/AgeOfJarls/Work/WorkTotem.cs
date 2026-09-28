@@ -42,7 +42,37 @@ namespace AgeOfJarls.Work
             AllDay = 2,
             Priority = 3,
             Replant = 4,
+            Upgrade = 5,
         }
+
+        // ---------------------------------------------------------------- level
+
+        internal const int MaxLevel = 3;
+        /// <summary>Every level above the first: one more worker place and this much faster work.</summary>
+        internal const float PacePerLevel = 0.15f;
+
+        /// <summary>What level 2, then level 3 costs (item prefab, amount): early materials, then the bronze age.</summary>
+        private static readonly (string item, int amount)[][] UpgradeCosts =
+        {
+            new[] { ("Wood", 20), ("Stone", 10), ("Resin", 5) },
+            new[] { ("FineWood", 10), ("Bronze", 4) },
+        };
+
+        internal int Level => _nview != null && _nview.IsValid()
+            ? Mathf.Clamp(_nview.GetZDO().GetInt(Keys.ZdoTotemLevel, 1), 1, MaxLevel)
+            : 1;
+
+        /// <summary>Multiplier for its workers' pace, live and in the catch-up.</summary>
+        internal float PaceBonus => 1f + PacePerLevel * (Level - 1);
+
+        /// <summary>The materials for <paramref name="level"/> (2 or 3); empty for any other level.</summary>
+        internal static (string item, int amount)[] UpgradeCost(int level) =>
+            level >= 2 && level <= MaxLevel ? UpgradeCosts[level - 2] : new (string, int)[0];
+
+        // The player who paid for an upgrade here waits for the owner's answer; only then may a refund come in.
+        private int _paidFromLevel;
+        private float _paidUntil;
+        private const float RefundWaitSeconds = 30f;
 
         /// <summary>A woodcutter totem whose workers replant the trees they fell.</summary>
         internal bool Replants => m_job == JobType.Woodcutter && _nview != null && _nview.IsValid() && _nview.GetZDO().GetBool(Keys.ZdoTotemReplant);
@@ -105,6 +135,7 @@ namespace AgeOfJarls.Work
             Loaded.Add(this);
             HideMarker();
             _nview.Register<ZPackage>(Keys.RpcTotemConfig, RPC_Config);
+            _nview.Register<int>(Keys.RpcTotemRefund, RPC_Refund);
         }
 
         private void Start()
@@ -147,7 +178,10 @@ namespace AgeOfJarls.Work
             return count;
         }
 
-        /// <summary>Workers the totem takes: more places as the settlement's tier rises and with every extra member.</summary>
+        /// <summary>
+        /// Workers the totem takes: more places as the settlement's tier rises, with every extra member and with every
+        /// level of the totem.
+        /// </summary>
         internal int Capacity
         {
             get
@@ -157,7 +191,8 @@ namespace AgeOfJarls.Work
                 int tier = data != null ? data.Tier : 0;
                 return Mathf.Min(AoJConfig.TotemBaseSlots.Value + tier / 2, AoJConfig.TotemMaxSlots.Value) +
                        AoJConfig.TotemSlotsPerMember.Value * JarlTable.ExtraMembers(data) +
-                       (JarlTable.HasUnlock(data, JarlTable.UnlockTotemSlot) ? 1 : 0);
+                       (JarlTable.HasUnlock(data, JarlTable.UnlockTotemSlot) ? 1 : 0) +
+                       (Level - 1);
             }
         }
 
@@ -186,6 +221,73 @@ namespace AgeOfJarls.Work
         internal void RequestPriority(int priority) => Send(TotemAction.Priority, p => p.Write(Mathf.Clamp(priority, LowPriority, HighPriority)));
 
         internal void RequestReplant(bool replant) => Send(TotemAction.Replant, p => p.Write(replant));
+
+        /// <summary>
+        /// Pays for the next level from the player's inventory and asks the owner to raise it. Returns null when sent,
+        /// else a localization token saying why not. The owner gives the materials back if it refuses (two players at
+        /// once, rights changed meanwhile).
+        /// </summary>
+        internal string TryUpgrade(Player player)
+        {
+            int level = Level;
+            if (level >= MaxLevel)
+            {
+                return "$aoj_totem_max_level";
+            }
+            if (!MayManage(player))
+            {
+                return Permissions.Denied(SettlementRight.Manage);
+            }
+            (string item, int amount)[] cost = UpgradeCost(level + 1);
+            bool free = player.NoCostCheat();
+            if (!free)
+            {
+                string missing = MissingText(player.GetInventory(), cost);
+                if (missing.Length > 0)
+                {
+                    return "$aoj_msg_totem_missing " + missing;
+                }
+                foreach ((string item, int amount) in cost)
+                {
+                    player.GetInventory().RemoveItem(SharedName(item), amount);
+                }
+                _paidFromLevel = level;
+                _paidUntil = Time.time + RefundWaitSeconds;
+            }
+            Send(TotemAction.Upgrade, p => p.Write(level));
+            return null;
+        }
+
+        /// <summary>"20 $item_wood, 10 $item_stone" - the materials of a level, for buttons and messages.</summary>
+        internal static string CostText((string item, int amount)[] cost) =>
+            string.Join(", ", cost.Select(c => $"{c.amount} {SharedName(c.item)}"));
+
+        private static string MissingText(Inventory inventory, (string item, int amount)[] cost) =>
+            string.Join(", ", cost.Where(c => inventory.CountItems(SharedName(c.item)) < c.amount)
+                .Select(c => $"{c.amount - inventory.CountItems(SharedName(c.item))} {SharedName(c.item)}"));
+
+        private static string SharedName(string prefab)
+        {
+            GameObject item = ObjectDB.instance != null ? ObjectDB.instance.GetItemPrefab(prefab) : null;
+            ItemDrop drop = item != null ? item.GetComponent<ItemDrop>() : null;
+            return drop != null ? drop.m_itemData.m_shared.m_name : prefab;
+        }
+
+        // On the player who paid, if the owner refused the upgrade it asked for: the materials come back.
+        private void RPC_Refund(long sender, int fromLevel)
+        {
+            Player player = Player.m_localPlayer;
+            if (player == null || fromLevel != _paidFromLevel || Time.time > _paidUntil)
+            {
+                return;
+            }
+            _paidUntil = 0f;
+            foreach ((string item, int amount) in UpgradeCost(fromLevel + 1))
+            {
+                player.GetInventory().AddItem(item, amount, 1, 0, 0L, "", false);
+            }
+            player.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_totem_refund"));
+        }
 
         private void Send(TotemAction action, Action<ZPackage> write)
         {
@@ -217,17 +319,33 @@ namespace AgeOfJarls.Work
                 _nview.InvokeRPC(Keys.RpcTotemConfig, package);
                 return;
             }
-            if (!MayManage(Peers.FindPlayer(sender)))
-            {
-                Log.Warning(Module, $"Totem settings from peer {sender} refused: not the Jarl or a Hersir here");
-                return;
-            }
             try
             {
                 var action = (TotemAction)package.ReadInt();
+                if (!MayManage(Peers.FindPlayer(sender)))
+                {
+                    Log.Warning(Module, $"Totem settings from peer {sender} refused: not the Jarl or a Hersir here");
+                    if (action == TotemAction.Upgrade)
+                    {
+                        _nview.InvokeRPC(sender, Keys.RpcTotemRefund, package.ReadInt());
+                    }
+                    return;
+                }
                 ZDO zdo = _nview.GetZDO();
                 switch (action)
                 {
+                    case TotemAction.Upgrade:
+                        // Raised from the level the player saw and paid for; anything else (two players at once) is refused.
+                        int from = package.ReadInt();
+                        if (from == Level && from < MaxLevel)
+                        {
+                            zdo.Set(Keys.ZdoTotemLevel, from + 1);
+                        }
+                        else
+                        {
+                            _nview.InvokeRPC(sender, Keys.RpcTotemRefund, from);
+                        }
+                        break;
                     case TotemAction.Radius:
                         zdo.Set(Keys.ZdoTotemRadius, Mathf.Clamp(package.ReadSingle(), MinRadius, MaxRadius));
                         break;
@@ -262,7 +380,7 @@ namespace AgeOfJarls.Work
             }
             List<Settler> workers = Workers();
             var text = new StringBuilder();
-            text.Append("<b>$aoj_totem: ").Append(JobInfo.Token(m_job)).Append("</b>\n");
+            text.Append("<b>$aoj_totem: ").Append(JobInfo.Token(m_job)).Append("</b> · $aoj_totem_level ").Append(Level).Append('/').Append(MaxLevel).Append('\n');
             text.Append("$aoj_workers: ").Append(workers.Count == 0 ? "-" : string.Join(", ", workers.Select(w => w.DisplayName)))
                 .Append($" ({workers.Count}/{Capacity})\n");
             text.Append("$aoj_radius ").Append(Mathf.RoundToInt(Radius)).Append(" m · ").Append(AllDay ? "$aoj_hours_allday" : "$aoj_hours_day")

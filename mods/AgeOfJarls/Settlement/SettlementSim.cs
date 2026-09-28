@@ -89,11 +89,11 @@ namespace AgeOfJarls.Settlement
                 switch (totem.Job)
                 {
                     case JobType.Woodcutter:
-                        Gather("Wood", WorkScanner.Find<TreeBase>(totem).Count * WoodPerTree, workers, window, fedShare, from, credited);
+                        Gather("Wood", WorkScanner.Find<TreeBase>(totem).Count * WoodPerTree, workers, window * totem.PaceBonus, fedShare, from, credited);
                         break;
                     case JobType.Miner:
                         Gather("Stone", (WorkScanner.Find<MineRock5>(totem).Count + WorkScanner.Find<MineRock>(totem).Count) * StonePerRock,
-                            workers, window, fedShare, from, credited);
+                            workers, window * totem.PaceBonus, fedShare, from, credited);
                         break;
                     case JobType.Smelter:
                         Smelt(totem, window * fedShare, from, credited);

@@ -56,7 +56,8 @@ namespace AgeOfJarls.AI.Jobs
             bool working = Work(dt);
             if (working)
             {
-                _unsavedWork += dt;
+                // Time at the totem's pace: the measured rate stays the base one, the catch-up applies the level itself.
+                _unsavedWork += dt * TotemPace;
             }
             _flushTimer -= dt;
             if (_flushTimer <= 0f)
@@ -84,16 +85,21 @@ namespace AgeOfJarls.AI.Jobs
             FlushStats();
         }
 
-        /// <summary>x0.6 - x1.25 from morale and hunger, up to x1.5 more from experience, and the traits (Diligent, Lazy).</summary>
+        /// <summary>
+        /// x0.6 - x1.25 from morale and hunger, up to x1.5 more from experience, the traits (Diligent, Lazy) and the
+        /// totem's level.
+        /// </summary>
         protected float Pace
         {
             get
             {
                 ZDO zdo = Settler.Zdo;
-                float traits = Mathf.Max(0.1f, 1f + Settler.TraitSum(Core.Defs.TraitStat.WorkSpeed));
+                float traits = Mathf.Max(0.1f, 1f + Settler.TraitSum(Core.Defs.TraitStat.WorkSpeed)) * TotemPace;
                 return zdo == null ? traits : Needs.WorkPace(zdo) * (1f + Skill / 200f) * traits;
             }
         }
+
+        private float TotemPace => Totem != null ? Totem.PaceBonus : 1f;
 
         protected float Skill => Settler.Zdo?.GetFloat(Keys.SkillPrefix + Job.ToString().ToLowerInvariant()) ?? 0f;
 

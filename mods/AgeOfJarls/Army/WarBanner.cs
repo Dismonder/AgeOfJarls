@@ -182,7 +182,7 @@ namespace AgeOfJarls.Army
 
         internal static string KindToken(BannerKind kind) => "$aoj_banner_" + kind.ToString().ToLowerInvariant();
 
-        private void ShowMarker()
+        internal void ShowMarker()
         {
             if (m_areaMarker == null)
             {

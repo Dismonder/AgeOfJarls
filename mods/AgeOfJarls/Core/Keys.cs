@@ -21,6 +21,8 @@ namespace AgeOfJarls.Core
         internal const string RpcChestRequest = "AoJ_ChestRequest";
         internal const string RpcSettlerSetJob = "AoJ_SettlerSetJob";
         internal const string RpcTotemConfig = "AoJ_TotemConfig";
+        /// <summary>Owner to the player who paid for a totem upgrade it refused: take the materials back.</summary>
+        internal const string RpcTotemRefund = "AoJ_TotemRefund";
         internal const string RpcSettlerRole = "AoJ_SettlerRole";
         internal const string RpcBannerConfig = "AoJ_BannerConfig";
         internal const string RpcSettlerFree = "AoJ_SettlerFree";
@@ -49,6 +51,8 @@ namespace AgeOfJarls.Core
         internal static readonly int ZdoTotemPriority = "aoj_totem_priority".GetStableHashCode();
         /// <summary>Woodcutter totem: replant every felled tree (off by default: clearing land stays clear).</summary>
         internal static readonly int ZdoTotemReplant = "aoj_totem_replant".GetStableHashCode();
+        /// <summary>Totem level 1-3, bought with materials in its window: more worker places, faster work.</summary>
+        internal static readonly int ZdoTotemLevel = "aoj_totem_level".GetStableHashCode();
         /// <summary>Settlement: players assign work themselves (free settlers do not take a free place at a totem).</summary>
         internal static readonly int ZdoSettlementManualWork = "aoj_settlement_manual_work".GetStableHashCode();
         /// <summary>Wood (or other output) delivered by the totem's workers and the seconds they worked, measured live for the catch-up.</summary>

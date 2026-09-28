@@ -36,6 +36,7 @@ The user's mods are managed by **Vortex**: never touch folders in `BepInEx\plugi
 | World backup | `pwsh -NoProfile -File tools/backup-world.ps1 <world>` → `_backups/` (Steam cloud and local saves; refuses while the game runs) |
 | Launch game | `Start-Process steam://rungameid/892970` (only when the user wants to test) |
 | Is the game running? | `Get-Process valheim -ErrorAction SilentlyContinue` |
+| Drive the game in a test | `tools/focus-game.ps1` (focus), `tools/click.ps1 <x> <y>` (menu click, 1456x819 screenshot frame), `tools/sendkey.ps1 KEY[,KEY...]` (scan codes, `MOVE:dx,dy`, `LCLICK`) |
 
 Deploying while the game is running fails (locked DLL, a warning in the build). Ask the user to close the game; do not kill the process on your own.
 

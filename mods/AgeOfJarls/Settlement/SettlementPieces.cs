@@ -35,14 +35,19 @@ namespace AgeOfJarls.Settlement
             {
                 string source = $"piece_banner{banner++:00}";
                 TryAdd(Keys.TotemPrefabPrefix + job, () => BuildTotem(job, source), JobInfo.Token(job) + "_totem",
-                    "$aoj_totem_desc", ("Wood", 10), ("Stone", 2));
+                    "$aoj_totem_desc", NoStation, ("Wood", 10), ("Stone", 2));
             }
-            TryAdd(Keys.CauldronPrefab, BuildCauldron, "$aoj_piece_cauldron", "$aoj_piece_cauldron_desc", ("Wood", 10), ("Stone", 10));
-            TryAdd(Keys.ArmoryPrefab, BuildArmory, "$aoj_piece_armory", "$aoj_piece_armory_desc", ("Wood", 15), ("Copper", 2));
-            TryAdd(Keys.BannerPrefab, BuildBanner, "$aoj_piece_banner", "$aoj_piece_banner_desc", ("Wood", 6), ("LeatherScraps", 4));
+            TryAdd(Keys.CauldronPrefab, BuildCauldron, "$aoj_piece_cauldron", "$aoj_piece_cauldron_desc", Workbench, ("Wood", 10), ("Stone", 10));
+            TryAdd(Keys.ArmoryPrefab, BuildArmory, "$aoj_piece_armory", "$aoj_piece_armory_desc", Workbench, ("Wood", 15), ("Copper", 2));
+            TryAdd(Keys.BannerPrefab, BuildBanner, "$aoj_piece_banner", "$aoj_piece_banner_desc", NoStation, ("Wood", 6), ("LeatherScraps", 4));
         }
 
-        private static void TryAdd(string name, Func<GameObject> build, string displayName, string description, params (string item, int amount)[] cost)
+        private const string Workbench = "piece_workbench";
+        /// <summary>Standards (totems, war banners) go where they are needed, not only next to a workbench.</summary>
+        private const string NoStation = null;
+
+        private static void TryAdd(string name, Func<GameObject> build, string displayName, string description, string station,
+            params (string item, int amount)[] cost)
         {
             try
             {
@@ -57,7 +62,7 @@ namespace AgeOfJarls.Settlement
                     Description = description,
                     PieceTable = "Hammer",
                     Category = "Misc",
-                    CraftingStation = "piece_workbench",
+                    CraftingStation = station,
                     Requirements = cost.Select(c => new RequirementConfig(c.item, c.amount, 0, true)).ToArray(),
                 };
                 PieceManager.Instance.AddPiece(new CustomPiece(prefab, false, config));
@@ -87,6 +92,7 @@ namespace AgeOfJarls.Settlement
             {
                 return null;
             }
+            FreeStandingBanner.Apply(prefab);
             WorkTotem totem = prefab.AddComponent<WorkTotem>();
             totem.m_job = job;
             totem.m_areaMarker = JarlTablePiece.CloneAreaMarker(prefab);
@@ -133,6 +139,7 @@ namespace AgeOfJarls.Settlement
             {
                 return null;
             }
+            FreeStandingBanner.Apply(prefab);
             WarBanner banner = prefab.AddComponent<WarBanner>();
             banner.m_areaMarker = JarlTablePiece.CloneAreaMarker(prefab);
             return prefab;

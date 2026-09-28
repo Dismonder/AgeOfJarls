@@ -15,6 +15,8 @@ param(
     [int]$GapMs = 150,
     [switch]$Shift
 )
+# `pwsh -File sendkey.ps1 A,B` passes "A,B" as one string: split it so several keys work from any caller.
+$Keys = @($Keys | ForEach-Object { [regex]::Matches($_, 'MOVE:-?\d+,-?\d+|[^,]+') | ForEach-Object { $_.Value } })
 # Sends real key presses (scan codes) to the foreground window, which Unity's Input System reads (unlike unicode chars).
 Add-Type -TypeDefinition @"
 using System;
@@ -44,10 +46,10 @@ public static class ScanKeys {
     }
 }
 "@
-$scan = @{ ESC=0x01; '1'=0x02; '2'=0x03; '3'=0x04; '4'=0x05; Q=0x10; W=0x11; E=0x12; R=0x13; T=0x14; Y=0x15; U=0x16; I=0x17; O=0x18; P=0x19;
+$scan = @{ ESC=0x01; '1'=0x02; '2'=0x03; '3'=0x04; '4'=0x05; '5'=0x06; '6'=0x07; '7'=0x08; '8'=0x09; Q=0x10; W=0x11; E=0x12; R=0x13; T=0x14; Y=0x15; U=0x16; I=0x17; O=0x18; P=0x19;
            A=0x1E; S=0x1F; D=0x20; F=0x21; G=0x22; H=0x23; J=0x24; K=0x25; L=0x26; Z=0x2C; X=0x2D; C=0x2E; V=0x2F; B=0x30; N=0x31; M=0x32;
            TAB=0x0F; ENTER=0x1C; SPACE=0x39; LSHIFT=0x2A; F5=0x3F }
-(New-Object -ComObject WScript.Shell).AppActivate((Get-Process valheim).Id) | Out-Null
+(New-Object -ComObject WScript.Shell).AppActivate((Get-Process valheim | Select-Object -First 1).Id) | Out-Null
 Start-Sleep -Milliseconds 400
 if ($Shift) { [ScanKeys]::Send($scan.LSHIFT, $false) }
 foreach ($k in $Keys) {
