@@ -202,6 +202,8 @@ namespace AgeOfJarls.AI.Jobs
 
         protected override float Margin(Component target) => target is TreeLog ? WorkTotem.Overreach : 0f;
 
+        protected override float LootMargin => WorkTotem.Overreach;
+
         protected override int MinToolTier(Component target)
         {
             switch (target)
@@ -284,6 +286,11 @@ namespace AgeOfJarls.AI.Jobs
         private const float ReachSlack = 0.6f;
         /// <summary>About where a swing starts: blows are aimed from this height - down at a log, level at a trunk.</summary>
         private const float ChestHeight = 1f;
+        /// <summary>
+        /// Never aimed lower than this over its own feet: from a slope above its target a blow would go into the ground -
+        /// a miss, and a pickaxe digs a hole. Such a target is given up after a few misses and tried from elsewhere later.
+        /// </summary>
+        private const float LowestAim = 0.25f;
         private const float BaseSwingSeconds = 1.5f;
         private const float GiveUpSeconds = 40f;
         private const float IgnoreSeconds = 120f;
@@ -341,6 +348,9 @@ namespace AgeOfJarls.AI.Jobs
         /// <summary>How far past the zone's edge such a target is still worked (see <see cref="WorkTotem.Overreach"/>).</summary>
         protected virtual float Margin(Component target) => 0f;
 
+        /// <summary>How far past the zone's edge drops are still gathered: as far as its work may take it.</summary>
+        protected virtual float LootMargin => 0f;
+
         protected override bool Work(float dt)
         {
             if (Body.InAttack())
@@ -351,7 +361,7 @@ namespace AgeOfJarls.AI.Jobs
                 _swingTimer -= dt;
                 if (_target != null)
                 {
-                    Aim(StrikePoint());
+                    Aim(AimPoint(StrikePoint()));
                 }
                 else
                 {
@@ -373,9 +383,9 @@ namespace AgeOfJarls.AI.Jobs
                 return false;
             }
 
-            // What the last swings dropped (wood, stone, ore, resin, seeds...) comes first - also where a tree felled at
-            // the edge took the work past it.
-            if (Ctx.Loot.CollectInZone(dt, Totem.transform.position, Totem.Radius + WorkTotem.Overreach, item => true))
+            // What the last swings dropped (wood, stone, ore, resin, seeds...) comes first - for a woodcutter also where a
+            // tree felled at the edge took the work past it.
+            if (Ctx.Loot.CollectInZone(dt, Totem.transform.position, Totem.Radius + LootMargin, item => true))
             {
                 Produced(Ctx.Loot.TakePicked());
                 Problem("");
@@ -448,7 +458,8 @@ namespace AgeOfJarls.AI.Jobs
             }
 
             Reservations.Take(_target, Uid);
-            Aim(point);
+            Vector3 aim = AimPoint(point);
+            Aim(aim);
             _swingTimer -= dt;
             // The swing goes where the settler faces: wait until it has turned to the target.
             Vector3 toTarget = point - Position;
@@ -482,7 +493,7 @@ namespace AgeOfJarls.AI.Jobs
                 if (AiTrace.On)
                 {
                     AiTrace.Write(Ctx.Ai, $"swings at {Describe(_target)} (strike point {Utils.DistanceXZ(point, Position):0.0} m, " +
-                                          $"{point.y - Position.y:0.0} m up{(landed ? "" : $", {_misses} miss(es)")})");
+                                          $"aimed {aim.y - Position.y:0.0} m up{(landed ? "" : $", {_misses} miss(es)")})");
                 }
             }
             return true;
@@ -496,6 +507,12 @@ namespace AgeOfJarls.AI.Jobs
 
         /// <summary>Where on the target to aim, seen from about where a swing starts.</summary>
         private Vector3 StrikePoint() => WorkScanner.StrikePoint(_target, _targetColliders, Position + Vector3.up * ChestHeight);
+
+        private Vector3 AimPoint(Vector3 point)
+        {
+            point.y = Mathf.Max(point.y, Position.y + LowestAim);
+            return point;
+        }
 
         private uint Revision() => _targetView != null && _targetView.IsValid() ? _targetView.GetZDO().DataRevision : 0u;
 

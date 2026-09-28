@@ -62,14 +62,19 @@ namespace AgeOfJarls.AI.Jobs
             }
             Problem("");
             System.Predicate<ItemDrop.ItemData> sortable = item => SettlementStorage.HasDestination(item, chests, Position);
-            if (Time.time < _pauseUntil || !SettlementStorage.IsUsable(input) || !input.GetInventory().GetAllItems().Exists(sortable))
+            if (Time.time < _pauseUntil || !IsReachable(input) || !SettlementStorage.IsUsable(input) ||
+                !input.GetInventory().GetAllItems().Exists(sortable))
             {
                 _accessTimer = 0f;
                 return false;
             }
-            Step walk = WalkTo(dt, input.transform.position, 2.5f);
+            Step walk = WalkToObject(dt, input, 2f);
             if (walk != Step.Done)
             {
+                if (walk == Step.Failed)
+                {
+                    MarkUnreachable(input);
+                }
                 return walk == Step.Busy;
             }
             // The chest's owner (another machine) hands it over within a moment; asked once a second, not every frame.
@@ -640,23 +645,27 @@ namespace AgeOfJarls.AI.Jobs
             Problem("");
 
             Inventory bag = Body.GetInventory();
-            _station = stations.FirstOrDefault(s => NeedsOre(s) && bag.GetAllItems().Exists(i => Accepts(s, i))) ??
-                       stations.FirstOrDefault(s => NeedsFuel(s) && bag.GetAllItems().Exists(i => IsFuel(s, i)));
+            _station = stations.FirstOrDefault(s => IsReachable(s) && NeedsOre(s) && bag.GetAllItems().Exists(i => Accepts(s, i))) ??
+                       stations.FirstOrDefault(s => IsReachable(s) && NeedsFuel(s) && bag.GetAllItems().Exists(i => IsFuel(s, i)));
             if (_station == null)
             {
                 // Nothing in the bag fits a hungry station: bring ore or fuel from the chests.
-                bool hungry = stations.Any(s => NeedsOre(s) || NeedsFuel(s));
+                bool hungry = stations.Any(s => IsReachable(s) && (NeedsOre(s) || NeedsFuel(s)));
                 if (!hungry)
                 {
                     return false;
                 }
-                Step fetch = Fetch(dt, item => stations.Any(s => (NeedsOre(s) && Accepts(s, item)) || (NeedsFuel(s) && IsFuel(s, item))), FetchBatch);
+                Step fetch = Fetch(dt, item => stations.Any(s => IsReachable(s) && ((NeedsOre(s) && Accepts(s, item)) || (NeedsFuel(s) && IsFuel(s, item)))), FetchBatch);
                 return fetch == Step.Busy || fetch == Step.Done;
             }
 
-            Step walk = WalkTo(dt, _station.transform.position, Reach);
+            Step walk = WalkToObject(dt, _station, Reach);
             if (walk != Step.Done)
             {
+                if (walk == Step.Failed)
+                {
+                    MarkUnreachable(_station);
+                }
                 return walk == Step.Busy;
             }
             Face(_station.transform.position);
@@ -742,14 +751,14 @@ namespace AgeOfJarls.AI.Jobs
             Problem("");
 
             // Done food first, before it burns.
-            CookingStation ready = stations.FirstOrDefault(HasDoneItem);
+            CookingStation ready = stations.FirstOrDefault(s => IsReachable(s) && HasDoneItem(s));
             if (ready != null)
             {
                 return Act(dt, ready, view => view.InvokeRPC("RPC_RemoveDoneItem", Position + Vector3.up, 1));
             }
 
             Inventory bag = Body.GetInventory();
-            CookingStation free = stations.FirstOrDefault(s => FreeSlots(s) > 0 && bag.GetAllItems().Exists(i => Accepts(s, i)));
+            CookingStation free = stations.FirstOrDefault(s => IsReachable(s) && FreeSlots(s) > 0 && bag.GetAllItems().Exists(i => Accepts(s, i)));
             if (free != null)
             {
                 return Act(dt, free, view =>
@@ -774,9 +783,13 @@ namespace AgeOfJarls.AI.Jobs
 
         private bool Act(float dt, CookingStation station, System.Action<ZNetView> action)
         {
-            Step walk = WalkTo(dt, station.transform.position, Reach);
+            Step walk = WalkToObject(dt, station, Reach);
             if (walk != Step.Done)
             {
+                if (walk == Step.Failed)
+                {
+                    MarkUnreachable(station);
+                }
                 return walk == Step.Busy;
             }
             Face(station.transform.position);

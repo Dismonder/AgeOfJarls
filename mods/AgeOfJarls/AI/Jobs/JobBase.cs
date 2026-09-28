@@ -218,6 +218,44 @@ namespace AgeOfJarls.AI.Jobs
             return Step.Busy;
         }
 
+        private Component _walkObject;
+        private Collider[] _walkColliders = new Collider[0];
+
+        private const float UnreachableSeconds = 60f;
+        private readonly Dictionary<int, float> _unreachableUntil = new Dictionary<int, float>();
+
+        /// <summary>Not given up on lately as out of reach (see <see cref="MarkUnreachable"/>).</summary>
+        protected bool IsReachable(Component target) =>
+            target != null && !(_unreachableUntil.TryGetValue(target.GetInstanceID(), out float until) && Time.time < until);
+
+        /// <summary>No way there: other stations or chests first, this one again in a minute - not walked at every frame.</summary>
+        protected void MarkUnreachable(Component target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+            if (_unreachableUntil.Count > 32)
+            {
+                _unreachableUntil.Clear();
+            }
+            _unreachableUntil[target.GetInstanceID()] = Time.time + UnreachableSeconds;
+        }
+
+        /// <summary>
+        /// Walks up to an object: to the nearest point of its colliders, so a big one (a charcoal kiln, a blast furnace)
+        /// is reached at its side - its middle lies in a hole of the navmesh, and a way there only ever gets part-way.
+        /// </summary>
+        protected Step WalkToObject(float dt, Component target, float reach)
+        {
+            if (target != _walkObject)
+            {
+                _walkObject = target;
+                _walkColliders = WorkScanner.SolidColliders(target);
+            }
+            return WalkTo(dt, WorkScanner.NearestPoint(_walkColliders, Position, target.transform.position), reach);
+        }
+
         /// <summary>The settlement's chests (refreshed every few seconds), for fetching supplies.</summary>
         protected List<Container> SettlementChests()
         {
@@ -251,7 +289,7 @@ namespace AgeOfJarls.AI.Jobs
                 {
                     return Step.Failed;
                 }
-                _fetchChest = Settlement.SettlementStorage.FindHolding(SettlementChests(), wanted, Position);
+                _fetchChest = Settlement.SettlementStorage.FindHolding(SettlementChests().FindAll(IsReachable), wanted, Position);
                 _accessTimer = 0f;
                 if (_fetchChest == null)
                 {
@@ -259,11 +297,12 @@ namespace AgeOfJarls.AI.Jobs
                     return Step.Failed;
                 }
             }
-            Step walk = WalkTo(dt, _fetchChest.transform.position, 2.5f);
+            Step walk = WalkToObject(dt, _fetchChest, 2f);
             if (walk != Step.Done)
             {
                 if (walk == Step.Failed)
                 {
+                    MarkUnreachable(_fetchChest);
                     _fetchChest = null;
                 }
                 return walk;
