@@ -23,9 +23,14 @@
   wolnego posterunku nie przeszukują sztandarów co klatkę, liczenie obsady bez alokacji.
 - **Po 0.4.0 (niewydane, CHANGELOG „Unreleased”):** wolnostojące totemy i sztandary wojenne, poziomy totemów w
   `totems.json` (protokół definicji 5), komendy `aoj_perf`, `aoj_dump`, `aoj_totem`, `aoj_despawn`.
-- **Do sprawdzenia w grze (kolejność):** kocioł i głód (w `testo` osadnicy mają sytość 0), skrzynia wejściowa
-  tragarza (problem „brak wejścia”) i czy gracz wie, jak ją ustawić, drwal z siekierą, górnik/hutnik/kucharz/rolnik,
-  oblężenie i odbudowa, co-op, serwer dedykowany.
+- **Sprawdzone w grze 2026-09-28 (AI osadników):** praca bez przerw przy każdym zamachu, celowanie w kłodę, pełny
+  cykl drwala (drzewo → kłoda → połówki → drewno → pniak, małe drzewa), totem drwala **poza osadą** (praca tam i
+  odnoszenie urobku do skrzyń 46 m dalej), jedzenie ze skrzyń i z plecaka (racja do 3 porcji, bez kursów z jedną
+  jagodą), osadnik nazywa przedmiot bez skrzyni („Pióra: postaw pustą skrzynię”).
+- **Do sprawdzenia w grze (kolejność):** górnik (ten sam kod celowania co drwal; w `testo` zablokowany poziomem
+  osady), skrzynia wejściowa tragarza (problem „brak wejścia”) i czy gracz wie, jak ją ustawić,
+  hutnik/kucharz/rolnik, oblężenie i odbudowa, co-op, serwer dedykowany. Uwaga: `tod` przesuwa zegar świata —
+  osadnicy głodnieją o tyle, ile czasu przeskoczono.
 - **Świat `testo` po testach:** Totem Tragarza poziom 3 przy osadzie, krata jeńca i 2 greydwarfy (świat ma pasywne
   potwory), postać „test” z odblokowanymi przepisami na brąz (przedmioty z `spawn`).
 
