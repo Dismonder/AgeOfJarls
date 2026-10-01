@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.6.0
+
+- Settlers defend themselves: an enemy swinging at a settler meets its raised shield (or its weapon, as a player
+  blocks with a sword), and the settler turns to the one striking it instead of the one it walked up to. The block
+  is timed for a **perfect block** from the creature's wind-up, which settlers learn from the hits that land - a
+  creature they have never met is blocked from the start of its swing. Off with `Settlers/Blocking`.
+- Settlers fight with the weapon of their role (a bow from afar, a melee weapon in the enemy's face) instead of the
+  game's random pick every second; their bows are drawn fully (arrows used to fly powerless); swords, axes and
+  spears strike from their own reach and every swing, not every two seconds; an archer with nothing but a bow backs
+  away from an enemy at its feet.
+- Settler window, Equipment tab: every item in its own row with **Take** and **Take 1** - take one thing from a
+  settler's bag (worn gear comes off), also from a settler another player's machine simulates. "Take everything
+  back" stays.
+- Bigger windows and text: `UI/Scale` (default 1.3, 0.7-2) scales the settler, Jarl's Table and totem windows,
+  never past the screen.
+- The settlement's chests are mapped once per change, not searched by every settler every frame: a chest's hover
+  text and the Storage tab show what the settlers take an unassigned chest for ("holds: wood, stone"). Two players'
+  settlers sort the same way, since the map follows the chest data the game syncs.
+- Fewer false alarms: an automatic alarm needs `Sieges/AlarmMinThreats` (2) alerted hostile creatures inside the
+  settlement for 4 seconds, and waits `Sieges/AlarmCooldownSeconds` (90) after the last one; a siege sounds it at
+  once. Manual alarms are unchanged.
+- Everyone on a server needs 0.6.0 (new network messages).
+
 ## 0.5.0
 
 - Work Totems and War Banners are free-standing standards now: a pole with the banner on a crossbar, placed on the

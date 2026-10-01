@@ -38,7 +38,18 @@
   brakującą zbroję; alarm w nocy bez migotania sen↔schronienie; budowniczy odbudowuje wyłom (`aoj_breach`) i naprawia
   dach oraz ścianę domu na palach z ziemi (`aoj_breach damage`); drwal sadzi buk z nasion ze skrzyni
   (`aoj_totem replant on`); osadnik nie porzuca celu przy pierwszym utknięciu; podejście do skrzyni z dostępnej strony.
-- **Do sprawdzenia w grze:** co-op (dwóch graczy), serwer dedykowany. Uwaga: gra działająca w tle między testami
+- **Co-op sprawdzony przez użytkownika 2026-09-30 (serwer, dwóch graczy):** działa; uwagi: alarm za często,
+  osadnicy nie bronią się (brak bloków), zbieranie i magazyn nieintuicyjne, interfejs za mały, brak zabierania
+  pojedynczych przedmiotów.
+- **0.6.0 (2026-10-01, kod bez testu w grze — użytkownik prosił o samo pisanie kodu):** CombatSense (bloki, blok
+  idealny z uczonego zamachu, cel = bijący, dobór broni roli, pełny naciąg łuku NPC, odskok łucznika), zabieranie
+  pojedynczych przedmiotów z okna osadnika (RPC + routowana dostawa), `UI/Scale`, ChestIndex + etykieta „zawiera”,
+  próg i odstęp alarmu. W trace z 10:08 widać działanie uczenia: „hit by Skeleton 0,76 s into its swing”.
+- **Do sprawdzenia w grze (0.6.0):** blok i blok idealny wojownika z tarczą (`aoj_give ShieldBronzeBuckler`, `spawn
+  Greydwarf 3`, `aoj_trace` → „(blocking)”), łucznik (strzały pełnej mocy, odskok), okno osadnika w skali 1.3,
+  zakładka Ekwipunek „Weź”/„Weź 1” (w co-op od osadnika symulowanego przez drugiego gracza), etykieta skrzyni,
+  częstość alarmu w co-op. Świat `testo` ma trwający najazd draugrów przy bazie; postać `test` ma 25 HP (użyj `god`).
+- **Do sprawdzenia w grze:** serwer dedykowany. Uwaga: gra działająca w tle między testami
   to upływ czasu świata (doba = 30 min) — osadnicy w tym czasie jedzą zapasy.
 - **Świat `testo` po testach:** Totem Tragarza poziom 3 przy osadzie, krata jeńca i 2 greydwarfy (świat ma pasywne
   potwory), postać „test” z odblokowanymi przepisami na brąz (przedmioty z `spawn`).

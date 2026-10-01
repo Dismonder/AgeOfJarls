@@ -168,7 +168,15 @@ lastSimTime = teraz                                // w tym samym zapisie co wyn
   dla oswojonych → **SettlerAI (M3) musi sam omijać ogień**; `RaiseSkill` ostrzega bez `Tameable` → nadpisane pustą
   metodą w `SettlerCharacter`. Fryzurę i brodę `Humanoid` przekazuje do `VisEquipment` tylko graczom, więc osadnik
   ustawia je bezpośrednio.
-- Ruch, pathfinding, animacje i walkę daje vanilla; my wybieramy cel i zachowanie.
+- Ruch, pathfinding, animacje i walkę daje vanilla; my wybieramy cel i zachowanie. Obronę dokładamy sami
+  (`AI/CombatSense`, `AI/CombatPatches`, 0.6.0): co 0,1 s osadnik patrzy, który wróg w zasięgu ciosu zamachnął się w
+  jego stronę, obraca się do niego i podnosi tarczę (albo broń białą, jak gracz) — `Character.m_blocking` ustawiane u
+  właściciela, resztę (licznik bloku idealnego, animacja, flaga w ZDO) robi `Humanoid.UpdateBlock`. Moment podniesienia
+  bloku liczony z zamachu wroga: czas od `InAttack()` do trafienia, uczony per prefab z trafień (`Character.RPC_Damage`
+  prefix), nieznany wróg blokowany od początku zamachu. Gdy osadnik chce blokować, `MonsterAI.DoAttack` (prefix) nie
+  zaczyna zamachu. Wróg bijący z boku staje się celem. Dobór broni własny (`Humanoid.EquipBestWeapon` prefix: broń
+  roli, łuk z daleka, biała w zwarciu), naciąg łuku NPC = pełny (`GetAttackDrawPercentage` postfix), pola AI broni
+  graczy (`m_aiAttackRange/Interval`) ustawiane przy założeniu. Łucznik bez broni białej odskakuje od wroga w zwarciu.
 - Frakcja `Character.Faction.Players`: potwory atakują osadników, a osadnicy walczą z potworami. Bez `Tameable` —
   podążanie przez `MonsterAI.SetFollowTarget`, posterunki przez `BaseAI.SetPatrolPoint` / `ResetPatrolPoint`.
 
@@ -212,6 +220,18 @@ Każdy krok zapisuje w ZDO typ zadania, krok i cel (ZDOID), więc zadanie trwa d
   (`JobBase.MarkUnreachable`), następne wybierane są inne; nigdy ten sam cel w kółko.
 - **Powrót do domu z histerezą.** Powrót zaczyna się dalej niż 12 m od kotwicy domu i trwa do 8 m — osadnik pchany na
   granicy (kłoda) przełączał się co klatkę między powrotem a spacerem vanilla.
+- **Mapa skrzyń (`Settlement/ChestIndex`).** Jeden opis na skrzynię (stosy, przedmioty, rodzaje, wolne sloty),
+  przebudowywany, gdy zmieni się `Container.m_lastRevision` (gra sama co 1 s wczytuje skrzynię z ZDO na każdej
+  maszynie, właściciel zapisuje przy zmianie). `SettlementStorage.BestChestFor` i `Rank` czytają opis, nie inwentarz;
+  `StoreInto` po każdym przedmiocie unieważnia opis (`Touch`). Na każdej maszynie ten sam obraz, więc osadnicy obu
+  graczy sortują tak samo. Etykieta skrzyni bez przypisania pokazuje, za co osadnicy ją mają („zawiera: drewno”).
+- **Oddawanie przedmiotów (`Net/ItemDelivery`).** Okno osadnika prosi RPC `AoJ_SettlerTakeItem` (nazwa, jakość,
+  założone, ilość); właściciel osadnika zdejmuje/wyjmuje i wysyła paczkę routowanym RPC `AoJ_ReceiveItems` do peera
+  pytającego (lokalnie od razu); odbiorca wkłada do plecaka gracza, reszta ląduje u stóp.
+- **Alarm bez fałszywych.** Automatyczny alarm po ≥ `Sieges/AlarmMinThreats` zaalarmowanych wrogach w osadzie przez
+  4 s i nie wcześniej niż `AlarmCooldownSeconds` po poprzednim; oblężenie uruchamia od razu.
+- **Skala okien.** `UI/Scale` to `localScale` panelu Jotunn (przycięte do rozmiaru canvasu), więc układ i teksty
+  rosną razem.
 - **Rezerwacje.** W pamięci właściciela totemu, z czasem wygaśnięcia — znikają same, gdy pracownik zniknie.
 - **Zamach to praca, nie walka.** `SettlerAI.IsCalm` nie patrzy na `InAttack`: własny zamach siekierą czy kilofem nie
   zatrzymuje zadania (wcześniej każdy cios zwalniał cel). W trakcie zamachu `HarvestJob` trzyma osadnika w miejscu,

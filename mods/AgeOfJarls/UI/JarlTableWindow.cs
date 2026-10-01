@@ -750,7 +750,10 @@ namespace AgeOfJarls.UI
                 int used = inventory.NrOfItems();
                 int size = used + inventory.GetEmptySlots();
                 string assigned = SettlementStorage.AssignedKind(chest);
-                string kind = assigned.Length > 0 ? $" [{SettlementStorage.KindToken(assigned)}]" : "";
+                // A chest's kind: the one a member gave it, or what the settlers take it for from what it holds.
+                List<string> autoKinds = assigned.Length > 0 ? null : ChestIndex.KindTokens(chest);
+                string kind = assigned.Length > 0 ? $" [{SettlementStorage.KindToken(assigned)}]"
+                    : autoKinds.Count > 0 ? $" [{string.Join(", ", autoKinds.Take(2))}]" : "";
                 lines.Append($"<color=#e0c080>{chest.m_name}{kind}</color> ({distance} m, {used}/{size}): {held}\n");
             }
             if (_chests.Count > MaxChestLines)

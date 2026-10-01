@@ -10,7 +10,11 @@ server and in co-op. Works in new **and existing** worlds.
   wheel): press **H** while looking at a settler — up to 40 m away — to call it (*come to me!*), stop it, send it to
   attack, fall back, go home or open its window; press H looking elsewhere for your squad's orders, with the creature
   in your sight as the attack target. The game's wheel (G) has the same squad orders under *Commands*. By default a
-  settler is **knocked out, not killed**: it gets up with its gear (permanent death is an option).
+  settler is **knocked out, not killed**: it gets up with its gear (permanent death is an option). Its window's
+  Equipment tab takes single items back (**Take** / **Take 1**), worn gear included.
+- **They fight like you do** — a settler raises its shield (or weapon) against a blow about to land, times it for a
+  perfect block once it has learned the creature's wind-up, turns on the enemy striking it, fights with the weapon of
+  its role (bow from afar, melee up close) and backs off when caught with only a bow in hand.
 - **Jarl's Table** — founds a settlement (radius 30–60 m, tiers 0–7 unlocked by bosses). Its window has tabs for
   the settlement, the members, the settlers (orders, dismissal), work, storage, defence and the chronicle.
 - **Built together, bigger together** — every player who joins (as a member) adds the tier's settler limit again (two
@@ -42,8 +46,9 @@ Everyone on a server needs the mod (the server too). Requires BepInEx and Jotunn
 ## Configuration
 
 `BepInEx/config/*AgeOfJarls*.cfg` (synced from the server): settler health and death, loot, work speed, hunger,
-catch-up, captive camps, sieges, gear wear, the members' bonuses and the number of Jarls. Local: the command wheel key
-(`Commands/WheelKey`, default H) and reach (`Commands/LookRange`). Balance data in `BepInEx/config/AgeOfJarls/*.json`
+catch-up, captive camps, sieges and the alarm (`Sieges/AlarmMinThreats`, `AlarmCooldownSeconds`), settler blocking,
+gear wear, the members' bonuses and the number of Jarls. Local: the command wheel key (`Commands/WheelKey`, default H)
+and reach (`Commands/LookRange`), and the size of the mod's windows (`UI/Scale`, default 1.3). Balance data in `BepInEx/config/AgeOfJarls/*.json`
 (traits, tiers, names, storage kinds, siege waves, totem levels).
 
 ## Console (devcommands)
