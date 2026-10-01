@@ -129,6 +129,12 @@ namespace AgeOfJarls.Settlers
             }
         }
 
+        /// <summary>
+        /// Owner only: holds the block up or lets it down, the way a player's block key does; the game's own block logic
+        /// (the timer for a perfect block, the animation, the synced flag) runs on it (<see cref="AI.CombatSense"/>).
+        /// </summary>
+        internal void SetBlocking(bool on) => m_blocking = on;
+
         private const float BedHealPerSecond = 0.01f;
 
         /// <summary>Multiplier for healing in bed; set by the settler each second from its settlement's perks.</summary>

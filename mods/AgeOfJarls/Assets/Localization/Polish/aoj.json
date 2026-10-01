@@ -444,5 +444,12 @@
   "aoj_problem_no_tree_seeds": "brak nasion drzew w skrzyniach (szyszki, żołędzie, nasiona buka...)",
   "aoj_captive_how": "pokonaj strażników albo rozbij kratę",
   "aoj_problem_no_materials": "brak materiałów w skrzyniach do odbudowy",
-  "aoj_breaches_waiting": "Zniszczone budowle do odbudowy: $1 (Budowniczowie wezmą materiały ze skrzyń)"
+  "aoj_breaches_waiting": "Zniszczone budowle do odbudowy: $1 (Budowniczowie wezmą materiały ze skrzyń)",
+  "aoj_take": "Weź",
+  "aoj_take_one": "Weź 1",
+  "aoj_msg_took": "Od $1: $2",
+  "aoj_msg_took_dropped": "Od $1: $2 (część nie zmieściła się - leży u twoich stóp)",
+  "aoj_chest_holds": "zawiera",
+  "aoj_chest_empty_auto": "pusta (weźmie pierwszą rzecz)",
+  "aoj_kind_other": "różne"
 }

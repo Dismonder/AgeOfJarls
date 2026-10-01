@@ -30,6 +30,26 @@ namespace AgeOfJarls.AI
         private Character _orderedTarget;
         private float _orderedUntil;
         private float _ceaseFireUntil;
+        private CombatSense _sense;
+
+        /// <summary>Blocks and the striker as target (owner only; null before the first AI frame).</summary>
+        internal CombatSense Sense => _sense;
+
+        /// <summary>Means to block a blow right now: vanilla must not start a swing (see CombatPatches).</summary>
+        internal bool HoldingBlock => _sense != null && _sense.HoldingBlock;
+
+        internal bool HasOrderedTarget => _orderedTarget != null;
+
+        /// <summary>A few running steps to a point (an archer backing away): vanilla's own path following.</summary>
+        internal void StepBack(float dt, Vector3 point) => MoveTo(dt, point, 0.5f, true);
+
+        /// <summary>The enemy striking it becomes its target, like vanilla's own retarget on damage - before the hit.</summary>
+        internal void RetargetTo(Character target)
+        {
+            m_targetCreature = target;
+            m_targetStatic = null;
+            m_updateTargetTimer = 1f;
+        }
 
         /// <summary>Owner only (via RPC): fight this creature, whatever vanilla targeting would prefer.</summary>
         internal void OrderAttack(Character target)
@@ -58,11 +78,14 @@ namespace AgeOfJarls.AI
                 m_targetCreature = null;
                 m_targetStatic = null;
                 _home?.Stop();
+                _sense?.Release();
                 return true;
             }
             // Before vanilla: its targeting then sees the ordered target (or none) and keeps it, since the
             // retarget timer is held back while an order stands.
             ApplyOrders();
+            // Blocks and the striker as target before vanilla swings: a swing of its own would cancel the block.
+            _sense?.Update(dt);
             long perf = Perf.Start();
             bool running = base.UpdateAI(dt);
             Perf.Stop(Perf.Section.VanillaAi, perf);
@@ -73,6 +96,10 @@ namespace AgeOfJarls.AI
             perf = Perf.Start();
             try
             {
+                if (!IsCalm())
+                {
+                    _sense?.AfterVanilla(dt);
+                }
                 UpdateSettlerBehaviours(dt);
             }
             catch (Exception e)
@@ -175,6 +202,7 @@ namespace AgeOfJarls.AI
                 return false;
             }
             _mover = new PathMover(this);
+            _sense = new CombatSense(this, character, _settler);
             _loot = new LootCollector(this, character, _mover);
             var context = new Jobs.JobContext { Ai = this, Settler = _settler, Body = character, Mover = _mover, Loot = _loot };
             var duty = new SoldierDuty(this, _settler, character, _mover);
@@ -213,6 +241,11 @@ namespace AgeOfJarls.AI
                 : Time.time < _ceaseFireUntil ? "cease-fire"
                 : "calm";
             string ordered = _orderedTarget != null ? $" (ordered: {_orderedTarget.GetHoverName()})" : "";
+            string guard = _sense != null ? _sense.DebugState() : "";
+            if (guard.Length > 0)
+            {
+                ordered += " · " + guard;
+            }
             string home = _home != null ? _home.DebugState() : "-";
             string path = _mover != null ? _mover.DebugState() : "-";
             string loot = _loot != null ? _loot.DebugState() : "-";

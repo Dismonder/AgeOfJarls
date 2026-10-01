@@ -376,6 +376,7 @@ namespace AgeOfJarls.Settlers
                 _nview.Register<long>(Keys.RpcSettlerCommand, RPC_Command);
                 _nview.Register<ZPackage>(Keys.RpcSettlerGive, RPC_Give);
                 _nview.Register(Keys.RpcSettlerTakeBack, RPC_TakeBack);
+                _nview.Register<ZPackage>(Keys.RpcSettlerTakeItem, RPC_TakeItem);
                 _nview.Register(Keys.RpcSettlerGoHome, RPC_GoHome);
                 _nview.Register<string>(Keys.RpcSettlerRename, RPC_Rename);
                 _nview.Register<ZDOID>(Keys.RpcSettlerAttack, RPC_Attack);
@@ -950,6 +951,87 @@ namespace AgeOfJarls.Settlers
             }
             _nview.InvokeRPC(Keys.RpcSettlerTakeBack);
             player.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_takeback", DisplayName));
+        }
+
+        /// <summary>
+        /// One thing out of the settler's bag (or off its body) into the player's: the settler's owner takes it out and
+        /// sends it to this player's machine (<see cref="Net.ItemDelivery"/>). Whoever may take everything back may
+        /// take one thing.
+        /// </summary>
+        internal void RequestTakeItem(Player player, ItemDrop.ItemData item, int amount)
+        {
+            if (item == null || _nview == null || !_nview.IsValid())
+            {
+                return;
+            }
+            if (!IsFollowing(player) && !MayBeOrderedBy(player, SettlementRight.Live))
+            {
+                player.Message(MessageHud.MessageType.Center, Permissions.Denied(SettlementRight.Live));
+                return;
+            }
+            var package = new ZPackage();
+            package.Write(item.m_shared.m_name);
+            package.Write(item.m_quality);
+            package.Write(item.m_equipped);
+            package.Write(Mathf.Clamp(amount, 1, Mathf.Max(1, item.m_stack)));
+            _nview.InvokeRPC(Keys.RpcSettlerTakeItem, package);
+        }
+
+        private void RPC_TakeItem(long sender, ZPackage package)
+        {
+            if (!_nview.IsOwner())
+            {
+                _nview.InvokeRPC(Keys.RpcSettlerTakeItem, package);
+                return;
+            }
+            if (!IsLeader(sender) && !MayOrder(sender, SettlementRight.Live))
+            {
+                Log.Warning(Module, $"Handing an item of {DisplayName} to peer {sender} refused");
+                return;
+            }
+            string name;
+            int quality;
+            bool equipped;
+            int amount;
+            try
+            {
+                name = package.ReadString();
+                quality = package.ReadInt();
+                equipped = package.ReadBool();
+                amount = package.ReadInt();
+            }
+            catch (Exception e) when (e is IOException || e is ArgumentException)
+            {
+                Log.Warning(Module, $"Malformed take-item request from peer {sender}: {e.Message}");
+                return;
+            }
+
+            Inventory inventory = _humanoid.GetInventory();
+            // The very stack the player clicked when it is still there, otherwise the same item from another stack.
+            ItemDrop.ItemData item = inventory.GetAllItems().Find(i => i.m_shared.m_name == name && i.m_quality == quality && i.m_equipped == equipped)
+                                     ?? inventory.GetAllItems().Find(i => i.m_shared.m_name == name && i.m_quality == quality);
+            if (item == null)
+            {
+                return;
+            }
+            if (item.m_equipped)
+            {
+                _humanoid.UnequipItem(item);
+            }
+            amount = Mathf.Clamp(amount, 1, item.m_stack);
+            ItemDrop.ItemData copy = item.Clone();
+            copy.m_stack = amount;
+            copy.m_equipped = false;
+            var parcel = new Inventory("aoj_take", null, 1, 1);
+            if (!parcel.AddItem(copy))
+            {
+                return;
+            }
+            inventory.RemoveItem(item, amount);
+            MarkInventoryDirty();
+            FlushInventory();
+            Net.ItemDelivery.Send(sender, parcel, DisplayName);
+            Log.Info(Module, $"{DisplayName} handed {amount}x {name} to peer {sender}");
         }
 
         internal void RequestGoHome(Player player)
@@ -1539,10 +1621,22 @@ namespace AgeOfJarls.Settlers
         internal List<string> CarriedItems()
         {
             var lines = new List<string>();
+            foreach (ItemDrop.ItemData item in CarriedItemData())
+            {
+                string line = item.m_stack > 1 ? $"{item.m_shared.m_name} ×{item.m_stack}" : item.m_shared.m_name;
+                lines.Add(item.m_equipped ? line + " <color=#b0b0b0>($aoj_equipped)</color>" : line);
+            }
+            return lines;
+        }
+
+        /// <summary>What the settler carries, from the saved inventory: copies, worn ones first, for the window.</summary>
+        internal List<ItemDrop.ItemData> CarriedItemData()
+        {
+            var items = new List<ItemDrop.ItemData>();
             byte[] data = _nview != null && _nview.IsValid() ? _nview.GetZDO().GetByteArray(Keys.ZdoSettlerInventory) : null;
             if (data == null)
             {
-                return lines;
+                return items;
             }
             var view = new Inventory("aoj_view", null, 8, 8);
             try
@@ -1551,14 +1645,11 @@ namespace AgeOfJarls.Settlers
             }
             catch (Exception e) when (e is IOException || e is ArgumentException)
             {
-                return lines;
+                return items;
             }
-            foreach (ItemDrop.ItemData item in view.GetAllItems())
-            {
-                string line = item.m_stack > 1 ? $"{item.m_shared.m_name} ×{item.m_stack}" : item.m_shared.m_name;
-                lines.Add(item.m_equipped ? line + " <color=#b0b0b0>($aoj_equipped)</color>" : line);
-            }
-            return lines;
+            items.AddRange(view.GetAllItems());
+            items.Sort((a, b) => a.m_equipped == b.m_equipped ? string.CompareOrdinal(a.m_shared.m_name, b.m_shared.m_name) : a.m_equipped ? -1 : 1);
+            return items;
         }
 
         private string OrderText(ZDO zdo)

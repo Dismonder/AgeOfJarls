@@ -70,8 +70,16 @@ namespace AgeOfJarls.Settlement
                 {
                     return;
                 }
-                string kind = SettlementStorage.KindToken(SettlementStorage.AssignedKind(__instance));
+                string assigned = SettlementStorage.AssignedKind(__instance);
+                string kind = SettlementStorage.KindToken(assigned);
                 __result += Localization.instance.Localize($"\n[<color=yellow><b>$KEY_AltPlace + $KEY_Use</b></color>] $aoj_chest_for: {kind}");
+                if (assigned.Length == 0)
+                {
+                    // What the settlers take it for, from what it holds: the chest map every settler reads.
+                    System.Collections.Generic.List<string> kinds = ChestIndex.KindTokens(__instance);
+                    string holds = kinds.Count == 0 ? "$aoj_chest_empty_auto" : string.Join(", ", kinds);
+                    __result += Localization.instance.Localize($"\n<color=#b0b0b0>$aoj_chest_holds: {holds}</color>");
+                }
             }
         }
 

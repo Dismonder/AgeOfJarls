@@ -27,11 +27,22 @@ namespace AgeOfJarls.UI
         {
             GameObject panel = GUIManager.Instance.CreateWoodpanel(GUIManager.CustomGUIFront.transform, Center, Center, Vector2.zero, width, height, false);
             panel.name = name;
+            // Bigger windows and text (UI/Scale), scaled as a whole so every layout keeps its proportions; never past
+            // the edge of the screen (the canvas is in reference units, like the window).
+            float scale = Core.AoJConfig.UiScale.Value;
+            RectTransform canvas = GUIManager.CustomGUIFront.GetComponent<RectTransform>();
+            if (canvas != null && canvas.rect.width > 0f && canvas.rect.height > 0f)
+            {
+                scale = Mathf.Min(scale, (canvas.rect.width - ScreenMargin) / width, (canvas.rect.height - ScreenMargin) / height);
+            }
+            panel.GetComponent<RectTransform>().localScale = Vector3.one * Mathf.Max(0.5f, scale);
             T window = panel.AddComponent<T>();
             window.Build(panel.transform);
             panel.SetActive(false);
             return window;
         }
+
+        private const float ScreenMargin = 40f;
 
         protected abstract void Build(Transform root);
 

@@ -61,8 +61,27 @@ namespace AgeOfJarls.Core
 
         internal static ConfigEntry<float> GearWear;
 
+        internal static ConfigEntry<bool> SettlerBlocking;
+        internal static ConfigEntry<int> AlarmMinThreats;
+        internal static ConfigEntry<float> AlarmCooldownSeconds;
+        internal static ConfigEntry<float> UiScale;
+
         internal static void Bind(ConfigFile config)
         {
+            UiScale = config.BindConfig("UI", "Scale", 1.3f,
+                "Size of the mod's windows (settler, Jarl's Table, totem) and their text; 1 = the original size. " +
+                "A window is never bigger than the screen.", synced: false,
+                acceptableValues: new AcceptableValueRange<float>(0.7f, 2f));
+            SettlerBlocking = config.BindConfig("Settlers", "Blocking", true,
+                "Settlers raise their shield (or weapon) against a blow about to land, time it for a perfect block once they " +
+                "know the attacker's wind-up, and turn to the enemy that is striking them.", synced: true);
+            AlarmMinThreats = config.BindConfig("Sieges", "AlarmMinThreats", 2,
+                "Alerted hostile creatures inside the settlement before the alarm sounds by itself (a siege always sounds it). " +
+                "1 = any single greydwarf that notices someone.", synced: true,
+                acceptableValues: new AcceptableValueRange<int>(1, 20));
+            AlarmCooldownSeconds = config.BindConfig("Sieges", "AlarmCooldownSeconds", 90f,
+                "After an automatic alarm ends, no new automatic alarm for this long (a siege always sounds it).", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0f, 600f));
             DebugLogging = config.BindConfig("General", "DebugLogging", false,
                 "Write detailed Age of Jarls diagnostics to the BepInEx log.", synced: false);
             GuardWorldStartup = config.BindConfig("General", "GuardWorldStartup", true,

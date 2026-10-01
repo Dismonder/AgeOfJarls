@@ -444,5 +444,12 @@
   "aoj_problem_no_tree_seeds": "no tree seeds in the chests (pine cones, acorns, beech seeds...)",
   "aoj_captive_how": "beat the guards or break the bars",
   "aoj_problem_no_materials": "no materials in the chests to rebuild with",
-  "aoj_breaches_waiting": "Destroyed buildings to rebuild: $1 (Builders take the materials from the chests)"
+  "aoj_breaches_waiting": "Destroyed buildings to rebuild: $1 (Builders take the materials from the chests)",
+  "aoj_take": "Take",
+  "aoj_take_one": "Take 1",
+  "aoj_msg_took": "From $1: $2",
+  "aoj_msg_took_dropped": "From $1: $2 (what did not fit lies at your feet)",
+  "aoj_chest_holds": "holds",
+  "aoj_chest_empty_auto": "empty (takes the first thing)",
+  "aoj_kind_other": "other"
 }

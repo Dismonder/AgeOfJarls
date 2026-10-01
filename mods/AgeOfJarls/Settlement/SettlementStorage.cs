@@ -242,7 +242,7 @@ namespace AgeOfJarls.Settlement
                 {
                     continue;
                 }
-                Inventory contents = chest.GetInventory();
+                ChestIndex.ChestSummary contents = ChestIndex.Of(chest);
                 // Food goes to the Settlement Cauldron first; nothing else ever goes there. A chest given a kind takes
                 // that kind only, before any sorted chest.
                 string assigned = AssignedKind(chest);
@@ -302,6 +302,8 @@ namespace AgeOfJarls.Settlement
                 carried.RemoveItem(item, amount);
                 moved += amount;
                 Log.Info(Module, $"{who} stored {amount}x {item.m_shared.m_name}");
+                // The next item is ranked against what the chest holds now.
+                ChestIndex.Touch(chest);
             }
             return moved;
         }
@@ -327,18 +329,18 @@ namespace AgeOfJarls.Settlement
             }
         }
 
-        private static int Rank(Inventory contents, ItemDrop.ItemData item, string kind)
+        private static int Rank(ChestIndex.ChestSummary contents, ItemDrop.ItemData item, string kind)
         {
             bool sameItem = false;
             bool sameKind = false;
             bool other = false;
-            foreach (ItemDrop.ItemData held in contents.GetAllItems())
+            foreach (ChestIndex.Stack held in contents.Stacks)
             {
-                if (held.m_shared.m_name == item.m_shared.m_name)
+                if (held.Name == item.m_shared.m_name)
                 {
                     sameItem = true;
                 }
-                else if (kind != null && KindOf(held) == kind)
+                else if (kind != null && held.Kind == kind)
                 {
                     sameKind = true;
                 }
@@ -374,6 +376,24 @@ namespace AgeOfJarls.Settlement
                 if (held.m_shared.m_name == item.m_shared.m_name && held.m_quality == item.m_quality && held.m_worldLevel == item.m_worldLevel)
                 {
                     space += Mathf.Max(0, maxStack - held.m_stack);
+                }
+            }
+            return space;
+        }
+
+        internal static int FreeSpace(ChestIndex.ChestSummary contents, ItemDrop.ItemData item)
+        {
+            int maxStack = item.m_shared.m_maxStackSize;
+            int space = contents.EmptySlots * maxStack;
+            if (maxStack <= 1)
+            {
+                return space;
+            }
+            foreach (ChestIndex.Stack held in contents.Stacks)
+            {
+                if (held.Name == item.m_shared.m_name && held.Quality == item.m_quality && held.WorldLevel == item.m_worldLevel)
+                {
+                    space += Mathf.Max(0, maxStack - held.Size);
                 }
             }
             return space;

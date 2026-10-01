@@ -33,9 +33,25 @@ namespace AgeOfJarls.UI
         private Text _status;
         private Text _followLabel;
 
-        // Inventory tab
-        private Text _items;
+        // Inventory tab: one row per item, with buttons to take it (all of it, or one of a stack)
+        private const int ItemRows = 10;
+        private const float ItemRowTop = 178f;
+        private const float ItemRowStep = 34f;
+        private readonly List<ItemRow> _itemRows = new List<ItemRow>();
+        private readonly List<ItemDrop.ItemData> _carried = new List<ItemDrop.ItemData>();
+        private Text _itemsEmpty;
+        private Text _itemPageLabel;
+        private GameObject _itemPager;
+        private int _itemPage;
         private int _itemsRevision = -1;
+
+        private sealed class ItemRow
+        {
+            internal GameObject Root;
+            internal Text Name;
+            internal GameObject TakeOne;
+            internal ItemDrop.ItemData Item;
+        }
 
         // Info tab
         private Text _info;
@@ -58,6 +74,7 @@ namespace AgeOfJarls.UI
             s_instance._settler = settler;
             s_instance._reach = Mathf.Max(MaxDistance, reach);
             s_instance._itemsRevision = -1;
+            s_instance._itemPage = 0;
             s_instance.TextEntry.text = "";
             s_instance.ShowWindow();
         }
@@ -168,8 +185,62 @@ namespace AgeOfJarls.UI
 
         private void BuildInventory(Transform page)
         {
-            _items = Label(page, new Vector2(0f, 20f), 16, GUIManager.Instance.ValheimBeige, Width - 60f, 330f, TextAnchor.UpperLeft);
-            Button(page, "$aoj_takeback", new Vector2(0f, -190f), ButtonWidth, () => Act(s => s.RequestTakeBack(Player.m_localPlayer)));
+            _itemsEmpty = Label(page, new Vector2(0f, 120f), 18, GUIManager.Instance.ValheimBeige, Width - 60f, 40f, TextAnchor.MiddleCenter);
+            for (int i = 0; i < ItemRows; i++)
+            {
+                int index = i;
+                float y = ItemRowTop - i * ItemRowStep;
+                var row = new ItemRow { Root = Page(page, "Item" + i).gameObject };
+                row.Name = Label(row.Root.transform, new Vector2(-120f, y), 17, GUIManager.Instance.ValheimBeige, 340f, RowButtonHeight, TextAnchor.MiddleLeft);
+                Button(row.Root.transform, "$aoj_take", new Vector2(150f, y), 110f, () => TakeRow(index, all: true), RowButtonHeight);
+                row.TakeOne = Button(row.Root.transform, "$aoj_take_one", new Vector2(255f, y), 90f, () => TakeRow(index, all: false), RowButtonHeight)
+                    .GetComponentInParent<Button>().gameObject;
+                _itemRows.Add(row);
+            }
+            _itemPager = Page(page, "ItemPager").gameObject;
+            Button(_itemPager.transform, "<", new Vector2(-90f, -170f), 60f, () => TurnItemPage(-1), RowButtonHeight);
+            _itemPageLabel = Label(_itemPager.transform, new Vector2(0f, -170f), 16, GUIManager.Instance.ValheimBeige, 120f, RowButtonHeight, TextAnchor.MiddleCenter);
+            Button(_itemPager.transform, ">", new Vector2(90f, -170f), 60f, () => TurnItemPage(1), RowButtonHeight);
+            Button(page, "$aoj_takeback", new Vector2(0f, -212f), ButtonWidth, () => Act(s => s.RequestTakeBack(Player.m_localPlayer)));
+        }
+
+        private int ItemPages => Mathf.Max(1, (_carried.Count + ItemRows - 1) / ItemRows);
+
+        private void TurnItemPage(int step)
+        {
+            _itemPage = (_itemPage + step + ItemPages) % ItemPages;
+            FillItemRows();
+        }
+
+        private void TakeRow(int index, bool all)
+        {
+            ItemDrop.ItemData item = index < _itemRows.Count ? _itemRows[index].Item : null;
+            if (item != null)
+            {
+                Act(s => s.RequestTakeItem(Player.m_localPlayer, item, all ? item.m_stack : 1));
+            }
+        }
+
+        private void FillItemRows()
+        {
+            _itemPage = Mathf.Clamp(_itemPage, 0, ItemPages - 1);
+            for (int i = 0; i < _itemRows.Count; i++)
+            {
+                ItemRow row = _itemRows[i];
+                int at = _itemPage * ItemRows + i;
+                row.Item = at < _carried.Count ? _carried[at] : null;
+                row.Root.SetActive(row.Item != null);
+                if (row.Item == null)
+                {
+                    continue;
+                }
+                string line = row.Item.m_stack > 1 ? $"{row.Item.m_shared.m_name} ×{row.Item.m_stack}" : row.Item.m_shared.m_name;
+                row.Name.text = Localize(row.Item.m_equipped ? line + " <color=#b0b0b0>($aoj_equipped)</color>" : line);
+                row.TakeOne.SetActive(row.Item.m_stack > 1);
+            }
+            _itemsEmpty.text = _carried.Count == 0 ? Localize("$aoj_inventory_empty") : "";
+            _itemPager.SetActive(ItemPages > 1);
+            _itemPageLabel.text = $"{_itemPage + 1} / {ItemPages}";
         }
 
         private void BuildInfo(Transform page)
@@ -212,13 +283,14 @@ namespace AgeOfJarls.UI
         {
             ZNetView view = _settler.GetComponent<ZNetView>();
             int revision = view != null && view.IsValid() ? view.GetZDO().GetInt(Keys.ZdoSettlerInventoryRevision) : -1;
-            if (revision == _itemsRevision && _items.text.Length > 0)
+            if (revision == _itemsRevision)
             {
                 return;
             }
             _itemsRevision = revision;
-            List<string> items = _settler.CarriedItems();
-            _items.text = Localize(items.Count == 0 ? "$aoj_inventory_empty" : "<color=#e0c080>$aoj_items</color>\n" + string.Join("\n", items));
+            _carried.Clear();
+            _carried.AddRange(_settler.CarriedItemData());
+            FillItemRows();
         }
 
         protected override void OnHidden()
