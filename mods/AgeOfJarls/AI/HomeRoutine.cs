@@ -100,8 +100,11 @@ namespace AgeOfJarls.AI
             _planTimer = UnityEngine.Random.Range(0f, PlanSeconds);
             _hasChest = item => SettlementStorage.HasDestination(item, _chests, _ai.transform.position);
             _avoided = chest => _avoidUntil.TryGetValue(chest.m_nview.GetZDO().m_uid, out float until) && Time.time < until;
-            _keep = item => (AssignedJob()?.Keeps(item) ?? false) || _duty.Keeps(item);
+            _keep = item => (AssignedJob()?.Keeps(item) ?? false) || (_helpJob?.Keeps(item) ?? false) || _duty.Keeps(item);
+            _courtesy = new Courtesy(ai);
         }
+
+        private readonly Courtesy _courtesy;
 
         internal void Update(float dt)
         {
@@ -140,6 +143,11 @@ namespace AgeOfJarls.AI
                 return;
             }
 
+            // A player walking into it gets the way for a moment, whatever it was about to do.
+            if (_courtesy.Update(dt))
+            {
+                return;
+            }
             if (_chest != null)
             {
                 CarryToChest(dt);
@@ -155,7 +163,11 @@ namespace AgeOfJarls.AI
                 return;
             }
             ZDO zdo = _settler.Zdo;
-            if (zdo != null && Needs.IsHungry(zdo) && Eat(dt))
+            bool hungry = zdo != null && Needs.IsHungry(zdo);
+            // Not hungry yet but close to it, and between two tasks: a bite now, from the bag or the cauldron, rather
+            // than a trip from the far end of the zone in the middle of the next job.
+            bool peckish = !hungry && zdo != null && !_carrying && (_activeJob == null || (_jobIdle && !_helpBusy)) && Needs.IsPeckish(zdo);
+            if ((hungry || peckish) && Eat(dt, lightMeal: peckish))
             {
                 return;
             }
@@ -207,8 +219,8 @@ namespace AgeOfJarls.AI
             _idleThisFrame = true;
             _idleTime += dt;
             IdleSit(dt);
-            bool hungry = _starving && zdo != null && Needs.IsHungry(zdo);
-            _settler.SetActivity(_carrying ? SettlerActivity.NoChest : hungry ? SettlerActivity.NoFood : SettlerActivity.Idle);
+            bool noFood = _starving && hungry;
+            _settler.SetActivity(_carrying ? SettlerActivity.NoChest : noFood ? SettlerActivity.NoFood : SettlerActivity.Idle);
         }
 
         /// <summary>Hungry and no cauldron with food at the last look.</summary>
@@ -234,6 +246,11 @@ namespace AgeOfJarls.AI
             {
                 string target = _activeJob.DebugTarget;
                 parts.Add($"{_activeJob.Job}{(_jobIdle ? " (idle)" : "")}{(target.Length > 0 ? " -> " + target : "")}");
+            }
+            if (_helpJob != null)
+            {
+                string target = _helpJob.DebugTarget;
+                parts.Add($"helping: {_helpJob.Job}{(_helpBusy ? "" : " (idle)")}{(target.Length > 0 ? " -> " + target : "")}");
             }
             if (_cauldron != null)
             {
@@ -332,13 +349,15 @@ namespace AgeOfJarls.AI
         // zone reaches: the way there and back is home life too, not a journey for vanilla idle movement to cut short.
         private bool IsHome(Vector3 position)
         {
-            Vector3 table = _table.transform.position;
-            WorkTotem totem = _settler.JobTotem;
-            float work = totem != null && totem.Settlement == _table
-                ? Utils.DistanceXZ(totem.transform.position, table) + totem.Radius + WorkTotem.Overreach
-                : 0f;
-            return Utils.DistanceXZ(position, table) <= HomeReach(_radius, work);
+            float work = Mathf.Max(WorkReach(_settler.JobTotem), WorkReach(_helpTotem));
+            return Utils.DistanceXZ(position, _table.transform.position) <= HomeReach(_radius, work);
         }
+
+        /// <summary>The far edge of a totem's zone, from the table; 0 for none or another settlement's.</summary>
+        private float WorkReach(WorkTotem totem) =>
+            totem != null && totem.Settlement == _table
+                ? Utils.DistanceXZ(totem.transform.position, _table.transform.position) + totem.Radius + WorkTotem.Overreach
+                : 0f;
 
         /// <summary>
         /// How far from its table a settler still counts as at home: its settlement or its work, whichever reaches
@@ -432,13 +451,23 @@ namespace AgeOfJarls.AI
                 }
                 _deliverFood = false;
             }
-            if (_activeJob != null && !_jobIdle)
+            if ((_activeJob != null && !_jobIdle) || _helpBusy)
             {
                 int limit = AoJConfig.CarryLimit.Value;
                 return limit > 0 && CarriedCount() >= limit * Mathf.Max(0.25f, 1f + _settler.TraitSum(TraitStat.CarryWeight));
             }
+            // Work just ran out with a part load: more often comes within moments (a drop, the input chest filled, a
+            // tree another worker felled), so the trip to the chests waits a little for it - a fuller load, fewer trips.
+            if (_activeJob != null && _jobIdle && Time.time - _jobIdleSince < IdleStoreDelaySeconds &&
+                bag.GetEmptySlots() > FreeSlotsBeforeStoring + 2)
+            {
+                return false;
+            }
             return !_loot.BusyWithin(GatherPauseSeconds) && HasLoad(bag);
         }
+
+        private const float IdleStoreDelaySeconds = 12f;
+        private float _jobIdleSince;
 
         /// <summary>A few servings of food a settler keeps on it and eats when hungry: no reason for a trip.</summary>
         private const int RationServings = 3;
@@ -591,8 +620,9 @@ namespace AgeOfJarls.AI
 
         // ---------------------------------------------------------------- meals
 
-        // The nearest Settlement Cauldron with food; the best meal in it (most satiety) is eaten on the spot.
-        private bool Eat(float dt)
+        // The nearest Settlement Cauldron with food; the best meal in it (most satiety) is eaten on the spot. A light
+        // meal (peckish, not hungry) comes from the bag or a cauldron only: no fetching from chests, no foraging.
+        private bool Eat(float dt, bool lightMeal = false)
         {
             // Food in its own bag (fetched from a chest, picked up) is eaten on the spot. Every frame while hungry, so
             // a plain loop rather than LINQ.
@@ -660,6 +690,11 @@ namespace AgeOfJarls.AI
                     .OrderBy(c => Vector3.Distance(c.transform.position, _ai.transform.position))
                     .FirstOrDefault();
                 _mealTimer = 0f;
+                if (_cauldron == null && lightMeal)
+                {
+                    _mealRetryAt = Time.time + MealRetrySeconds;
+                    return false;
+                }
                 _starving = _cauldron == null;
                 if (_cauldron == null)
                 {
@@ -981,13 +1016,21 @@ namespace AgeOfJarls.AI
             }
             _character.GetUp();
             bool busy = job.Update(dt, totem);
+            if (busy && _helpTotem != null)
+            {
+                // Its own work is back: the hand lent elsewhere comes home.
+                StopHelping();
+            }
             if (!busy && !_jobIdle)
             {
                 // Out of work (or of room in its bag) just now: the trip to the chests is planned in a moment, not after
                 // up to a whole planning period of chores.
                 _planTimer = Mathf.Min(_planTimer, GatherPauseSeconds);
+                _jobIdleSince = Time.time;
             }
             _jobIdle = !busy;
+            _helpBusy = !busy && Help(dt, totem);
+            busy |= _helpBusy;
             if (busy)
             {
                 _settler.SetActivity(SettlerActivity.Working);
@@ -997,6 +1040,7 @@ namespace AgeOfJarls.AI
 
         private void StopJob()
         {
+            StopHelping();
             if (_activeJob != null)
             {
                 _activeJob.Stop();
@@ -1005,17 +1049,130 @@ namespace AgeOfJarls.AI
             _jobIdle = false;
         }
 
+        // ---------------------------------------------------------------- lending a hand
+
+        /// <summary>Idle at its own totem this long (no trees left, an empty input chest) before it looks elsewhere.</summary>
+        private const float HelpAfterSeconds = 15f;
+        /// <summary>A totem that gives no work for this long is left alone for a while.</summary>
+        private const float HelpGiveUpSeconds = 5f;
+        private const float HelpTotemRetrySeconds = 90f;
+        /// <summary>How far beyond the settlement's radius a totem's zone may reach for a helper to go there.</summary>
+        private const float MaxHelpBeyond = 60f;
+
+        private WorkTotem _helpTotem;
+        private JobBase _helpJob;
+        private bool _helpBusy;
+        private float _helpIdleSince;
+        private readonly Dictionary<long, float> _helpRetryAt = new Dictionary<long, float>();
+
+        // A worker whose own totem has nothing for it lends a hand at another totem of the settlement with work - the
+        // highest priority first, the nearest among equals - with its assignment unchanged; the tool it needs there is
+        // fetched from the chests like for its own job. Its own totem is still asked every frame, so it is back the
+        // moment its own work is. True while busy elsewhere.
+        private bool Help(float dt, WorkTotem own)
+        {
+            if (_helpTotem != null && (_helpTotem.Settlement != _table || !_helpTotem.IsWorkTime))
+            {
+                StopHelping();
+            }
+            if (_helpTotem == null)
+            {
+                if (_table == null || Time.time - _jobIdleSince < HelpAfterSeconds || _settler.TraitSum(TraitStat.NightWork) <= 0f && !own.IsWorkTime)
+                {
+                    return false;
+                }
+                _helpTotem = PickHelpTotem(own);
+                if (_helpTotem == null)
+                {
+                    return false;
+                }
+                _helpJob = Job(_helpTotem.Job);
+                if (_helpJob == null || _helpJob == _activeJob)
+                {
+                    _helpTotem = null;
+                    _helpJob = null;
+                    return false;
+                }
+                _helpJob.Helping = true;
+                _helpIdleSince = Time.time;
+                Log.Debug(Module, $"{_settler.DisplayName} lends a hand at the {_helpTotem.Job} totem");
+                if (AiTrace.On)
+                {
+                    AiTrace.Write(_ai, $"nothing at its own totem: lends a hand at the {_helpTotem.Job} totem {Vector3.Distance(_ai.transform.position, _helpTotem.transform.position):0} m away");
+                }
+            }
+            bool busy = _helpJob.Update(dt, _helpTotem);
+            if (busy)
+            {
+                _helpIdleSince = Time.time;
+                return true;
+            }
+            if (Time.time - _helpIdleSince > HelpGiveUpSeconds)
+            {
+                if (_helpRetryAt.Count > 32)
+                {
+                    _helpRetryAt.Clear();
+                }
+                _helpRetryAt[_helpTotem.Id] = Time.time + HelpTotemRetrySeconds;
+                StopHelping();
+            }
+            return false;
+        }
+
+        private WorkTotem PickHelpTotem(WorkTotem own)
+        {
+            WorkTotem best = null;
+            int bestPriority = int.MinValue;
+            float bestSqr = float.MaxValue;
+            int tier = _table.Data?.Tier ?? 0;
+            Vector3 me = _ai.transform.position;
+            foreach (WorkTotem totem in WorkTotem.Loaded)
+            {
+                if (totem == null || totem == own || totem.Id == 0L || totem.Settlement != _table || !totem.IsWorkTime ||
+                    !JobInfo.IsUnlocked(totem.Job, tier) || totem.Job == own.Job ||
+                    (_helpRetryAt.TryGetValue(totem.Id, out float retryAt) && Time.time < retryAt) ||
+                    WorkReach(totem) > _radius + MaxHelpBeyond)
+                {
+                    continue;
+                }
+                float sqr = (totem.transform.position - me).sqrMagnitude;
+                int priority = totem.Priority;
+                if (priority > bestPriority || (priority == bestPriority && sqr < bestSqr))
+                {
+                    best = totem;
+                    bestPriority = priority;
+                    bestSqr = sqr;
+                }
+            }
+            return best;
+        }
+
+        private void StopHelping()
+        {
+            if (_helpJob != null)
+            {
+                _helpJob.Stop();
+                _helpJob.Helping = false;
+            }
+            _helpJob = null;
+            _helpTotem = null;
+            _helpBusy = false;
+        }
+
         // ---------------------------------------------------------------- wounds
 
         private const float WoundedBelow = 0.4f;
         private const float HealedAbove = 0.95f;
+        /// <summary>By day a worker gets up again at this much health - fit for work, the rest heals on its feet - rather than lying in bed till evening.</summary>
+        private const float FitForWorkAbove = 0.75f;
         private bool _recovering;
 
         // A badly wounded settler goes to bed and stays there (healing faster, see SettlerCharacter) until it is well.
         private bool Recover(float dt)
         {
             float health = _character.GetHealthPercentage();
-            if (_recovering && health >= HealedAbove)
+            float healed = EnvMan.IsNight() || _settler.JobId == 0L ? HealedAbove : FitForWorkAbove;
+            if (_recovering && health >= healed)
             {
                 _recovering = false;
             }

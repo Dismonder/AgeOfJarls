@@ -45,6 +45,8 @@ namespace AgeOfJarls.AI
 
         private Escort _escort;
         private PortalTravel _portals;
+        private SquadTactics _squad;
+        private Courtesy _courtesy;
         private bool _travelling;
 
         /// <summary>Following as a player's guard (owner only; null before the first AI frame).</summary>
@@ -106,12 +108,17 @@ namespace AgeOfJarls.AI
             // retarget timer is held back while an order stands.
             ApplyOrders();
             // A guard fights for the player it follows: its target comes from the escort, not from vanilla's search.
+            // A soldier at home fights with the troop: the enemy its comrades are on (SquadTactics).
             if (_escort != null && _orderedTarget == null && Time.time >= _ceaseFireUntil)
             {
                 Player leader = Leader;
                 if (leader != null)
                 {
                     _escort.UpdateTargeting(dt, leader);
+                }
+                else if (_settler.HasHome)
+                {
+                    _squad.UpdateTargeting(dt);
                 }
             }
             // Blocks and the striker as target before vanilla swings: a swing of its own would cancel the block.
@@ -129,6 +136,7 @@ namespace AgeOfJarls.AI
                 if (!IsCalm())
                 {
                     _sense?.AfterVanilla(dt);
+                    _squad?.AfterVanilla(dt);
                 }
                 UpdateSettlerBehaviours(dt);
             }
@@ -223,7 +231,8 @@ namespace AgeOfJarls.AI
                 _travelling = false;
                 _home.Stop();
                 Player leader = calm ? Leader : null;
-                if (leader != null)
+                // Out of a player's way first (a guard in a doorway); otherwise the loot around the leader.
+                if (leader != null && !_courtesy.Update(dt))
                 {
                     // A settler with a home keeps its loot for the chests there.
                     _loot.Follow(dt, leader, handOver: !_settler.HasHome);
@@ -249,6 +258,8 @@ namespace AgeOfJarls.AI
             _loot = new LootCollector(this, character, _mover);
             _escort = new Escort(this, _settler);
             _portals = new PortalTravel(this, _settler, _mover);
+            _squad = new SquadTactics(this, _settler, character);
+            _courtesy = new Courtesy(this);
             var context = new Jobs.JobContext { Ai = this, Settler = _settler, Body = character, Mover = _mover, Loot = _loot };
             var duty = new SoldierDuty(this, _settler, character, _mover);
             _home = new HomeRoutine(this, _settler, character, _mover, _loot, duty, job => CreateJob(job, context));

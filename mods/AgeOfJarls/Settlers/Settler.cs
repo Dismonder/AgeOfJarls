@@ -807,7 +807,23 @@ namespace AgeOfJarls.Settlers
             {
                 return post.transform.position;
             }
-            return night && TryGetBed(table, out Vector3 bed) ? bed : table.transform.position;
+            return night && TryGetBed(table, out Vector3 bed) ? bed : table.transform.position + IdleSpot();
+        }
+
+        /// <summary>Civilians idle in a ring around the table, each at a spot of its own: not all on top of it, and of the player using it.</summary>
+        private const float IdleRingRadius = 3.5f;
+
+        private Vector3 IdleSpot()
+        {
+            long uid = Uid;
+            if (uid == 0L)
+            {
+                return Vector3.zero;
+            }
+            // Spread by the golden angle: settlers with any ids end up around the whole ring, not bunched on one side.
+            float degrees = (uid % 360L + 360L) % 360L * 137.5f % 360f;
+            float radians = degrees * Mathf.Deg2Rad;
+            return new Vector3(Mathf.Cos(radians), 0f, Mathf.Sin(radians)) * IdleRingRadius;
         }
 
         // Idle movement strolls around the patrol point and walks back to it, so moving that point is what sends a
@@ -838,6 +854,9 @@ namespace AgeOfJarls.Settlers
             {
                 EnsureUid();
             }
+            // Its leader at once, not at the next tick: a follower that changed hands (or was just told to follow)
+            // sets off within the frame instead of standing for up to a second.
+            RefreshFollowTarget();
             ZDO zdo = _nview.GetZDO();
             byte[] data = zdo.GetByteArray(Keys.ZdoSettlerInventory);
             if (data == null)

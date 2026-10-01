@@ -19,8 +19,6 @@ namespace AgeOfJarls.AI
     internal sealed class Escort
     {
         private const string Module = "AI";
-        private const float BehindDistance = 2.5f;
-        private const float SideDistance = 2f;
         /// <summary>
         /// With the player standing, it stays put however the player turns - unless it is in the way (see
         /// <see cref="InViewPatience"/>) or has ended up this far from its spot (the player stepped aside, or it was
@@ -44,9 +42,13 @@ namespace AgeOfJarls.AI
         private const float StrikerBonus = 10f;
         private const float KeepTargetBonus = 2f;
 
+        /// <summary>How often a guard looks who else follows its leader, for its place in the formation.</summary>
+        private const float SlotSeconds = 0.5f;
+
         private readonly SettlerAI _ai;
         private readonly Settler _settler;
-        private readonly float _side;
+        private int _slot;
+        private float _slotTimer;
         private bool _moving;
         /// <summary>Where the current trip goes: the live spot while the player walks, a fixed one while the player stands.</summary>
         private Vector3 _target;
@@ -62,7 +64,27 @@ namespace AgeOfJarls.AI
         {
             _ai = ai;
             _settler = settler;
-            _side = (settler.Uid & 1L) == 0L ? 1f : -1f;
+        }
+
+        // Its place among the leader's followers, by settler id: the first pair at the shoulders, the next pair a row
+        // back and a little farther out (see Formation.EscortSlot), so three or four guards do not fight for two spots.
+        private int SlotAmong(Player leader)
+        {
+            long leaderId = leader.GetPlayerID();
+            long me = _settler.Uid;
+            int slot = 0;
+            foreach (Settler other in Settler.Loaded)
+            {
+                if (other == null || other == _settler || !other.IsLoaded || other.IsDown || other.FollowedPlayerId != leaderId)
+                {
+                    continue;
+                }
+                if (other.Uid < me)
+                {
+                    slot++;
+                }
+            }
+            return slot;
         }
 
         /// <summary>Replaces vanilla following (see <see cref="FollowPatch"/>): to the player's shoulder, out of the view.</summary>
@@ -88,7 +110,14 @@ namespace AgeOfJarls.AI
             }
             forward.Normalize();
             Vector3 right = Vector3.Cross(Vector3.up, forward);
-            Vector3 spot = at - forward * BehindDistance + right * (SideDistance * _side);
+            _slotTimer -= dt;
+            if (_slotTimer <= 0f)
+            {
+                _slotTimer = SlotSeconds;
+                _slot = SlotAmong(leader);
+            }
+            Formation.EscortSlot(_slot, out float behind, out float sideways);
+            Vector3 spot = at - forward * behind + right * sideways;
             float toLeader = FlatDistance(me, at);
             float toSpot = FlatDistance(me, spot);
 

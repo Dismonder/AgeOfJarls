@@ -23,8 +23,15 @@ namespace AgeOfJarls.AI
         private const float RepathSeconds = 2f;
         private const float WaypointReached = 0.6f;
         private const float TargetMoved = 1f;
-        private const float StuckSeconds = 3f;
+        private const float StuckSeconds = 2.5f;
         private const float StuckDistance = 0.5f;
+        /// <summary>Somebody this close ahead (plus their radius), inside a 53-degree cone, is walked around rather than into.</summary>
+        private const float AvoidReach = 1.8f;
+        private const float AvoidConeCos = 0.6f;
+        private const float AvoidDegrees = 45f;
+        private const float AvoidCheckSeconds = 0.25f;
+        private Character _blocker;
+        private float _blockerCheckAt;
         /// <summary>Everyday trips are walked; a far goal is jogged to, walking again for the last stretch.</summary>
         private const float JogAbove = 20f;
         private const float WalkBelow = 12f;
@@ -403,15 +410,68 @@ namespace AgeOfJarls.AI
                     return Step.Stuck;
                 }
             }
-            _ai.MoveTowards(_path[0] - position, run);
+            Vector3 direction = _path[0] - position;
+            direction.y = 0f;
+            _ai.MoveTowards(Steer(position, direction), run);
             return Step.Moving;
         }
 
-        // Stuck again and again on one spot. The second time, a settler wedged against furniture (the bed it got up from,
+        // Another settler (or a player) right ahead on the way: the step is turned past them, to the side away from
+        // them - two settlers meeting head-on each see the other on their right and both turn left, past each other -
+        // instead of walking into them and pushing until one gives. The path itself stays; only the step bends.
+        private Vector3 Steer(Vector3 position, Vector3 direction)
+        {
+            if (Time.time >= _blockerCheckAt)
+            {
+                _blockerCheckAt = Time.time + AvoidCheckSeconds;
+                _blocker = FindBlocker(position, direction);
+            }
+            if (_blocker == null || _blocker.IsDead())
+            {
+                _blocker = null;
+                return direction;
+            }
+            Vector3 toBlocker = _blocker.transform.position - position;
+            toBlocker.y = 0f;
+            if (!Formation.Blocks(direction, toBlocker, AvoidReach + _blocker.GetRadius(), AvoidConeCos))
+            {
+                return direction;
+            }
+            return Formation.SteerAround(direction, toBlocker, AvoidDegrees);
+        }
+
+        private Character FindBlocker(Vector3 position, Vector3 direction)
+        {
+            Character self = _ai.m_character;
+            Character best = null;
+            float bestSqr = float.MaxValue;
+            List<Character> all = Character.GetAllCharacters();
+            for (int i = 0; i < all.Count; i++)
+            {
+                Character other = all[i];
+                if (other == null || other == self || other.IsDead())
+                {
+                    continue;
+                }
+                Vector3 to = other.transform.position - position;
+                to.y = 0f;
+                float sqr = to.sqrMagnitude;
+                float reach = AvoidReach + other.GetRadius();
+                if (sqr > reach * reach || sqr >= bestSqr || !Formation.Blocks(direction, to, reach, AvoidConeCos))
+                {
+                    continue;
+                }
+                best = other;
+                bestSqr = sqr;
+            }
+            return best;
+        }
+
+        // Stuck again and again on one spot. The first time, a settler wedged against furniture (the bed it got up from,
         // a chest, a bench) slips past what it touches until it is clear of it - walls, floors and roofs stay solid.
         // From the third time, with the way on right next to it, it takes a short step over to that waypoint, which
         // lies on the navmesh: at most MaxHop, so never through a wall and never across the world like a teleport.
-        private const int StuckBeforeSlip = 2;
+        private const int StuckBeforeSlip = 1;
         private const int StuckBeforeHop = 3;
         private const float MaxHop = 2f;
         private const float SameStuckSpot = 1f;

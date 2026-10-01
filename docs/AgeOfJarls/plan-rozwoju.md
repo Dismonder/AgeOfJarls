@@ -123,6 +123,22 @@
   `BowDrawPatch` bez `GetComponent` co klatkę. Pomiar z 2026-09-28 (architecture.md §11) mówi, że kod moda to
   0,1% klatki przy 23 osadnikach, a koszt dużej osady to AI gry, animacja i fizyka — dalsze zyski wymagają pomiaru
   `aoj_perf` na osadzie 60+ i ewentualnie rzadszego AI dla osadników daleko od graczy (decyzja po pomiarze).
+- **Inteligentniejsi osadnicy (0.7.1, 2026-10-01, kod bez testu w grze — użytkownik testuje sam):** pięć obszarów
+  z listy użytkownika; pomysł „wyczucie zagrożenia/ucieczka do żołnierzy” odrzucony („to akurat zbędne”). Zrobione:
+  (1) **Praca** — pomoc przy innym totemie po 15 s bezczynności (`HomeRoutine.Help`, inny rodzaj zadania, przydział
+  bez zmian, narzędzie z skrzyń, powrót gdy własna praca wraca), 12 s czekania na większy ładunek po końcu pracy,
+  skrzynia docelowa = ta, która bierze najwięcej z ładunku (`NextDestination`); (2) **Ruch** — omijanie postaci
+  (`PathMover.Steer`, oboje w lewo), prześlizg przy meblach od pierwszego zacięcia, pierścień 3,5 m wokół stołu
+  (`Settler.IdleSpot`); (3) **Walka** — `AI/SquadTactics`: skupianie ognia na najbardziej rannym wrogu, do którego
+  strzelają/biją towarzysze w 12 m, dołączanie do walki; łucznik odsuwa się z linii strzału sojusznika; kiting łucznika
+  5 m i w seriach 1,5 s/2,5 s; (4) **Gracz** — formacja strażników parami (`Formation.EscortSlot`), ustępowanie z drogi
+  graczowi (`AI/Courtesy`), `RefreshFollowTarget` od razu po przejęciu własności; (5) **Dom** — lekki posiłek przy
+  „prawie głodny” między zadaniami (`Needs.IsPeckish`, `Eat(lightMeal)`), ranny pracownik wstaje przy 75% w dzień.
+  Testy czystej geometrii: `FormationTests` (7). **Do sprawdzenia w grze:** dwóch–trzech strażników na „Do mnie!”
+  idzie parami za plecami; wejście w stojącego osadnika → odsuwa się; drwal po wycięciu strefy po 15 s idzie do
+  totemu górnika/tragarza (log „lends a hand”) i wraca, gdy posadzisz drzewa; `spawn Greydwarf 3` przy posterunku →
+  żołnierze biją tego samego (trace „focus: …”); łucznik z kolegą przed sobą robi krok w bok; osadnicy przy stole
+  stoją w kręgu, nie na stole; dwóch osadników naprzeciw siebie w korytarzu mija się.
 - **Do sprawdzenia w grze:** serwer dedykowany. Uwaga: gra działająca w tle między testami
   to upływ czasu świata (doba = 30 min) — osadnicy w tym czasie jedzą zapasy.
 - **Świat `testo` po testach:** Totem Tragarza poziom 3 przy osadzie, krata jeńca i 2 greydwarfy (świat ma pasywne

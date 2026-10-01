@@ -16,6 +16,33 @@
   test; portals register themselves instead of being searched for in the scene; a bow's draw no longer looks up a
   component every frame.
 
+**Smarter settlers**
+
+- **Work.** A worker whose own totem has nothing for it (no trees left, an empty input chest) lends a hand at
+  another totem of the settlement after a quarter of a minute - the highest priority first, the nearest among
+  equals, another kind of job than its own - fetching the tool from the chests if it must, and is back at its own
+  totem the moment there is work there again. Its assignment does not change. A worker whose work just ran out
+  with a part load waits a dozen seconds for more before it walks to the chests. The chest a settler walks to is
+  the one that takes the most of what it carries (one trip instead of two). Jobs already took the nearest target
+  of the most urgent kind.
+- **Moving.** A settler walking into another settler or a player steps round them - both turn to their own left,
+  so two meeting head-on pass each other - instead of pushing. One wedged against furniture (a bed, a chest, a
+  bench) slips free after its first stall rather than its second. Idle settlers stand in a ring around the Jarl's
+  Table, each at its own spot, instead of all on top of it.
+- **Soldiers.** The troop focuses fire: a soldier goes for the enemy its comrades nearby are fighting, the most
+  wounded first, instead of each picking its own; one standing idle within twelve metres of a fight joins it. An
+  archer with a comrade or a player in its line of fire steps aside before it shoots. Archers of the troop keep
+  five metres instead of three and a half, and kite in bursts - a step back, then a shot even at close quarters -
+  rather than backing away from a faster enemy without ever shooting.
+- **Around the player.** Several guards walk in formation: the first pair at your shoulders, the next pair a row
+  back and a little farther out, instead of fighting over two spots. A settler you walk into - in a doorway, a
+  passage, at the table - steps out of your way. A follower that changed hands between machines sets off at once,
+  not up to a second later.
+- **Home.** A settler within fifteen points of hunger eats between two tasks (from its bag or a cauldron) rather
+  than walking back from the far end of its zone when hunger hits in the middle of the next one. A wounded worker
+  gets up at three quarters of its health by day and finishes healing on its feet, instead of lying in bed till
+  evening; at night, or without a job, it stays until well.
+
 ## 0.7.0
 
 - Co-op: taking items from a settler works for every player, not only for the one whose machine simulates the

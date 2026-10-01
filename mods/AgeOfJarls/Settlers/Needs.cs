@@ -30,6 +30,11 @@ namespace AgeOfJarls.Settlers
 
         internal static bool IsHungry(ZDO zdo) => Satiety(zdo) < AoJConfig.HungryBelow.Value;
 
+        /// <summary>Not hungry yet, but within this much of it: a bite between two tasks saves a trip from the far end of the zone later.</summary>
+        internal const float PeckishMargin = 15f;
+
+        internal static bool IsPeckish(ZDO zdo) => Satiety(zdo) < AoJConfig.HungryBelow.Value + PeckishMargin;
+
         /// <summary>Morale and hunger as a work pace: x0.6 at 0 morale, x1.25 at 100; starving halves it.</summary>
         internal static float WorkPace(ZDO zdo)
         {

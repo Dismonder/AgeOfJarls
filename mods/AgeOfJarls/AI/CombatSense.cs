@@ -104,9 +104,16 @@ namespace AgeOfJarls.AI
 
         /// <summary>An enemy this close to an archer with nothing but its bow makes it step back to shoot.</summary>
         private const float KiteRange = 3.5f;
+        /// <summary>A settler whose place in the troop is the bow keeps more room: it is there to shoot, not to trade blows.</summary>
+        private const float ArcherKiteRange = 5f;
         private const float KiteStep = 6f;
+        /// <summary>Kiting goes in bursts: a step or two back, then it stands and shoots even at close quarters, rather than backing away from a faster enemy for ever without a shot.</summary>
+        private const float KiteSeconds = 1.5f;
+        private const float KiteHoldSeconds = 2.5f;
         private Character _nearest;
         private float _nearestDistance;
+        private float _kiteStartedAt = -100f;
+        private float _kiteHoldUntil;
 
         /// <summary>
         /// After vanilla moved it: an archer with an enemy at its feet and no melee weapon in hand backs off a few metres
@@ -114,7 +121,8 @@ namespace AgeOfJarls.AI
         /// </summary>
         internal void AfterVanilla(float dt)
         {
-            if (_nearest == null || _nearest.IsDead() || _nearestDistance > KiteRange || _body.InAttack() || _body.Down ||
+            float range = _settler.Role == Army.CombatRole.Archer ? ArcherKiteRange : KiteRange;
+            if (_nearest == null || _nearest.IsDead() || _nearestDistance > range || _body.InAttack() || _body.Down ||
                 !AoJConfig.SettlerBlocking.Value)
             {
                 return;
@@ -122,6 +130,19 @@ namespace AgeOfJarls.AI
             ItemDrop.ItemData weapon = _body.GetCurrentWeapon();
             if (weapon == null || !Army.Posts.IsBow(weapon))
             {
+                return;
+            }
+            if (Time.time < _kiteHoldUntil)
+            {
+                return;
+            }
+            if (Time.time - _kiteStartedAt > KiteSeconds + KiteHoldSeconds)
+            {
+                _kiteStartedAt = Time.time;
+            }
+            else if (Time.time - _kiteStartedAt > KiteSeconds)
+            {
+                _kiteHoldUntil = Time.time + KiteHoldSeconds;
                 return;
             }
             Vector3 away = _body.transform.position - _nearest.transform.position;

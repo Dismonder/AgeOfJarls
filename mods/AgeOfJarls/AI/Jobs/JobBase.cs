@@ -103,7 +103,16 @@ namespace AgeOfJarls.AI.Jobs
 
         protected float Skill => Settler.Zdo?.GetFloat(Keys.SkillPrefix + Job.ToString().ToLowerInvariant()) ?? 0f;
 
-        protected void Problem(string token) => Settler.SetJobProblem(token);
+        /// <summary>Run at another totem than the settler's own (HomeRoutine lends it out): its problems are not the settler's job problems.</summary>
+        internal bool Helping;
+
+        protected void Problem(string token)
+        {
+            if (!Helping)
+            {
+                Settler.SetJobProblem(token);
+            }
+        }
 
         protected bool InZone(Vector3 point) => Utils.DistanceXZ(point, Totem.transform.position) <= Totem.Radius;
 

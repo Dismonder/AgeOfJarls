@@ -235,8 +235,9 @@ Każdy krok zapisuje w ZDO typ zadania, krok i cel (ZDOID), więc zadanie trwa d
   trafiła, straciła własność w międzyczasie) lub pole wskazuje serwer (`Settler.Requester`). Odmowa (szczebel) i
   „już tego nie ma” wracają do pytającego RPC `AoJ_SettlerNotify(token, argument)` — tylko tokeny `$aoj_*`.
 - **Strażnik (`AI/Escort`).** Osadnik podążający za graczem: prefix `BaseAI.Follow` zastępuje vanilla (prosto na
-  gracza, stop 3 m — często w kadrze) pozycją „przy ramieniu”: 2,5 m za graczem, 2 m w bok (strona z `Uid`), względem
-  `transform.forward` gracza. Histereza: gdy gracz idzie (prędkość z różnicy pozycji > 0,5 m/s), rusza, gdy punkt
+  gracza, stop 3 m — często w kadrze) pozycją „przy ramieniu”: miejsce w formacji z `Formation.EscortSlot` (numer
+  wśród podążających za tym graczem, po `Uid`, liczony co 0,5 s): pierwsza para 2,5 m za graczem i 2 m w bok, każda
+  następna para 2 m dalej i co druga 1 m szerzej, względem `transform.forward` gracza. Histereza: gdy gracz idzie (prędkość z różnicy pozycji > 0,5 m/s), rusza, gdy punkt
   odjedzie 2 m, i idzie za żywym punktem; gdy gracz stoi, obroty kamery go nie ruszają — idzie tylko, gdy jest w
   kadrze (stożek 60° przed graczem, bliżej niż 4 m) dłużej niż 1 s albo oddalił się od punktu > 5 m, i wtedy cel
   wyprawy jest zamrożony (nie krąży za obracającym się graczem). `MoveTo(dist 0)` kończy sam (0,5/1 m lub brak
@@ -246,6 +247,36 @@ Każdy krok zapisuje w ZDO typ zadania, krok i cel (ZDOID), więc zadanie trwa d
   `Character.RPC_Damage` na maszynie gracza → `Escort.Defend` u strażników symulowanych tam); cel dalej niż
   `Commands/GuardLeash` od gracza jest porzucany. Rozkazy gracza (`_orderedTarget`, odwrót) mają pierwszeństwo —
   wtedy strażnik nie wybiera celów.
+- **Taktyka oddziału (`AI/SquadTactics`).** Żołnierz w domu (rola ≠ None, bez lidera i rozkazu), co 0,5 s przed
+  vanilla: cele towarzyszy tej samej osady symulowanych na tej maszynie (`SettlerAI.CurrentTarget`) w 12 m → wynik =
+  ułamek zdrowia wroga − 0,03 na każdego towarzysza na nim; własny cel ma premię 0,1 (brak miotania się); najniższy
+  wynik → `RetargetTo` + `SetAlerted`. Bezczynny żołnierz w 12 m od walki dołącza. Po vanilla, w walce: łucznik z
+  sojusznikiem (osadnik, gracz) w pasie 0,9 m linii strzału (`Formation.InLineOfFire`) robi krok 2 m w bok
+  (`StepBack` przez 0,8 s, przerwa 2 s). Kiting (`CombatSense.AfterVanilla`): łucznik oddziału 5 m (inni 3,5 m),
+  w seriach 1,5 s cofania / 2,5 s stania i strzelania.
+- **Geometria ruchu (`AI/Formation`, testy `FormationTests`).** Czysta arytmetyka wektorów (bez wywołań silnika, więc
+  pod xunit): miejsca w eskorcie, omijanie (`Blocks`, `SteerAround` — obaj skręcają w swoją lewą), ustępowanie z drogi
+  (`WalksInto`, `StepAside`), linia strzału, obrót o kąt.
+- **Omijanie postaci (`PathMover.Steer`).** Co 0,25 s najbliższa postać przed osadnikiem (stożek cos 0,6, zasięg 1,8 m +
+  jej promień); jest → krok (`MoveTowards`) obrócony o 45° od jej strony; ścieżka bez zmian. Zacięcia: `StuckSeconds`
+  2,5 s, prześlizg przy meblach od pierwszego zacięcia (`StuckBeforeSlip` 1), skok nad punkt ścieżki od trzeciego.
+- **Ustępowanie graczowi (`AI/Courtesy`).** Co 0,2 s: gracz w 2,6 m idący na osadnika (> 0,8 m/s, cos ≥ 0,6) →
+  krok 1,6 m w bok, na stronę, po której osadnik już stoi (`Formation.StepAside`), przez 0,8 s prostym `MoveTowards`,
+  przerwa 2 s; nie w walce. Wołane na początku `HomeRoutine.UpdateInner` (przed noszeniem do skrzyni) i dla
+  podążających w `SettlerAI` przed zbieraniem łupu.
+- **Pomoc przy innym totemie (`HomeRoutine.Help`).** Własne zadanie bezczynne 15 s (`_jobIdleSince`) → totem tej
+  osady innego rodzaju zadania (ta sama instancja `JobBase` nie może obsłużyć dwóch totemów naraz), odblokowany, w
+  porze pracy, zasięg strefy ≤ promień osady + 60 m, nieodrzucony w ostatnich 90 s; najwyższy priorytet, potem
+  najbliższy. `JobBase.Helping` wycisza problemy zadania (nie są problemami przydziału). Własny totem pytany co
+  klatkę — gdy ma pracę, pomoc kończy się (`StopHelping`). 5 s bez pracy u pomaganego → odrzucony na 90 s.
+  `IsHome` liczy zasięg pomaganego totemu; `_keep` trzyma narzędzie pomaganego zadania; `ShouldStore` traktuje pomoc
+  jak pracę (limit noszenia), a po końcu pracy czeka 12 s (`IdleStoreDelaySeconds`) na nową, gdy w plecaku jest
+  jeszcze miejsce. `SettlementStorage.NextDestination`: skrzynia biorąca najwięcej sztuk z ładunku, remis → bliższa.
+- **Miejsce przy stole (`Settler.IdleSpot`).** Kotwica cywila = stół + punkt na pierścieniu 3,5 m pod kątem
+  `Uid · 137,5°` (złoty kąt); nocą łóżko, żołnierz na posterunku — bez zmian.
+- **Posiłki i rany.** `Needs.IsPeckish` = sytość < `HungryBelow` + 15; między zadaniami (`_jobIdle`, bez ładunku) lekki
+  posiłek `Eat(lightMeal)` tylko z plecaka lub kotła (bez skrzyń i zbieractwa, bez flagi głodu). `Recover`: wstaje przy
+  95% nocą lub bez zadania, przy 75% w dzień z zadaniem (`FitForWorkAbove`).
 - **Osadnicy na mapie (`UI/SettlerPins`).** Postfix `Minimap.UpdateMap` co 0,5 s: pinezka `PinType.Player` z imieniem
   dla każdego z `Settler.Loaded` (tylko wczytani na tej maszynie — pozycji dalszych nikt tu nie zna), pozycja
   aktualizowana z `m_pinUpdateRequired`, usuwana, gdy osadnik zniknie; nowa instancja `Minimap` = nowa sesja → słownik

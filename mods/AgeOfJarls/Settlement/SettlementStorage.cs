@@ -295,10 +295,17 @@ namespace AgeOfJarls.Settlement
             chest != null && chest.m_nview != null && chest.m_nview.IsValid() && !chest.IsInUse() &&
             chest.m_nview.GetZDO().GetInt(ZDOVars.s_inUse) == 0;
 
-        /// <summary>The chest to walk to next, or null; <paramref name="carrying"/> tells whether anything waits to be stored.</summary>
+        private static readonly Dictionary<Container, int> s_destinationLoad = new Dictionary<Container, int>();
+
+        /// <summary>
+        /// The chest to walk to next, or null; <paramref name="carrying"/> tells whether anything waits to be stored.
+        /// The chest that takes the most of the load (by pieces), the nearest among equals: one trip puts most of the
+        /// bag away, instead of a trip for whatever lies first in the bag and another for the rest.
+        /// </summary>
         internal static Container NextDestination(Inventory carried, List<Container> chests, Vector3 from, out bool carrying, Predicate<ItemDrop.ItemData> keep = null)
         {
             carrying = false;
+            s_destinationLoad.Clear();
             foreach (ItemDrop.ItemData item in carried.GetAllItems())
             {
                 if (!IsStorable(item) || (keep != null && keep(item)))
@@ -309,10 +316,25 @@ namespace AgeOfJarls.Settlement
                 Container chest = BestChestFor(item, chests, from);
                 if (chest != null)
                 {
-                    return chest;
+                    s_destinationLoad.TryGetValue(chest, out int load);
+                    s_destinationLoad[chest] = load + Mathf.Max(1, item.m_stack);
                 }
             }
-            return null;
+            Container best = null;
+            int bestLoad = 0;
+            float bestSqr = float.MaxValue;
+            foreach (KeyValuePair<Container, int> entry in s_destinationLoad)
+            {
+                float sqr = (entry.Key.transform.position - from).sqrMagnitude;
+                if (entry.Value > bestLoad || (entry.Value == bestLoad && sqr < bestSqr))
+                {
+                    best = entry.Key;
+                    bestLoad = entry.Value;
+                    bestSqr = sqr;
+                }
+            }
+            s_destinationLoad.Clear();
+            return best;
         }
 
         internal static bool HasDestination(ItemDrop.ItemData item, List<Container> chests, Vector3 from) =>
