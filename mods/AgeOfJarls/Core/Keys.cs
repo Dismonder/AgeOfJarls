@@ -33,8 +33,14 @@ namespace AgeOfJarls.Core
         internal const string RpcChestKind = "AoJ_ChestKind";
         /// <summary>On a settler: hand one item (or part of a stack) to the asking player (Settler.RPC_TakeItem).</summary>
         internal const string RpcSettlerTakeItem = "AoJ_SettlerTakeItem";
-        /// <summary>Routed to one peer: items for its player, into the bag or at its feet (Net.ItemDelivery).</summary>
-        internal const string RpcReceiveItems = "AoJ_ReceiveItems";
+        /// <summary>On a settler, to the asking peer: a parcel for its player, into the bag or at its feet (Net.ItemDelivery).</summary>
+        internal const string RpcSettlerDeliver = "AoJ_SettlerDeliver";
+        /// <summary>On a settler, back to its owner: the parcel with this id arrived (Net.ItemDelivery).</summary>
+        internal const string RpcSettlerDelivered = "AoJ_SettlerDelivered";
+        /// <summary>On a settler, to the asking peer: a message for its player (a token and one argument).</summary>
+        internal const string RpcSettlerNotify = "AoJ_SettlerNotify";
+        /// <summary>On a settler: come along through the portal its leader just took - to this spot (Settler.RPC_Teleport).</summary>
+        internal const string RpcSettlerTeleport = "AoJ_SettlerTeleport";
 
         /// <summary>Chest: the kind of things settlers put in it (a storage.json kind or a built-in one); "" = anything.</summary>
         internal static readonly int ZdoChestKind = "aoj_chest_kind".GetStableHashCode();

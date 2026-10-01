@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.7.1
+
+- **Fixed:** taking an item (or the whole bag) from a settler your own machine simulates gave nothing and put the
+  items back into its bag - the parcel was read from its end. Now it lands in your inventory as in co-op.
+- A guard stands still while you stand and look around, however you turn; it only steps behind you after a second
+  in your view, or when you have moved away from it. Before, every turn of the camera sent it walking around you.
+- A settler on its way to a portal no longer flips its activity (and a network update) every frame.
+- A follower's portal jump asked through another machine (the settler changed hands on the way) is no longer
+  refused; the request carries who asked, like the item requests do.
+- A settler re-homed to another settlement asks its old roster to drop it every ten seconds, not every second.
+
+## 0.7.0
+
+- Co-op: taking items from a settler works for every player, not only for the one whose machine simulates the
+  settler. The items travel by a message on the settler itself, which every machine with the mod handles; the mod no
+  longer depends on a world-start hook that another mod's broken hook could cancel (seen with M182 Admin Panel: the
+  world loaded, but one machine ignored everything the others sent it). The settler's owner keeps the parcel until the
+  asking player's machine confirms it arrived; if nothing comes back in 6 s, the items go back into the settler's bag.
+  Nothing can vanish on the way any more.
+- **A follower is your guard.** It walks at your shoulder - a little behind, to one side, each settler its own side -
+  instead of straight at you and into the camera, and does not fidget while you stand and look around (only after a
+  second in your way does it step behind you). It fights for you, not for itself: the enemy nearest you, first of
+  all one going for you or one that just hit you (`Commands/GuardRange`, 15 m), and it breaks off a fight that gets
+  farther than `Commands/GuardLeash` (30 m) from you and comes back instead of chasing into the woods. Your own
+  orders (attack, fall back) still come first.
+- **Portals module.** Your own jump is quicker: `Portals/PlayerTeleportSeconds` (0.5 s in the dark instead of 2)
+  and `Portals/DistantLoadSeconds` (2 s instead of 6 once the far side is loaded). Settlers use portals on their own
+  (`Portals/SettlerPortals`): every trip a settler makes - to a chest, a tree, a station, its bed, home from afar -
+  goes through a portal within 80 m when the portal's far end lands much closer to the goal (at least 60 m saved),
+  and comes back the same way. A settler left far from its settlement takes a portal home if one leads there.
+- **Areas on the map.** On the big map press **Z** (`Commands/ZoneKey`) over a spot: a window marks an area of the
+  nearest loaded settlement of yours (Hersir and up) - a **warehouse**, whose chests the settlers fill and empty like
+  the ones at home (a warehouse behind a portal works: they go through it), or any other named area; Z over an
+  existing area edits or removes it. Areas are drawn on the map (warehouse blue, others green, with their names)
+  next to the settlement circle, and saved with the settlement (settlement format 6).
+  Mind the game: settlers only act where the world is loaded, around the players - a warehouse far from everybody
+  waits until somebody is near it.
+- **Updates itself.** In the main menu the mod looks at its update page (`Updates/Url`, a Cloudflare Pages site),
+  downloads a newer version, checks its SHA-256 and puts the files in place for the next start of the game; a message
+  in the game says when a restart is due. Off with `Updates/AutoUpdate`. Everyone on a server stays on the same
+  version this way. (This version still has to be installed by hand once.)
+- **A settler whose Jarl's Table was destroyed far away can be taken into another settlement**: a follower whose
+  table is not standing where you are may be accepted, and it adopts the new home from that table's roster; its old
+  roster, if that table still exists, drops it when the settler comes near. A follower whose table stands here
+  is named in the message instead of "nobody follows you".
+- Guards leave deer and boars alone unless one attacks the player; map pins respect the map's player filter;
+  a settler sent through a portal takes no fall damage from the height it left.
+- **Followers take portals with you.** Settlers following you within 20 m are at the other side when you step out
+  (knocked-out and captive ones stay). Off with `Settlers/FollowThroughPortals`.
+- The same endless-loop crash fix covers the Jarl's Table, totems, war banners and chest labels: a settings change
+  on one nobody simulates for a moment takes it over instead of broadcasting.
+- **Settlers on the map.** Every settler loaded around you is on the map like another player - the player icon with
+  the settler's name - in gold (`UI/SettlerPinColor`), so it is not taken for a player; off with `UI/SettlerPins`.
+  The map's player filter hides them with the players. Settlers beyond the loaded zones are not shown: nothing on
+  your machine knows where they are.
+- **Take everything back** hands the whole bag into your inventory, like **Take** does with one item (what does not
+  fit lies at your feet), instead of dropping it on the ground.
+- A refused request (rank too low) or an item that is no longer there tells the asking player why, also when the
+  settler is simulated elsewhere.
+- **Crash fixed:** an order (wheel, H key, window) to a settler nobody simulates for a moment - its owner just left
+  the area, the server has not handed it to anybody yet - sent the game into an endless loop and closed it. Such a
+  settler is now taken over by the player giving the order. A request passed back and forth between two machines
+  is dropped after 10 a second instead of looping.
+- Everyone on a server needs 0.7.0 (new network messages).
+
 ## 0.6.0
 
 - Settlers defend themselves: an enemy swinging at a settler meets its raised shield (or its weapon, as a player

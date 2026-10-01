@@ -22,7 +22,9 @@ namespace AgeOfJarls
         {
             Log.Init(Logger);
             AoJConfig.Bind(Config);
-            ModPaths.Init(Path.GetDirectoryName(Info.Location));
+            string pluginDir = Path.GetDirectoryName(Info.Location);
+            ModPaths.Init(pluginDir);
+            AutoUpdate.Init(this, pluginDir);
 
             TranslationLoader.Load();
             DefsRegistry.LoadLocal();
@@ -38,6 +40,11 @@ namespace AgeOfJarls
             _harmony.PatchAll(typeof(Plugin).Assembly);
 
             Log.Info("Core", $"{PluginInfo.Name} {PluginInfo.Version} loaded");
+        }
+
+        private void Update()
+        {
+            ItemDelivery.Update();
         }
 
         private void OnDestroy()

@@ -18,5 +18,21 @@ namespace AgeOfJarls.Net
             }
             return null;
         }
+
+        /// <summary>Peer id of the server: this machine on the host, the server on a client; 0 while not connected.</summary>
+        internal static long ServerPeerId()
+        {
+            ZNet net = ZNet.instance;
+            if (net == null)
+            {
+                return 0L;
+            }
+            if (net.IsServer())
+            {
+                return ZDOMan.GetSessionID();
+            }
+            ZNetPeer server = net.GetServerPeer();
+            return server != null ? server.m_uid : 0L;
+        }
     }
 }

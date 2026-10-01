@@ -124,9 +124,8 @@ namespace AgeOfJarls.Army
 
         private void RPC_SetKind(long sender, int kind)
         {
-            if (!_nview.IsOwner())
+            if (!Net.OwnerRpc.Handles(_nview, Keys.RpcBannerConfig, kind))
             {
-                _nview.InvokeRPC(Keys.RpcBannerConfig, kind);
                 return;
             }
             if (!MayManage(Peers.FindPlayer(sender)) || kind < 0 || kind > (int)BannerKind.Shelter)

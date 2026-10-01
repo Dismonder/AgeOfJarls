@@ -335,9 +335,8 @@ namespace AgeOfJarls.Work
 
         private void RPC_Config(long sender, ZPackage package)
         {
-            if (!_nview.IsOwner())
+            if (!Net.OwnerRpc.Handles(_nview, Keys.RpcTotemConfig, package))
             {
-                _nview.InvokeRPC(Keys.RpcTotemConfig, package);
                 return;
             }
             try

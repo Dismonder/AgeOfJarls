@@ -43,6 +43,27 @@ namespace AgeOfJarls.AI
         /// <summary>A few running steps to a point (an archer backing away): vanilla's own path following.</summary>
         internal void StepBack(float dt, Vector3 point) => MoveTo(dt, point, 0.5f, true);
 
+        private Escort _escort;
+        private PortalTravel _portals;
+        private bool _travelling;
+
+        /// <summary>Following as a player's guard (owner only; null before the first AI frame).</summary>
+        internal Escort Escort => _escort;
+
+        internal Character Body => m_character;
+
+        internal Character CurrentTarget => m_targetCreature;
+
+        /// <summary>Vanilla's path following to a point; true once there (within half a metre, one at a run) or with no path.</summary>
+        internal bool MoveToPoint(float dt, Vector3 point, float dist, bool run) => MoveTo(dt, point, dist, run);
+
+        internal void Halt() => StopMoving();
+
+        internal void CalmDown() => SetAlerted(false);
+
+        /// <summary>Keeps vanilla from looking for a target of its own for this long (the guard picks them).</summary>
+        internal void HoldVanillaTargeting(float seconds) => m_updateTargetTimer = Mathf.Max(m_updateTargetTimer, seconds);
+
         /// <summary>The enemy striking it becomes its target, like vanilla's own retarget on damage - before the hit.</summary>
         internal void RetargetTo(Character target)
         {
@@ -84,6 +105,15 @@ namespace AgeOfJarls.AI
             // Before vanilla: its targeting then sees the ordered target (or none) and keeps it, since the
             // retarget timer is held back while an order stands.
             ApplyOrders();
+            // A guard fights for the player it follows: its target comes from the escort, not from vanilla's search.
+            if (_escort != null && _orderedTarget == null && Time.time >= _ceaseFireUntil)
+            {
+                Player leader = Leader;
+                if (leader != null)
+                {
+                    _escort.UpdateTargeting(dt, leader);
+                }
+            }
             // Blocks and the striker as target before vanilla swings: a swing of its own would cancel the block.
             _sense?.Update(dt);
             long perf = Perf.Start();
@@ -174,10 +204,23 @@ namespace AgeOfJarls.AI
             bool calm = IsCalm();
             if (calm && _settler.IsAtHome)
             {
-                _home.Update(dt);
+                // Far from home with a portal into the settlement nearby: the portal, otherwise the home routine.
+                // The routine is stopped once, when the trip begins: Stop() each frame would flip the activity
+                // (and its ZDO value) between idle and returning every frame.
+                bool travelling = _portals.Update(dt);
+                if (travelling && !_travelling)
+                {
+                    _home.Stop();
+                }
+                _travelling = travelling;
+                if (!travelling)
+                {
+                    _home.Update(dt);
+                }
             }
             else
             {
+                _travelling = false;
                 _home.Stop();
                 Player leader = calm ? Leader : null;
                 if (leader != null)
@@ -204,6 +247,8 @@ namespace AgeOfJarls.AI
             _mover = new PathMover(this);
             _sense = new CombatSense(this, character, _settler);
             _loot = new LootCollector(this, character, _mover);
+            _escort = new Escort(this, _settler);
+            _portals = new PortalTravel(this, _settler, _mover);
             var context = new Jobs.JobContext { Ai = this, Settler = _settler, Body = character, Mover = _mover, Loot = _loot };
             var duty = new SoldierDuty(this, _settler, character, _mover);
             _home = new HomeRoutine(this, _settler, character, _mover, _loot, duty, job => CreateJob(job, context));

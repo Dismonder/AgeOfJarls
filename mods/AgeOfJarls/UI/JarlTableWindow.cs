@@ -717,7 +717,7 @@ namespace AgeOfJarls.UI
         // Read-only: every machine has the chests of a loaded settlement with their current contents.
         private void RefreshStorage(SettlementData data)
         {
-            SettlementStorage.CollectChests(_table.transform.position, JarlTable.RadiusOf(data), _chests);
+            SettlementStorage.CollectChests(_table.transform.position, JarlTable.RadiusOf(data), data, _chests);
             if (_chests.Count == 0)
             {
                 _totals.text = Localize("$aoj_storage_none");

@@ -3,7 +3,7 @@
     <AssemblyName>AgeOfJarls</AssemblyName>
     <RootNamespace>AgeOfJarls</RootNamespace>
     <!-- Must be plain x.y.z (BepInEx parses it with System.Version). -->
-    <Version>0.6.0</Version>
+    <Version>0.7.1</Version>
     <Description>Settlements, settlers, work, sieges and co-op management for Valheim</Description>
     <!-- true = reference Jotunn.dll and define the JOTUNN symbol. -->
     <UseJotunn>true</UseJotunn>
@@ -25,5 +25,8 @@
     <Reference Include="$(ManagedDir)Newtonsoft.Json.dll" Private="false" />
     <!-- Ships with the game; some vanilla signatures (Minimap.AddPin) name its PlatformUserID type. -->
     <Reference Include="$(ManagedDir)Splatform.dll" Private="false" />
+    <!-- Framework assemblies the game's Mono ships (valheim_DataManaged); the auto-updater unpacks its zip with them. -->
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
 </Project>

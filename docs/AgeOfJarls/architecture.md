@@ -225,9 +225,84 @@ Każdy krok zapisuje w ZDO typ zadania, krok i cel (ZDOID), więc zadanie trwa d
   maszynie, właściciel zapisuje przy zmianie). `SettlementStorage.BestChestFor` i `Rank` czytają opis, nie inwentarz;
   `StoreInto` po każdym przedmiocie unieważnia opis (`Touch`). Na każdej maszynie ten sam obraz, więc osadnicy obu
   graczy sortują tak samo. Etykieta skrzyni bez przypisania pokazuje, za co osadnicy ją mają („zawiera: drewno”).
-- **Oddawanie przedmiotów (`Net/ItemDelivery`).** Okno osadnika prosi RPC `AoJ_SettlerTakeItem` (nazwa, jakość,
-  założone, ilość); właściciel osadnika zdejmuje/wyjmuje i wysyła paczkę routowanym RPC `AoJ_ReceiveItems` do peera
-  pytającego (lokalnie od razu); odbiorca wkłada do plecaka gracza, reszta ląduje u stóp.
+- **Oddawanie przedmiotów (`Net/ItemDelivery`).** Okno osadnika prosi RPC `AoJ_SettlerTakeItem` (id pytającego
+  peera + ciało: nazwa, jakość, założone, ilość) albo `AoJ_SettlerTakeBack` (cały plecak); właściciel osadnika
+  zdejmuje/wyjmuje i wysyła paczkę RPC **na osadniku** `AoJ_SettlerDeliver(id, paczka)` do peera pytającego (lokalnie
+  od razu); odbiorca wkłada do plecaka gracza, reszta ląduje u stóp, i odpowiada `AoJ_SettlerDelivered(id)`.
+  Właściciel trzyma paczkę do potwierdzenia: bez odpowiedzi w 6 s (`Plugin.Update` → `ItemDelivery.Update`) przedmioty
+  wracają do plecaka osadnika (`Settler.TakeBackParcel`), a gdy osadnik zniknął z tej maszyny — na ziemię, gdzie stał.
+  Tożsamość pytającego to nadawca z sieci; z pola w paczce tylko wtedy, gdy prośbę przekazał serwer (maszyna, do której
+  trafiła, straciła własność w międzyczasie) lub pole wskazuje serwer (`Settler.Requester`). Odmowa (szczebel) i
+  „już tego nie ma” wracają do pytającego RPC `AoJ_SettlerNotify(token, argument)` — tylko tokeny `$aoj_*`.
+- **Strażnik (`AI/Escort`).** Osadnik podążający za graczem: prefix `BaseAI.Follow` zastępuje vanilla (prosto na
+  gracza, stop 3 m — często w kadrze) pozycją „przy ramieniu”: 2,5 m za graczem, 2 m w bok (strona z `Uid`), względem
+  `transform.forward` gracza. Histereza: gdy gracz idzie (prędkość z różnicy pozycji > 0,5 m/s), rusza, gdy punkt
+  odjedzie 2 m, i idzie za żywym punktem; gdy gracz stoi, obroty kamery go nie ruszają — idzie tylko, gdy jest w
+  kadrze (stożek 60° przed graczem, bliżej niż 4 m) dłużej niż 1 s albo oddalił się od punktu > 5 m, i wtedy cel
+  wyprawy jest zamrożony (nie krąży za obracającym się graczem). `MoveTo(dist 0)` kończy sam (0,5/1 m lub brak
+  ścieżki). Cele: co 0,5 s przed vanilla (`HoldVanillaTargeting` trzyma
+  `m_updateTargetTimer`, więc vanilla nie szuka sam) — wróg najbliżej **gracza** w `Commands/GuardRange`, premia dla
+  tego, który celuje w gracza (`MonsterAI.GetTargetCreature`) i dla tego, który trafił gracza (prefix
+  `Character.RPC_Damage` na maszynie gracza → `Escort.Defend` u strażników symulowanych tam); cel dalej niż
+  `Commands/GuardLeash` od gracza jest porzucany. Rozkazy gracza (`_orderedTarget`, odwrót) mają pierwszeństwo —
+  wtedy strażnik nie wybiera celów.
+- **Osadnicy na mapie (`UI/SettlerPins`).** Postfix `Minimap.UpdateMap` co 0,5 s: pinezka `PinType.Player` z imieniem
+  dla każdego z `Settler.Loaded` (tylko wczytani na tej maszynie — pozycji dalszych nikt tu nie zna), pozycja
+  aktualizowana z `m_pinUpdateRequired`, usuwana, gdy osadnik zniknie; nowa instancja `Minimap` = nowa sesja → słownik
+  czyszczony. Gra w `UpdatePins` maluje każdą pinezkę na biało przy każdym przerysowaniu, więc postfix `UpdatePins`
+  nadaje naszym kolor `UI/SettlerPinColor` (ikona i tekst). Filtr ikon mapy „gracze” ukrywa je razem z graczami.
+- **Portale (`Settlers/PortalFollow`).** Postfix `Player.TeleportTo` na maszynie gracza (gra przenosi gracza dopiero
+  po 2 s): podążający osadnicy w 20 m (nie powaleni, nie jeńcy) dostają `Settler.RequestTeleport(cel)` — właściciel
+  (tu, albo przez RPC `AoJ_SettlerTeleport(id pytającego + ciało: cel)` w formacie `Request`/`Requester` jak prośby
+  o przedmioty, przyjmowany tylko od maszyny gracza, za którym osadnik idzie) ustawia
+  `transform`, `m_body` i `ZDO.SetPosition` na punkt 2 m od wyjścia portalu (wysokość z `GetGroundHeight`, jeśli strefa
+  wczytana). Gdy strefa nie jest wczytana u właściciela, instancja znika, ZDO niesie nową pozycję i osadnik pojawia
+  się, gdy gracz tam dotrze.
+- **Właściciel obiektu dla kawałków (`Net/OwnerRpc`).** `JarlTable.RPC_Action`, `WorkTotem.RPC_Config`,
+  `WarBanner.RPC_SetKind`, `ChestLabels.RPC_SetKind` używają tego samego schematu co osadnik: obiekt bez właściciela
+  jest przejmowany, przekazanie dalej ograniczone do 10/s na ZDOID.
+- **Aktualizacje (`Core/AutoUpdate`, `tools/publish-update.ps1`).** Strona Cloudflare Pages `aoj-updates`
+  (https://aoj-updates.pages.dev, konto dismonder@gmail.com, wrangler zalogowany OAuth) z `manifest.json` (version,
+  url, sha256, notes), zipem Thunderstore i `index.html` z szablonu `cloud/aoj-updates/template.html`;
+  `_headers` wyłącza cache manifestu. Mod w `FejdStartup.Start` (menu główne: start i powrót ze świata, nie częściej
+  niż co 10 min) pobiera manifest przez `UnityWebRequest`, porównuje `System.Version`, pobiera zip (≤ 50 MB),
+  sprawdza SHA-256, rozpakowuje wpisy `plugins/AgeOfJarls/` (`System.IO.Compression` z Mono gry): plik zapisywany obok
+  jako `.new`, zajęty cel (DLL) przemianowany na `.old` (Windows pozwala przemianować załadowaną DLL), `.old` kasowane
+  przy następnym starcie. Komunikat `$aoj_msg_update_ready` po wejściu do świata (`Player.OnSpawned`). Opcje
+  `Updates/AutoUpdate`, `Updates/Url`. Publikacja: `pwsh tools/publish-update.ps1 AgeOfJarls` (pakuje, generuje stronę,
+  `wrangler pages deploy`). Vortex: folder `plugins/AgeOfJarls` nie jest zarządzany przez Vortex, więc podmiana trzyma.
+- **Dom po zniszczonym stole.** `Settler.UpdateHome`: gdy stół domu nie jest wczytany, a inny wczytany stół ma
+  osadnika na liście → adopcja (`AdoptListedHome` zwraca bool); gdy stół domu jest wczytany, a inny wczytany stół
+  wciąż go listuje → `RequestRemoveSettler` (raport właściciela). `JarlTable` przyjmuje podążających, których stół nie
+  jest tu wczytany (`FindById == null`), a tych ze stołem na miejscu wymienia w komunikacie
+  `$aoj_msg_followers_have_home`.
+- **Moduł portali (`Portals/`).** `PortalPatches`: prefix `Player.UpdateTeleport` przyspiesza licznik gry (faza
+  ciemności 2 s → `Portals/PlayerTeleportSeconds`, czekanie 6 s po dalekim skoku → `DistantLoadSeconds`); warunki gry
+  (strefa wczytana, podłoga) zostają. `PortalRoutes`: wczytane `TeleportWorld` (skan co 5 s), wyjście jak u gracza
+  (`GetConnectionZDOID` → ZDO celu, 1 m przed nim), `FindRoute` (cel w promieniu) i `FindShortcut` (droga przez portal
+  krótsza o ≥ 60 m). **Noga portalowa w `PathMover.MoveTo`**: cel dalej niż 120 m → co 5 s szukanie skrótu; jest →
+  marsz do wejścia (`MoveDirect`), przy portalu `Settler.JumpTo(exit)` i ścieżka od nowa po drugiej stronie;
+  `Blocked` → rezygnacja na 60 s. Każde zadanie korzysta (skrzynie, drzewa, stacje, łóżko), więc magazyn za portalem
+  jest osiągany i opuszczany przez portal. `AI/PortalTravel` dodatkowo prowadzi do domu osadnika, którego stół nie
+  jest tu wczytany (wtedy `HomeRoutine` nie działa). Ograniczenie gry: osadnicy działają tylko w strefach wczytanych
+  wokół graczy.
+- **Obszary osady (`SettlementZone`, format 6).** Lista stref w `SettlementData.Zones` (id, nazwa, rodzaj
+  warehouse/other, środek, promień 5–80 m, maks. 16, ≤ 400 m od stołu); akcje `SetZone`/`RemoveZone` (Hersir+,
+  właściciel stołu nadaje id `Keys.NewId`). `JarlTable.Contains` = promień stołu lub strefa; `FindContaining` z tego
+  korzysta (etykiety skrzyń). `SettlementStorage.CollectChests(center, radius, data, chests)` zbiera skrzynie też ze
+  stref (bez duplikatów) — HomeRoutine, JobBase, SettlementSim, okno stołu. Mapa: `UI/ZoneWindow` — postfix
+  `Minimap.UpdateMap` w trybie dużej mapy, klawisz `Commands/ZoneKey` (Z) nad mapą → `ScreenToWorldPoint(pointer)`;
+  strefa pod kursorem → edycja, inaczej nowa w najbliższej wczytanej osadzie z prawem Manage. `UI/SettlementPins`
+  rysuje koło osady i strefy (pinezki `EventArea` z `m_worldSize`, niebieskie/zielone, z nazwą).
+- **RPC na osadniku zamiast routowanych globalnie.** Odbiór paczki rejestruje `Settler.Awake` na każdej maszynie, więc
+  nie zależy od postfixu `ZNet.Awake`. Routowane RPC bez obiektu (`AoJ_AlarmPin`) rejestruje `Net/RoutedRpcs` w
+  postfixie **konstruktora `ZRoutedRpc`** i ponownie (idempotentnie, `m_functions.ContainsKey`) po `ZNet.Awake`:
+  rzucający postfix innego moda (M182 Admin Panel, patrz `StartupGuard`) przerywa postfixy po nim i maszyna bez
+  rejestracji po cichu ignoruje, co inni do niej wysyłają.
+- **Osadnik bez właściciela.** Każda prośba do właściciela (`Settler.OwnerHandles`, `ClaimIfOwnerless`) najpierw
+  przejmuje osadnika, którego nikt nie symuluje (`HasOwner()` false — właściciel właśnie wyszedł ze strefy), i od razu
+  wczytuje plecak z ZDO (`OnBecameOwner`). Inaczej `InvokeRPC` do właściciela 0 to rozgłoszenie do wszystkich, które
+  każda maszyna przekazałaby dalej (zdublowana obsługa).
 - **Alarm bez fałszywych.** Automatyczny alarm po ≥ `Sieges/AlarmMinThreats` zaalarmowanych wrogach w osadzie przez
   4 s i nie wcześniej niż `AlarmCooldownSeconds` po poprzednim; oblężenie uruchamia od razu.
 - **Skala okien.** `UI/Scale` to `localScale` panelu Jotunn (przycięte do rozmiaru canvasu), więc układ i teksty

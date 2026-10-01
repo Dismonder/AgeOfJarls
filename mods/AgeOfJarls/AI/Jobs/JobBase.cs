@@ -298,7 +298,7 @@ namespace AgeOfJarls.AI.Jobs
                 Settlement.JarlTable table = Settler.HomeTable;
                 if (table != null && table.Data != null)
                 {
-                    Settlement.SettlementStorage.CollectChests(table.transform.position, Settlement.JarlTable.RadiusOf(table.Data), _chests);
+                    Settlement.SettlementStorage.CollectChests(table.transform.position, Settlement.JarlTable.RadiusOf(table.Data), table.Data, _chests);
                 }
                 else
                 {

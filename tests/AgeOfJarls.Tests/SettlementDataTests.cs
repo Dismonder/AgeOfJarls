@@ -18,7 +18,32 @@ namespace AgeOfJarls.Tests
             data.Members.Add(new SettlementMember { PlayerId = Friend, Name = "Lagertha", Role = SettlementRole.Hersir });
             data.Settlers.Add(new RosterEntry { Uid = 11, Name = "Tove", HasBed = true, BedPosition = new Vector3(1.5f, 2f, -3.25f) });
             data.Settlers.Add(new RosterEntry { Uid = 12, Name = "Eir" });
+            data.Zones.Add(new SettlementZone { Id = 77, Name = "Magazyn", Kind = SettlementZone.KindWarehouse, Center = new Vector3(120f, 30f, -40f), Radius = 20f });
             return data;
+        }
+
+        [Fact]
+        public void ZonesRoundTripAndAreClamped()
+        {
+            SettlementData copy = SettlementData.Deserialize(Sample().Serialize());
+
+            Assert.NotNull(copy);
+            SettlementZone zone = Assert.Single(copy.Zones);
+            Assert.Equal(77, zone.Id);
+            Assert.Equal("Magazyn", zone.Name);
+            Assert.Equal(SettlementZone.KindWarehouse, zone.Kind);
+            Assert.Equal(new Vector3(120f, 30f, -40f), zone.Center);
+            Assert.Equal(20f, zone.Radius);
+            Assert.True(zone.Contains(new Vector3(130f, 0f, -45f)));
+            Assert.False(zone.Contains(new Vector3(150f, 0f, -45f)));
+
+            Assert.True(copy.SetZone(new SettlementZone { Id = 77, Name = "<b>Big</b>", Kind = "weird", Radius = 500f }));
+            zone = Assert.Single(copy.Zones);
+            Assert.Equal("bBig/b", zone.Name);
+            Assert.Equal(SettlementZone.KindOther, zone.Kind);
+            Assert.Equal(SettlementZone.MaxRadius, zone.Radius);
+            Assert.True(copy.RemoveZone(77));
+            Assert.Empty(copy.Zones);
         }
 
         [Fact]

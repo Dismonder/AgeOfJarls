@@ -11,7 +11,15 @@ server and in co-op. Works in new **and existing** worlds.
   attack, fall back, go home or open its window; press H looking elsewhere for your squad's orders, with the creature
   in your sight as the attack target. The game's wheel (G) has the same squad orders under *Commands*. By default a
   settler is **knocked out, not killed**: it gets up with its gear (permanent death is an option). Its window's
-  Equipment tab takes single items back (**Take** / **Take 1**), worn gear included.
+  Equipment tab takes single items back (**Take** / **Take 1**) or the whole bag, worn gear included, straight into
+  your inventory - also in co-op, whichever machine simulates the settler. A settler that follows you is your
+  **guard**: it keeps to your shoulder, out of the camera, and fights the enemies that come for you - never farther
+  from you than `Commands/GuardLeash`. Settlers around you are on the map like players, in gold. The mod **updates
+  itself** from its update page (https://aoj-updates.pages.dev) in the main menu and asks for a restart; off with
+  `Updates/AutoUpdate`. **Portals:** your jump is quicker, your followers come along, and settlers take a portal on
+  their own when it shortens a trip. **Areas:** press **Z** on the big map to mark a warehouse (its chests count as
+  the settlement's, also behind a portal) or any named area of your settlement; the map shows the settlement circle
+  and its areas.
 - **They fight like you do** — a settler raises its shield (or weapon) against a blow about to land, times it for a
   perfect block once it has learned the creature's wind-up, turns on the enemy striking it, fights with the weapon of
   its role (bow from afar, melee up close) and backs off when caught with only a bow in hand.

@@ -93,6 +93,26 @@ namespace AgeOfJarls.Settlement
         internal static void CollectChests(Vector3 center, float radius, List<Container> chests)
         {
             chests.Clear();
+            AddChests(center, radius, chests);
+        }
+
+        /// <summary>The settlement's chests: inside the table's radius and inside every area marked on its map.</summary>
+        internal static void CollectChests(Vector3 center, float radius, SettlementData data, List<Container> chests)
+        {
+            chests.Clear();
+            AddChests(center, radius, chests);
+            if (data == null)
+            {
+                return;
+            }
+            foreach (SettlementZone zone in data.Zones)
+            {
+                AddChests(zone.Center, zone.Radius, chests);
+            }
+        }
+
+        private static void AddChests(Vector3 center, float radius, List<Container> chests)
+        {
             s_pieces.Clear();
             Piece.GetAllPiecesInRadius(center, radius, s_pieces);
             foreach (Piece piece in s_pieces)
@@ -101,7 +121,7 @@ namespace AgeOfJarls.Settlement
                 Container chest = piece.GetComponent<Container>();
                 if (chest != null && chest.m_privacy == Container.PrivacySetting.Public &&
                     piece.GetComponent<Incinerator>() == null && piece.GetComponent<Army.Armory>() == null &&
-                    chest.m_nview != null && chest.m_nview.IsValid() && !IsInputChest(chest))
+                    chest.m_nview != null && chest.m_nview.IsValid() && !IsInputChest(chest) && !chests.Contains(chest))
                 {
                     chests.Add(chest);
                 }

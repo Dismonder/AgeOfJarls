@@ -135,7 +135,89 @@ namespace AgeOfJarls.AI
             }
         }
 
+        /// <summary>A goal this far away is worth a look for a portal that shortens the way.</summary>
+        private const float PortalWorthDistance = 120f;
+        /// <summary>A portal leg must save at least this much walking.</summary>
+        private const float PortalMinSaving = 60f;
+        private const float PortalJumpDistance = 1.6f;
+        private const float PortalCheckSeconds = 5f;
+        private const float PortalRetrySeconds = 60f;
+
+        private Portals.PortalRoutes.Route _portalLeg;
+        private float _portalCheckAt;
+
+        /// <summary>
+        /// To the goal, through a portal when one nearby lands much closer to it (Portals/SettlerPortals): the trip
+        /// to the portal is a leg of its own, the jump happens at the portal, and the path goes on from the far side.
+        /// Every trip a settler makes - to a chest, a tree, a station, its bed - gets this, so a warehouse behind a
+        /// portal is reached and left through it.
+        /// </summary>
         internal MoveResult MoveTo(float dt, Vector3 goal, float stopDistance, float reach, bool run)
+        {
+            if (_portalLeg == null)
+            {
+                if (Time.time >= _portalCheckAt && Utils.DistanceXZ(goal, _ai.transform.position) > PortalWorthDistance &&
+                    Core.AoJConfig.SettlerPortals != null && Core.AoJConfig.SettlerPortals.Value)
+                {
+                    _portalCheckAt = Time.time + PortalCheckSeconds;
+                    _portalLeg = Portals.PortalRoutes.FindShortcut(_ai.transform.position, goal, PortalMinSaving);
+                    if (_portalLeg != null)
+                    {
+                        ResetPath();
+                        if (AiTrace.On)
+                        {
+                            AiTrace.Write(_ai, $"portal '{_portalLeg.Tag}' on the way, {Vector3.Distance(_ai.transform.position, _portalLeg.Entrance):0} m to it");
+                        }
+                    }
+                }
+                if (_portalLeg == null)
+                {
+                    return MoveDirect(dt, goal, stopDistance, reach, run);
+                }
+            }
+
+            Portals.PortalRoutes.Route leg = _portalLeg;
+            if (leg.Portal == null || !Portals.PortalRoutes.TryGetExit(leg.Portal, out Vector3 exit))
+            {
+                DropPortalLeg();
+                return MoveDirect(dt, goal, stopDistance, reach, run);
+            }
+            leg.Exit = exit;
+            Vector3 portalPosition = leg.Portal.transform.position;
+            if (Vector3.Distance(_ai.transform.position, portalPosition) <= PortalJumpDistance)
+            {
+                var settler = _ai.GetComponent<Settlers.Settler>();
+                _portalLeg = null;
+                _portalCheckAt = Time.time + PortalCheckSeconds;
+                ResetPath();
+                if (settler != null)
+                {
+                    settler.JumpTo(exit, $"the portal '{leg.Tag}'");
+                }
+                return MoveResult.Moving;
+            }
+            MoveResult toPortal = MoveDirect(dt, leg.Entrance, PortalJumpDistance * 0.5f, 2.5f, true);
+            if (toPortal == MoveResult.Blocked)
+            {
+                DropPortalLeg();
+                return MoveResult.Moving;
+            }
+            if (toPortal == MoveResult.Arrived)
+            {
+                // At the spot in front of it but not on it yet: the last step straight at the portal.
+                _ai.MoveTowards((portalPosition - _ai.transform.position).normalized, false);
+            }
+            return MoveResult.Moving;
+        }
+
+        private void DropPortalLeg()
+        {
+            _portalLeg = null;
+            _portalCheckAt = Time.time + PortalRetrySeconds;
+            ResetPath();
+        }
+
+        private MoveResult MoveDirect(float dt, Vector3 goal, float stopDistance, float reach, bool run)
         {
             _lastMoveTime = Time.time;
             Vector3 position = _ai.transform.position;
@@ -208,6 +290,12 @@ namespace AgeOfJarls.AI
 
         /// <summary>The goal changed or the trip ended: forget the route and close a door left open behind.</summary>
         internal void Reset()
+        {
+            _portalLeg = null;
+            ResetPath();
+        }
+
+        private void ResetPath()
         {
             _path.Clear();
             _hasPath = false;

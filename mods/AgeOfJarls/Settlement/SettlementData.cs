@@ -46,11 +46,37 @@ namespace AgeOfJarls.Settlement
         internal Vector3 BedPosition;
     }
 
+    /// <summary>
+    /// A named area of the settlement, marked on the map: a circle that may lie outside the table's radius (a
+    /// warehouse across the river, reached through a portal). Chests inside count as the settlement's chests.
+    /// </summary>
+    internal sealed class SettlementZone
+    {
+        internal const string KindWarehouse = "warehouse";
+        internal const string KindOther = "other";
+        internal const float MinRadius = 5f;
+        internal const float MaxRadius = 80f;
+        internal const int MaxNameLength = 24;
+
+        internal long Id;
+        internal string Name = "";
+        internal string Kind = KindWarehouse;
+        internal Vector3 Center;
+        internal float Radius = 15f;
+
+        internal bool Contains(Vector3 point) => Utils.DistanceXZ(Center, point) <= Radius;
+
+        internal SettlementZone Clone() => new SettlementZone { Id = Id, Name = Name, Kind = Kind, Center = Center, Radius = Radius };
+    }
+
     /// <summary>Everything a settlement knows, stored as one versioned blob in the Jarl's Table ZDO.</summary>
     internal sealed class SettlementData
     {
         /// <summary>Bump on format changes; <see cref="Deserialize"/> keeps reading older versions.</summary>
-        private const int FormatVersion = 5;
+        private const int FormatVersion = 6;
+        /// <summary>Version 6 added the areas marked on the map.</summary>
+        private const int FirstZonesVersion = 6;
+        internal const int MaxZones = 16;
         /// <summary>Versions 2 and 3 listed settlers and beds by ZDOID, which does not survive a world reload.</summary>
         private const int FirstStableRosterVersion = 4;
         /// <summary>Version 5 added the Karl and Huskarl ranks below the Hersir, which moved the saved values.</summary>
@@ -65,9 +91,49 @@ namespace AgeOfJarls.Settlement
         internal int Tier;
         internal List<SettlementMember> Members = new List<SettlementMember>();
         internal List<RosterEntry> Settlers = new List<RosterEntry>();
+        /// <summary>Areas marked on the map (<see cref="SettlementZone"/>), at most <see cref="MaxZones"/>.</summary>
+        internal List<SettlementZone> Zones = new List<SettlementZone>();
 
         /// <summary>Read from an older format: the table's owner saves it again in the current one.</summary>
         internal bool NeedsRewrite;
+
+        internal SettlementZone FindZone(long id) => Zones.Find(z => z.Id == id);
+
+        /// <summary>The first area that holds the point, if any.</summary>
+        internal SettlementZone ZoneAt(Vector3 point) => Zones.Find(z => z.Contains(point));
+
+        /// <summary>Adds or replaces an area (by id), with its values clamped; false when there is no room for a new one.</summary>
+        internal bool SetZone(SettlementZone zone)
+        {
+            if (zone == null)
+            {
+                return false;
+            }
+            SettlementZone existing = FindZone(zone.Id);
+            if (existing == null && Zones.Count >= MaxZones)
+            {
+                return false;
+            }
+            var clean = new SettlementZone
+            {
+                Id = zone.Id,
+                Name = TextUtil.SanitizeName(zone.Name, SettlementZone.MaxNameLength),
+                Kind = zone.Kind == SettlementZone.KindWarehouse ? SettlementZone.KindWarehouse : SettlementZone.KindOther,
+                Center = zone.Center,
+                Radius = Mathf.Clamp(zone.Radius, SettlementZone.MinRadius, SettlementZone.MaxRadius),
+            };
+            if (existing != null)
+            {
+                Zones[Zones.IndexOf(existing)] = clean;
+            }
+            else
+            {
+                Zones.Add(clean);
+            }
+            return true;
+        }
+
+        internal bool RemoveZone(long id) => Zones.RemoveAll(z => z.Id == id) > 0;
 
         /// <summary>The senior Jarl: the first one listed (the founder, or whoever the title was handed to).</summary>
         internal SettlementMember Jarl => Members.Find(m => m.Role == SettlementRole.Jarl);
@@ -262,6 +328,15 @@ namespace AgeOfJarls.Settlement
                 package.Write(settler.HasBed);
                 package.Write(settler.BedPosition);
             }
+            package.Write(Zones.Count);
+            foreach (SettlementZone zone in Zones)
+            {
+                package.Write(zone.Id);
+                package.Write(zone.Name ?? "");
+                package.Write(zone.Kind ?? SettlementZone.KindOther);
+                package.Write(zone.Center);
+                package.Write(zone.Radius);
+            }
             return package.GetArray();
         }
 
@@ -326,6 +401,21 @@ namespace AgeOfJarls.Settlement
                     if (legacy > 0)
                     {
                         Log.Warning(Module, $"'{settlement.Name}': {legacy} settler(s) listed in the old format are dropped; accept them again at the table");
+                    }
+                }
+                if (version >= FirstZonesVersion)
+                {
+                    int zones = ReadCount(package, MaxZones, "zone");
+                    for (int i = 0; i < zones; i++)
+                    {
+                        settlement.Zones.Add(new SettlementZone
+                        {
+                            Id = package.ReadLong(),
+                            Name = package.ReadString(),
+                            Kind = package.ReadString(),
+                            Center = package.ReadVector3(),
+                            Radius = package.ReadSingle(),
+                        });
                     }
                 }
                 return settlement;

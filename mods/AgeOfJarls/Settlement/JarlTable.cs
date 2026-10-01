@@ -26,6 +26,9 @@ namespace AgeOfJarls.Settlement
         Breach = 11,
         /// <summary>A Builder put a destroyed building back.</summary>
         Rebuilt = 12,
+        /// <summary>An area marked on the map added or changed (Hersir and up).</summary>
+        SetZone = 13,
+        RemoveZone = 14,
     }
 
     /// <summary>
@@ -244,8 +247,21 @@ namespace AgeOfJarls.Settlement
         }
 
         /// <summary>The table whose settlement area contains the position, or null.</summary>
-        internal static JarlTable FindContaining(Vector3 position) =>
-            Loaded.FirstOrDefault(t => Utils.DistanceXZ(t.transform.position, position) <= t.Radius);
+        internal static JarlTable FindContaining(Vector3 position) => Loaded.FirstOrDefault(t => t.Contains(position));
+
+        /// <summary>Inside the table's radius or inside one of the settlement's areas marked on the map.</summary>
+        internal bool Contains(Vector3 position)
+        {
+            if (Utils.DistanceXZ(transform.position, position) <= Radius)
+            {
+                return true;
+            }
+            SettlementData data = Data;
+            return data != null && data.ZoneAt(position) != null;
+        }
+
+        private static bool IsFinite(Vector3 v) =>
+            !float.IsNaN(v.x) && !float.IsNaN(v.y) && !float.IsNaN(v.z) && !float.IsInfinity(v.x) && !float.IsInfinity(v.y) && !float.IsInfinity(v.z);
 
         /// <summary>
         /// The settlement a point works for: the one it lies in, else the one whose edge is nearest, if at most
@@ -588,12 +604,19 @@ namespace AgeOfJarls.Settlement
             }
 
             float radius = Radius;
-            List<Settler> followers = Settler.Loaded
-                .Where(s => s.FollowedPlayerId == player.GetPlayerID() && !s.HasHome && Utils.DistanceXZ(s.transform.position, transform.position) <= radius)
+            long me = player.GetPlayerID();
+            List<Settler> following = Settler.Loaded
+                .Where(s => s.FollowedPlayerId == me && Utils.DistanceXZ(s.transform.position, transform.position) <= radius)
                 .ToList();
+            // A follower whose own Jarl's Table is not loaded here has lost it (destroyed far away, where nobody saw
+            // it go) or left it far behind with the player who leads it: it may be taken in. One whose table stands
+            // here still lives there. Its settler adopts the new home from this roster (Settler.UpdateHome).
+            List<Settler> followers = following.Where(s => !s.HasHome || FindById(s.HomeId) == null).ToList();
             if (followers.Count == 0)
             {
-                player.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_nobody_follows"));
+                player.Message(MessageHud.MessageType.Center, following.Count == 0
+                    ? Localize("$aoj_msg_nobody_follows")
+                    : Localize("$aoj_msg_followers_have_home", string.Join(", ", following.Select(s => s.DisplayName))));
                 return;
             }
 
@@ -700,6 +723,22 @@ namespace AgeOfJarls.Settlement
         // ---------------------------------------------------------------- actions
 
         /// <summary>Gives a player a rank (Guest = off the list); the owner checks it with the same rules as the caller.</summary>
+        /// <summary>An area marked on the map, new (id 0: the owner gives it one) or changed (Hersir and up).</summary>
+        internal void RequestSetZone(SettlementZone zone) =>
+            Send(SettlementAction.SetZone, p =>
+            {
+                p.Write(zone.Id);
+                p.Write(zone.Name ?? "");
+                p.Write(zone.Kind ?? SettlementZone.KindOther);
+                p.Write(zone.Center);
+                p.Write(zone.Radius);
+            });
+
+        internal void RequestRemoveZone(long zoneId) => Send(SettlementAction.RemoveZone, p => p.Write(zoneId));
+
+        /// <summary>How far from the table an area may be marked: a warehouse across a portal, not across the world.</summary>
+        internal const float MaxZoneDistance = 400f;
+
         internal void RequestSetRank(long playerId, string name, SettlementRole rank) =>
             Send(SettlementAction.SetRank, p =>
             {
@@ -832,10 +871,9 @@ namespace AgeOfJarls.Settlement
 
         private void RPC_Action(long sender, ZPackage package)
         {
-            if (!_nview.IsOwner())
+            // Ownership moved while the RPC travelled: passed on to the current owner (Net.OwnerRpc).
+            if (!Net.OwnerRpc.Handles(_nview, Keys.RpcSettlementAction, package))
             {
-                // Ownership moved while the RPC travelled: pass it on to the current owner.
-                _nview.InvokeRPC(Keys.RpcSettlementAction, package);
                 return;
             }
 
@@ -967,6 +1005,56 @@ namespace AgeOfJarls.Settlement
                     string shown = data.Members.Find(m => m.PlayerId == target)?.Name ?? name;
                     Log.Info(Module, $"{shown} is the new Jarl of {DisplayName(data)}");
                     Chronicle.Add(_nview, "$aoj_chr_handover", shown, actor);
+                    return true;
+                }
+                case SettlementAction.SetZone:
+                {
+                    var zone = new SettlementZone
+                    {
+                        Id = package.ReadLong(),
+                        Name = package.ReadString(),
+                        Kind = package.ReadString(),
+                        Center = package.ReadVector3(),
+                        Radius = package.ReadSingle(),
+                    };
+                    if (!role.Allows(SettlementRight.Manage))
+                    {
+                        Log.Warning(Module, $"Peer {sender} tried to mark an area without the rank for it");
+                        return false;
+                    }
+                    if (float.IsNaN(zone.Radius) || float.IsInfinity(zone.Radius) || !IsFinite(zone.Center) ||
+                        Utils.DistanceXZ(zone.Center, transform.position) > MaxZoneDistance)
+                    {
+                        Log.Warning(Module, $"Peer {sender} tried to mark an area too far from the table or with bad numbers");
+                        return false;
+                    }
+                    if (zone.Id == 0L)
+                    {
+                        zone.Id = Keys.NewId();
+                    }
+                    bool added = data.FindZone(zone.Id) == null;
+                    if (!data.SetZone(zone))
+                    {
+                        Log.Warning(Module, $"Area '{zone.Name}' not saved: {DisplayName(data)} has {SettlementData.MaxZones} areas already");
+                        return false;
+                    }
+                    Log.Info(Module, $"Area '{zone.Name}' ({zone.Kind}, {zone.Radius:0} m) {(added ? "marked" : "changed")} in {DisplayName(data)} by {actor}");
+                    return true;
+                }
+                case SettlementAction.RemoveZone:
+                {
+                    long zoneId = package.ReadLong();
+                    if (!role.Allows(SettlementRight.Manage))
+                    {
+                        Log.Warning(Module, $"Peer {sender} tried to remove an area without the rank for it");
+                        return false;
+                    }
+                    SettlementZone gone = data.FindZone(zoneId);
+                    if (gone == null || !data.RemoveZone(zoneId))
+                    {
+                        return false;
+                    }
+                    Log.Info(Module, $"Area '{gone.Name}' removed from {DisplayName(data)} by {actor}");
                     return true;
                 }
                 case SettlementAction.Rename:

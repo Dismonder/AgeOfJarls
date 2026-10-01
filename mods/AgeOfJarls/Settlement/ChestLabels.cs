@@ -37,9 +37,8 @@ namespace AgeOfJarls.Settlement
             {
                 return;
             }
-            if (!view.IsOwner())
+            if (!OwnerRpc.Handles(view, Keys.RpcChestKind, kind))
             {
-                view.InvokeRPC(Keys.RpcChestKind, kind);
                 return;
             }
             JarlTable table = SettlementOf(chest);

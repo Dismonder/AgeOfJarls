@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using AgeOfJarls.Core;
-using HarmonyLib;
 using UnityEngine;
 
 namespace AgeOfJarls.Army
@@ -65,16 +64,11 @@ namespace AgeOfJarls.Army
             }
         }
 
-        // Every world session gets a new ZRoutedRpc: register with it, and forget the last session's pins.
-        [HarmonyPatch(typeof(ZNet), nameof(ZNet.Awake))]
-        private static class RegisterPatch
+        /// <summary>A new world session (<see cref="Net.RoutedRpcs"/>): register with its ZRoutedRpc, forget the last session's pins.</summary>
+        internal static void OnNewSession(ZRoutedRpc rpc)
         {
-            [HarmonyPriority(Priority.High)]
-            private static void Postfix()
-            {
-                s_pins.Clear();
-                ZRoutedRpc.instance?.Register<ZPackage>(Keys.RpcAlarmPin, RPC_AlarmPin);
-            }
+            s_pins.Clear();
+            Net.RoutedRpcs.Register<ZPackage>(rpc, Keys.RpcAlarmPin, RPC_AlarmPin);
         }
     }
 }

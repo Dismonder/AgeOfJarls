@@ -288,7 +288,7 @@ namespace AgeOfJarls.AI
             _anchor = _settler.HomeAnchor(_table);
             AutoWork(data);
 
-            SettlementStorage.CollectChests(_table.transform.position, _radius, _chests);
+            SettlementStorage.CollectChests(_table.transform.position, _radius, data, _chests);
             _chests.RemoveAll(_avoided);
             if (_chest == null && ShouldStore())
             {

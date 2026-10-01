@@ -147,6 +147,9 @@ namespace AgeOfJarls.Settlers
         /// <summary>A captive from a camp: takes no orders until a player frees it.</summary>
         internal bool IsCaptive => _nview != null && _nview.IsValid() && _nview.GetZDO().GetBool(Keys.ZdoSettlerCaptive);
 
+        /// <summary>In the world on this machine (its ZDO is alive; false once its zone unloads or it is destroyed).</summary>
+        internal bool IsLoaded => this != null && _nview != null && _nview.IsValid();
+
         /// <summary>Knocked out for a moment instead of dead (see SettlerCharacter.KnockOut).</summary>
         internal bool IsDown => _humanoid is SettlerCharacter body && body.Down;
 
@@ -189,9 +192,8 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_SetRole(long sender, int role)
         {
-            if (!_nview.IsOwner())
+            if (!OwnerHandles(Keys.RpcSettlerRole, role))
             {
-                _nview.InvokeRPC(Keys.RpcSettlerRole, role);
                 return;
             }
             if (IsCaptive)
@@ -257,9 +259,8 @@ namespace AgeOfJarls.Settlers
         // Guards alive nearby (and unbroken bars) keep the captive locked in; freed, it follows its rescuer.
         private void RPC_Free(long sender, long playerId)
         {
-            if (!_nview.IsOwner())
+            if (!OwnerHandles(Keys.RpcSettlerFree, playerId))
             {
-                _nview.InvokeRPC(Keys.RpcSettlerFree, playerId);
                 return;
             }
             Player player = Player.GetPlayer(playerId);
@@ -318,9 +319,8 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_SetJob(long sender, long totemId)
         {
-            if (!_nview.IsOwner())
+            if (!OwnerHandles(Keys.RpcSettlerSetJob, totemId))
             {
-                _nview.InvokeRPC(Keys.RpcSettlerSetJob, totemId);
                 return;
             }
             if (IsCaptive)
@@ -375,8 +375,12 @@ namespace AgeOfJarls.Settlers
                 Loaded.Add(this);
                 _nview.Register<long>(Keys.RpcSettlerCommand, RPC_Command);
                 _nview.Register<ZPackage>(Keys.RpcSettlerGive, RPC_Give);
-                _nview.Register(Keys.RpcSettlerTakeBack, RPC_TakeBack);
+                _nview.Register<ZPackage>(Keys.RpcSettlerTakeBack, RPC_TakeBack);
                 _nview.Register<ZPackage>(Keys.RpcSettlerTakeItem, RPC_TakeItem);
+                _nview.Register<long, ZPackage>(Keys.RpcSettlerDeliver, RPC_Deliver);
+                _nview.Register<long>(Keys.RpcSettlerDelivered, RPC_Delivered);
+                _nview.Register<string, string>(Keys.RpcSettlerNotify, RPC_Notify);
+                _nview.Register<ZPackage>(Keys.RpcSettlerTeleport, RPC_Teleport);
                 _nview.Register(Keys.RpcSettlerGoHome, RPC_GoHome);
                 _nview.Register<string>(Keys.RpcSettlerRename, RPC_Rename);
                 _nview.Register<ZDOID>(Keys.RpcSettlerAttack, RPC_Attack);
@@ -719,7 +723,15 @@ namespace AgeOfJarls.Settlers
                     ClearHome(zdo, "no longer on the roster");
                     return;
                 }
+                DropStaleRosters(uid, home);
                 UpdateHomeAnchor(zdo, table);
+                return;
+            }
+
+            // Its table is not here, but a table that is lists it: it was accepted there while its old home was
+            // gone (destroyed far away, where nobody could see it go). The roster is the truth.
+            if (AdoptListedHome(zdo, uid))
+            {
                 return;
             }
 
@@ -735,7 +747,7 @@ namespace AgeOfJarls.Settlers
             }
         }
 
-        private void AdoptListedHome(ZDO zdo, long uid)
+        private bool AdoptListedHome(ZDO zdo, long uid)
         {
             foreach (JarlTable table in JarlTable.Loaded)
             {
@@ -757,7 +769,28 @@ namespace AgeOfJarls.Settlers
                 }
                 UpdateHomeAnchor(zdo, table);
                 Log.Info(Module, $"{DisplayName} settled in {JarlTable.DisplayName(data)}");
+                return true;
+            }
+            return false;
+        }
+
+        // A loaded table other than its home that still lists it (its old home, before it was re-homed elsewhere)
+        // is told by its owner to drop it, so that roster stops counting a settler it no longer has. Asked every
+        // few seconds, not every tick: the table's owner answers over the network.
+        private void DropStaleRosters(long uid, long home)
+        {
+            if (Time.time < _nextStaleRosterCheck)
+            {
                 return;
+            }
+            _nextStaleRosterCheck = Time.time + StaleRosterSeconds;
+            foreach (JarlTable table in JarlTable.Loaded)
+            {
+                SettlementData data = table.Data;
+                if (data != null && table.SettlementId != 0L && table.SettlementId != home && data.HasSettler(uid))
+                {
+                    JarlTable.RequestRemoveSettler(table.SettlementId, uid);
+                }
             }
         }
 
@@ -942,14 +975,24 @@ namespace AgeOfJarls.Settlers
             player.Message(MessageHud.MessageType.Center, Localize(follow ? "$aoj_msg_follow" : "$aoj_msg_wait", DisplayName));
         }
 
+        /// <summary>
+        /// Everything out of the settler's bag (and off its body) into the player's: the settler's owner takes it all
+        /// out and sends it to this player's machine (<see cref="Net.ItemDelivery"/>); what does not fit lands at the
+        /// player's feet.
+        /// </summary>
         internal void RequestTakeBack(Player player)
         {
+            if (_nview == null || !_nview.IsValid())
+            {
+                return;
+            }
             if (!IsFollowing(player) && !MayBeOrderedBy(player, SettlementRight.Live))
             {
                 player.Message(MessageHud.MessageType.Center, Permissions.Denied(SettlementRight.Live));
                 return;
             }
-            _nview.InvokeRPC(Keys.RpcSettlerTakeBack);
+            ClaimIfOwnerless();
+            _nview.InvokeRPC(Keys.RpcSettlerTakeBack, Request(ZDOMan.GetSessionID(), new ZPackage()));
             player.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_takeback", DisplayName));
         }
 
@@ -969,24 +1012,273 @@ namespace AgeOfJarls.Settlers
                 player.Message(MessageHud.MessageType.Center, Permissions.Denied(SettlementRight.Live));
                 return;
             }
+            var body = new ZPackage();
+            body.Write(item.m_shared.m_name);
+            body.Write(item.m_quality);
+            body.Write(item.m_equipped);
+            body.Write(Mathf.Clamp(amount, 1, Mathf.Max(1, item.m_stack)));
+            ClaimIfOwnerless();
+            _nview.InvokeRPC(Keys.RpcSettlerTakeItem, Request(ZDOMan.GetSessionID(), body));
+        }
+
+        // ---------------------------------------------------------------- requests that answer the asking peer
+
+        /// <summary>
+        /// A request whose answer (items, a message) goes back to the one who asked: its peer id in front of the body.
+        /// The owner takes the asker's identity from the network, not from this field (<see cref="Requester"/>); the
+        /// field matters when the request is passed on, because the one passing it on becomes the network sender.
+        /// </summary>
+        private static ZPackage Request(long requester, ZPackage body)
+        {
             var package = new ZPackage();
-            package.Write(item.m_shared.m_name);
-            package.Write(item.m_quality);
-            package.Write(item.m_equipped);
-            package.Write(Mathf.Clamp(amount, 1, Mathf.Max(1, item.m_stack)));
-            _nview.InvokeRPC(Keys.RpcSettlerTakeItem, package);
+            package.Write(requester);
+            package.Write(body);
+            return package;
+        }
+
+        /// <summary>
+        /// Who asked: the network sender, unless the request names the server or came through it. The server relays
+        /// a request when the machine it was aimed at lost ownership meanwhile, and it writes the asker it got the
+        /// request from; nobody else is believed about somebody else asking. Naming the server gains nothing either
+        /// way: the answer goes to the host's player, who could have asked.
+        /// </summary>
+        private static long Requester(long sender, long claimed)
+        {
+            long server = Net.Peers.ServerPeerId();
+            return claimed != 0L && server != 0L && (sender == server || claimed == server) ? claimed : sender;
+        }
+
+        /// <summary>
+        /// Owner-only requests: true when this machine owns the settler. One nobody owns (its owner just left the
+        /// area) is claimed, the way the game claims a chest nobody simulates, instead of being asked by a broadcast
+        /// that every machine would pass on again. Otherwise the request goes on to the owner.
+        /// </summary>
+        private bool OwnerHandles(string method, params object[] args)
+        {
+            if (_nview.IsOwner())
+            {
+                return true;
+            }
+            if (!_nview.HasOwner())
+            {
+                // Passing it on to owner 0 would be a broadcast the game also handles on this machine at once: this
+                // method again, without end (0.6.0 crashed the host that way), so the settler is taken instead.
+                Claim();
+                return true;
+            }
+            // Two machines that each believe the other owns the settler would pass a request back and forth forever.
+            if (Time.time > _forwardWindowEnd)
+            {
+                _forwardWindowEnd = Time.time + 1f;
+                _forwardsInWindow = 0;
+            }
+            if (++_forwardsInWindow > MaxForwardsPerSecond)
+            {
+                if (_forwardsInWindow == MaxForwardsPerSecond + 1)
+                {
+                    Log.Warning(Module, $"{DisplayName}: {method} passed on to peer {_nview.GetZDO().GetOwner()} too often, dropped until the owner settles");
+                }
+                return false;
+            }
+            _nview.InvokeRPC(method, args);
+            return false;
+        }
+
+        private const int MaxForwardsPerSecond = 10;
+        private const float StaleRosterSeconds = 10f;
+        private float _forwardWindowEnd;
+        private int _forwardsInWindow;
+        private float _nextStaleRosterCheck;
+
+        /// <summary>Before asking the owner: a settler nobody owns would be asked by a broadcast, so this machine takes it.</summary>
+        private void ClaimIfOwnerless()
+        {
+            if (!_nview.HasOwner())
+            {
+                Claim();
+            }
+        }
+
+        private void Claim()
+        {
+            _nview.ClaimOwnership();
+            // Now, not at the next tick: whatever runs next reads the bag, which non-owners do not keep up to date.
+            OnBecameOwner();
+            _wasOwner = true;
+        }
+
+        /// <summary>A message on the asking player's screen, on this machine or over the network.</summary>
+        private void Notify(long peer, string token, string arg = "")
+        {
+            if (peer == ZDOMan.GetSessionID())
+            {
+                Player.m_localPlayer?.Message(MessageHud.MessageType.Center, Localize(token, arg));
+            }
+            else if (_nview != null && _nview.IsValid())
+            {
+                _nview.InvokeRPC(peer, Keys.RpcSettlerNotify, token, arg);
+            }
+        }
+
+        private void RPC_Notify(long sender, string token, string arg)
+        {
+            // Network boundary: only the mod's own texts, and an argument that is one of them or plain text.
+            if (!IsToken(token) || Player.m_localPlayer == null)
+            {
+                return;
+            }
+            Player.m_localPlayer.Message(MessageHud.MessageType.Center, Localize(token, IsToken(arg) ? arg : TextUtil.SanitizeName(arg, 40)));
+        }
+
+        private static bool IsToken(string text) =>
+            text != null && text.Length > 5 && text.Length <= 48 && text.StartsWith("$aoj_", StringComparison.Ordinal) &&
+            text.All(c => c == '$' || c == '_' || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'));
+
+        /// <summary>Owner: the parcel to the asking peer (<see cref="Net.ItemDelivery"/>).</summary>
+        internal void SendParcel(long peer, long id, ZPackage package) => _nview.InvokeRPC(peer, Keys.RpcSettlerDeliver, id, package);
+
+        private void RPC_Deliver(long sender, long id, ZPackage package)
+        {
+            if (Net.ItemDelivery.Receive(package))
+            {
+                _nview.InvokeRPC(sender, Keys.RpcSettlerDelivered, id);
+            }
+        }
+
+        private void RPC_Delivered(long sender, long id) => Net.ItemDelivery.Acknowledged(id, sender);
+
+        /// <summary>Its leader took a portal: come along, to a spot next to where the leader will arrive (any machine).</summary>
+        internal void RequestTeleport(Vector3 arrival)
+        {
+            if (_nview == null || !_nview.IsValid())
+            {
+                return;
+            }
+            ClaimIfOwnerless();
+            if (_nview.IsOwner())
+            {
+                FollowLeader(arrival);
+                return;
+            }
+            var body = new ZPackage();
+            body.Write(arrival);
+            _nview.InvokeRPC(Keys.RpcSettlerTeleport, Request(ZDOMan.GetSessionID(), body));
+        }
+
+        private void RPC_Teleport(long sender, ZPackage package)
+        {
+            long claimed;
+            ZPackage body;
+            Vector3 arrival;
+            try
+            {
+                claimed = package.ReadLong();
+                body = package.ReadPackage();
+                arrival = body.ReadVector3();
+                body.SetPos(0);
+            }
+            catch (Exception e) when (e is IOException || e is ArgumentException)
+            {
+                Log.Warning(Module, $"Malformed portal request from peer {sender}: {e.Message}");
+                return;
+            }
+            long requester = Requester(sender, claimed);
+            if (!OwnerHandles(Keys.RpcSettlerTeleport, Request(requester, body)))
+            {
+                return;
+            }
+            // Only the leader's own machine asks (Settlers.PortalFollow), for the settlers that follow that player.
+            Player leader = Net.Peers.FindPlayer(requester);
+            if (leader == null || !IsFollowing(leader))
+            {
+                Log.Warning(Module, $"Portal jump of {DisplayName} asked by peer {requester}, who it does not follow, refused");
+                return;
+            }
+            FollowLeader(arrival);
+        }
+
+        private void FollowLeader(Vector3 arrival)
+        {
+            Teleport(arrival);
+            Log.Info(Module, $"{DisplayName} followed its leader through a portal");
+        }
+
+        /// <summary>Owner: through a portal on its own (AI.PortalTravel), landing where a player would.</summary>
+        internal void JumpTo(Vector3 exit, string via)
+        {
+            if (_nview == null || !_nview.IsValid() || !_nview.IsOwner())
+            {
+                return;
+            }
+            Teleport(exit, scatter: false);
+            Log.Info(Module, $"{DisplayName} went through {via}");
+        }
+
+        // Owner: like the player's own jump, the body is set down at the spot; the ZDO carries the new position to
+        // everybody, and this machine drops the instance until the zone there is loaded, if it is not already.
+        private void Teleport(Vector3 arrival, bool scatter = true)
+        {
+            Vector3 spot = scatter ? arrival + Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f) * Vector3.forward * 2f : arrival;
+            if (ZoneSystem.instance != null && ZoneSystem.instance.GetGroundHeight(spot, out float ground))
+            {
+                spot.y = Mathf.Max(spot.y, ground + 0.3f);
+            }
+            FlushInventory();
+            _ai?.StopMoving();
+            transform.position = spot;
+            if (_humanoid.m_body != null)
+            {
+                _humanoid.m_body.position = spot;
+                _humanoid.m_body.linearVelocity = Vector3.zero;
+            }
+            // As the player's own jump does: the fall-damage mark starts here, not where the settler stood.
+            _humanoid.m_maxAirAltitude = spot.y;
+            _nview.GetZDO().SetPosition(spot);
+        }
+
+        /// <summary>Owner: a parcel nobody took comes back into the bag. False when this machine cannot (not the owner any more).</summary>
+        internal bool TakeBackParcel(Inventory parcel)
+        {
+            if (_nview == null || !_nview.IsValid() || !_nview.IsOwner())
+            {
+                return false;
+            }
+            Inventory inventory = _humanoid.GetInventory();
+            foreach (ItemDrop.ItemData item in parcel.GetAllItems().ToList())
+            {
+                if (!inventory.AddItem(item))
+                {
+                    ItemDrop.DropItem(item, item.m_stack, DropPoint(), transform.rotation);
+                }
+            }
+            MarkInventoryDirty();
+            FlushInventory();
+            return true;
         }
 
         private void RPC_TakeItem(long sender, ZPackage package)
         {
-            if (!_nview.IsOwner())
+            long claimed;
+            ZPackage body;
+            try
             {
-                _nview.InvokeRPC(Keys.RpcSettlerTakeItem, package);
+                claimed = package.ReadLong();
+                body = package.ReadPackage();
+            }
+            catch (Exception e) when (e is IOException || e is ArgumentException)
+            {
+                Log.Warning(Module, $"Malformed take-item request from peer {sender}: {e.Message}");
                 return;
             }
-            if (!IsLeader(sender) && !MayOrder(sender, SettlementRight.Live))
+            long requester = Requester(sender, claimed);
+            if (!OwnerHandles(Keys.RpcSettlerTakeItem, Request(requester, body)))
             {
-                Log.Warning(Module, $"Handing an item of {DisplayName} to peer {sender} refused");
+                return;
+            }
+            if (!IsLeader(requester) && !MayOrder(requester, SettlementRight.Live))
+            {
+                Log.Warning(Module, $"Handing an item of {DisplayName} to peer {requester} refused");
+                Notify(requester, "$aoj_msg_needs_rank", Permissions.Token(Permissions.Required(SettlementRight.Live)));
                 return;
             }
             string name;
@@ -995,10 +1287,10 @@ namespace AgeOfJarls.Settlers
             int amount;
             try
             {
-                name = package.ReadString();
-                quality = package.ReadInt();
-                equipped = package.ReadBool();
-                amount = package.ReadInt();
+                name = body.ReadString();
+                quality = body.ReadInt();
+                equipped = body.ReadBool();
+                amount = body.ReadInt();
             }
             catch (Exception e) when (e is IOException || e is ArgumentException)
             {
@@ -1012,6 +1304,8 @@ namespace AgeOfJarls.Settlers
                                      ?? inventory.GetAllItems().Find(i => i.m_shared.m_name == name && i.m_quality == quality);
             if (item == null)
             {
+                // Taken by somebody else, or eaten, since that window was drawn.
+                Notify(requester, "$aoj_msg_item_gone", DisplayName);
                 return;
             }
             if (item.m_equipped)
@@ -1030,8 +1324,8 @@ namespace AgeOfJarls.Settlers
             inventory.RemoveItem(item, amount);
             MarkInventoryDirty();
             FlushInventory();
-            Net.ItemDelivery.Send(sender, parcel, DisplayName);
-            Log.Info(Module, $"{DisplayName} handed {amount}x {name} to peer {sender}");
+            Net.ItemDelivery.Send(this, requester, parcel);
+            Log.Info(Module, $"{DisplayName} handed {amount}x {name} to peer {requester}");
         }
 
         internal void RequestGoHome(Player player)
@@ -1067,9 +1361,8 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_Attack(long sender, ZDOID targetId)
         {
-            if (!_nview.IsOwner())
+            if (!OwnerHandles(Keys.RpcSettlerAttack, targetId))
             {
-                _nview.InvokeRPC(Keys.RpcSettlerAttack, targetId);
                 return;
             }
             if (IsCaptive)
@@ -1090,9 +1383,8 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_FallBack(long sender, long playerId)
         {
-            if (!_nview.IsOwner())
+            if (!OwnerHandles(Keys.RpcSettlerFallBack, playerId))
             {
-                _nview.InvokeRPC(Keys.RpcSettlerFallBack, playerId);
                 return;
             }
             if (IsCaptive)
@@ -1144,9 +1436,8 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_GoHome(long sender)
         {
-            if (!_nview.IsOwner())
+            if (!OwnerHandles(Keys.RpcSettlerGoHome))
             {
-                _nview.InvokeRPC(Keys.RpcSettlerGoHome);
                 return;
             }
             if (IsCaptive)
@@ -1179,9 +1470,8 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_Rename(long sender, string name)
         {
-            if (!_nview.IsOwner())
+            if (!OwnerHandles(Keys.RpcSettlerRename, name))
             {
-                _nview.InvokeRPC(Keys.RpcSettlerRename, name);
                 return;
             }
 
@@ -1203,9 +1493,8 @@ namespace AgeOfJarls.Settlers
         private void RPC_Command(long sender, long followPlayerId)
         {
             // Ownership may have moved while the RPC travelled: pass it on to the current owner.
-            if (!_nview.IsOwner())
+            if (!OwnerHandles(Keys.RpcSettlerCommand, followPlayerId))
             {
-                _nview.InvokeRPC(Keys.RpcSettlerCommand, followPlayerId);
                 return;
             }
             if (IsCaptive)
@@ -1322,9 +1611,8 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_Give(long sender, ZPackage package)
         {
-            if (!_nview.IsOwner())
+            if (!OwnerHandles(Keys.RpcSettlerGive, package))
             {
-                _nview.InvokeRPC(Keys.RpcSettlerGive, package);
                 return;
             }
 
@@ -1361,9 +1649,8 @@ namespace AgeOfJarls.Settlers
         // The food's stats come from its prefab, so the sender cannot claim more than the item gives.
         private void RPC_Feed(long sender, string prefabName)
         {
-            if (!_nview.IsOwner())
+            if (!OwnerHandles(Keys.RpcSettlerFeed, prefabName))
             {
-                _nview.InvokeRPC(Keys.RpcSettlerFeed, prefabName);
                 return;
             }
             GameObject prefab = ObjectDB.instance != null ? ObjectDB.instance.GetItemPrefab(prefabName) : null;
@@ -1374,20 +1661,50 @@ namespace AgeOfJarls.Settlers
             }
         }
 
-        private void RPC_TakeBack(long sender)
+        private void RPC_TakeBack(long sender, ZPackage package)
         {
-            if (!_nview.IsOwner())
+            long claimed;
+            ZPackage body;
+            try
             {
-                _nview.InvokeRPC(Keys.RpcSettlerTakeBack);
+                claimed = package.ReadLong();
+                body = package.ReadPackage();
+            }
+            catch (Exception e) when (e is IOException || e is ArgumentException)
+            {
+                Log.Warning(Module, $"Malformed take-back request from peer {sender}: {e.Message}");
                 return;
             }
-            if (!IsLeader(sender) && !MayOrder(sender, SettlementRight.Live))
+            long requester = Requester(sender, claimed);
+            if (!OwnerHandles(Keys.RpcSettlerTakeBack, Request(requester, body)))
             {
-                Log.Warning(Module, $"Handing back the items of {DisplayName} to peer {sender} refused");
+                return;
+            }
+            if (!IsLeader(requester) && !MayOrder(requester, SettlementRight.Live))
+            {
+                Log.Warning(Module, $"Handing back the items of {DisplayName} to peer {requester} refused");
+                Notify(requester, "$aoj_msg_needs_rank", Permissions.Token(Permissions.Required(SettlementRight.Live)));
                 return;
             }
 
-            DropAllItems();
+            // Into the asking player's bag, like a single item; the whole bag travels as one parcel.
+            _humanoid.UnequipAllItems();
+            Inventory inventory = _humanoid.GetInventory();
+            var parcel = new Inventory("aoj_take", null, inventory.GetWidth(), inventory.GetHeight());
+            foreach (ItemDrop.ItemData item in inventory.GetAllItems().ToList())
+            {
+                item.m_equipped = false;
+                if (!parcel.AddItem(item))
+                {
+                    ItemDrop.DropItem(item, item.m_stack, DropPoint(), transform.rotation);
+                }
+            }
+            int count = parcel.NrOfItems();
+            inventory.RemoveAll();
+            MarkInventoryDirty();
+            FlushInventory();
+            Net.ItemDelivery.Send(this, requester, parcel);
+            Log.Info(Module, $"{DisplayName} handed its {count} items to peer {requester}");
         }
 
         // Character.OnDeath runs on the owner - only with Settlers/PermanentDeath, otherwise a settler is knocked out

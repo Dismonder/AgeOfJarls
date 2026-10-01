@@ -49,6 +49,73 @@
   Greydwarf 3`, `aoj_trace` → „(blocking)”), łucznik (strzały pełnej mocy, odskok), okno osadnika w skali 1.3,
   zakładka Ekwipunek „Weź”/„Weź 1” (w co-op od osadnika symulowanego przez drugiego gracza), etykieta skrzyni,
   częstość alarmu w co-op. Świat `testo` ma trwający najazd draugrów przy bazie; postać `test` ma 25 HP (użyj `god`).
+- **0.7.0 (2026-10-01, kod bez testu w grze — użytkownik grał w trakcie):** zgłoszenie z co-op: „Weź” działa tylko
+  u mnie (klient u kolegi-hosta), u kolegi nic nie trafia do plecaka. Log klienta: postfix `ZNet.Awake` moda M182
+  Admin Panel rzuca (`StartupGuard` ratuje ładowanie), co może pominąć rejestrację routowanego `AoJ_ReceiveItems` na
+  maszynie i przedmioty znikały po drodze. Zrobione: dostawa RPC na osadniku (`AoJ_SettlerDeliver`/`Delivered`),
+  potwierdzenie i zwrot do plecaka po 6 s bez odpowiedzi, „Oddaj wszystko” do plecaka gracza, komunikat o odmowie
+  i o brakującym przedmiocie u pytającego, przejęcie osadnika bez właściciela, `RoutedRpcs` (rejestracja w
+  konstruktorze `ZRoutedRpc`). Szczegóły: [architecture.md](architecture.md). Wersja 0.7.0 — obaj gracze muszą
+  mieć tę samą (format `AoJ_SettlerTakeItem` i `TakeBack` się zmienił).
+- **Crash hosta (0.6.0, zgłoszony 2026-10-01):** host nacisnął G i wezwał najbliższego osadnika → gra się wyłączyła.
+  Przyczyna: osadnik bez właściciela (klient właśnie wyszedł ze strefy, `ReleaseNearbyZDOS` ustawia właściciela 0,
+  serwer przydziela nowego dopiero w następnym przebiegu). `ZNetView.InvokeRPC` do właściciela 0 to rozgłoszenie,
+  które gra obsługuje od razu lokalnie; nie-właściciel w `RPC_*` przekazywał dalej → ta sama metoda bez końca →
+  przepełnienie stosu. W 0.7.0 `OwnerHandles` przejmuje takiego osadnika (`ClaimOwnership` + `OnBecameOwner`), a
+  przekazywanie między dwiema maszynami o nieaktualnym właścicielu jest ucinane po 10 na sekundę.
+- **Strażnik (0.7.0, kod bez testu w grze):** prośba użytkownika — osadnik przypisany jako ochroniarz, który nie włazi
+  w kadr i broni „inteligentnie”. `AI/Escort`: pozycja przy ramieniu (za plecami, z boku), odstępowanie z kadru po
+  sekundzie, cele wokół gracza (najpierw ten, co idzie na gracza lub go trafił), smycz `GuardLeash`. Szczegóły w
+  [architecture.md](architecture.md).
+- **Osadnicy na mapie (0.7.0, kod bez testu w grze):** `UI/SettlerPins` — pinezka gracza z imieniem, złota
+  (`UI/SettlerPinColor`), dla wczytanych osadników. Do sprawdzenia: mapa (M) i minimapa pokazują osadników złotym
+  kolorem z imieniem, pinezka idzie za osadnikiem, znika po wyjściu ze strefy, filtr „gracze” ukrywa je, po
+  wylogowaniu i wejściu do świata nie ma duplikatów.
+- **Portale i obszary (0.7.0, 2026-10-01, kod bez testu w grze — użytkownik prosił o kod zamiast testu):**
+  moduł `Portals/` (szybszy skok gracza, osadnicy używają portali przez nogę portalową w `PathMover`, powrót do domu
+  portalem), obszary osady na mapie (`SettlementZone`, format 6, okno Z na dużej mapie, magazyn = skrzynie osady),
+  rysowanie koła osady i stref. Szczegóły: [architecture.md](architecture.md). Zrobione w pierwszym przebiegu testów
+  (19:40): nowy build startuje, log „[Update] … is current (the update page lists 0.7.0)”; świat `testo` wczytany.
+  **Do sprawdzenia:** Z na mapie otwiera okno, zapis strefy widać jako koło z nazwą u obu graczy; skrzynia w strefie
+  „Magazyn” 150 m od stołu za parą portali → tragarz niesie tam przez portal (log „went through the portal '…'”) i
+  wraca; `aoj_trace` „portal '…' on the way”; skok gracza przez portal trwa ~0,5 s; osadnik zostawiony 200 m od
+  domu przy portalu do osady wraca nim; brak zapętlenia noga portalowa ↔ Blocked (log „gives up the portal” raz na
+  minutę, nie co klatkę). Wiadomo z góry: osadnik po skoku w niewczytaną strefę znika do czasu, aż gracz tam dotrze.
+- **Automatyczne aktualizacje (0.7.0, 2026-10-01, strona opublikowana, mod bez testu w grze):** użytkownik prosił
+  o stronę na Cloudflare, z której mod sam pobiera aktualizacje. Strona https://aoj-updates.pages.dev (manifest +
+  zip), mod `Core/AutoUpdate`, publikacja `tools/publish-update.ps1`. Do sprawdzenia: po starcie gry log „is current
+  (the update page lists 0.7.0)”; po publikacji 0.7.1 w menu log „installed … next start”, komunikat po wejściu do
+  świata, po restarcie nowa wersja i brak `.old` w `plugins/AgeOfJarls`.
+- **Osadnik po zniszczonym stole (zgłoszenie 2026-10-01):** „idzie za mną, a nie da się przypisać” — `UpdateHome`
+  czyścił dom tylko w 40 m od starego stołu; przy stole nowej osady filtr `!HasHome` go odrzucał. Naprawione: przyjęcie
+  podążającego, którego stół nie jest tu wczytany, adopcja domu z listy nowego stołu, usuwanie ze starych list.
+  Do sprawdzenia: taki osadnik przy „Przyjmij” trafia na listę i idzie do nowej osady (log „settled in …”).
+- **Przegląd „ulepsz gdzie się da” (0.7.0, kod bez testu w grze):** ta sama klasa crasha (RPC do właściciela 0)
+  była w `JarlTable`, `WorkTotem`, `WarBanner`, `ChestLabels` → wspólny `Net/OwnerRpc`. Podążający osadnicy
+  przechodzą przez portale (`Settlers/PortalFollow`, opcja `Settlers/FollowThroughPortals`). Do sprawdzenia: wejście
+  w portal ze strażnikiem → po wyjściu stoi 2 m obok; portal daleki (ładowanie strefy) → pojawia się po dotarciu;
+  powalony osadnik zostaje; w co-op strażnik symulowany przez hosta też przechodzi (log hosta: „followed its leader
+  through a portal”); zmiana ustawień totemu zaraz po przyjściu do pustej osady nie wiesza gry.
+- **Do sprawdzenia w grze (0.7.0, strażnik):** „Do mnie!” → osadnik idzie 2–3 m za plecami z boku, nie staje przed
+  kamerą; obrót gracza o 180° → po ~1 s przechodzi za plecy, bez tańczenia przy rozglądaniu; bieg za graczem bez
+  zacinania; `spawn Greydwarf 3` 20 m dalej → strażnik nie rusza, póki nie podejdą na 15 m lub nie uderzą gracza;
+  wróg uciekający >30 m → strażnik wraca; rozkaz „atakuj” nadal działa; `aoj_trace` pokazuje „guard: …”.
+- **Do sprawdzenia w grze (0.7.0, co-op):** rozkaz G/H dla osadnika, od którego drugi gracz właśnie odszedł (poprzednio crash); „Weź”/„Weź 1”/„Oddaj wszystko” z obu maszyn, od osadnika symulowanego
+  przez drugiego gracza i przez siebie; log właściciela: „handed … to peer”, brak „did not confirm”; odmowa dla
+  gościa bez szczebla Karl pokazuje komunikat u pytającego; pinezka alarmu na mapie u drugiego gracza.
+- **0.7.1 (2026-10-01, przegląd kodu 0.7.0 bez gry — użytkownik testuje sam):** przeczytane wszystkie nowe pliki
+  0.7.0 i sygnatury gry pod patchami Harmony (`UpdateMap`, `TeleportTo`, `RPC_Damage`, `Follow`, `UpdateTeleport`,
+  `AddPin` — zgodne). Błędy znalezione i naprawione: (1) lokalne „Weź”/„Oddaj wszystko” od osadnika symulowanego
+  u siebie — `ItemDelivery.Send` czytał tę samą `ZPackage` od końca (pozycja po zapisie), odbiór padał i przedmioty
+  wracały do plecaka osadnika bez komunikatu → `SetPos(0)`; (2) `SettlerAI` wołał `HomeRoutine.Stop()` co klatkę
+  w drodze do portalu → aktywność Idle↔Returning i zapis ZDO co klatkę → stop tylko przy starcie podróży;
+  (3) strażnik ruszał przy każdym obrocie kamery (punkt odjeżdżał > 2,5 m) → przy stojącym graczu rusza tylko
+  „w kadrze > 1 s” lub > 5 m od punktu, cel zamrożony; (4) `RPC_Teleport` przekazany dalej był odrzucany (nadawca =
+  pośrednik) → format `Request`; (5) `DropStaleRosters` co tick → co 10 s; podwójny log skoku. Wersja 0.7.1 (Jotunn
+  `VersionStrictness.Minor`, więc 0.7.0 i 0.7.1 łączą się ze sobą). Strona aktualizacji przygotowana lokalnie
+  (`cloud/aoj-updates/site`), **nieopublikowana** — `pwsh tools/publish-update.ps1 AgeOfJarls` publikuje.
+  Lista do sprawdzenia w grze: jak dla 0.7.0 powyżej, plus „Weź” od własnego osadnika solo (komunikat „took” i
+  przedmiot w plecaku).
 - **Do sprawdzenia w grze:** serwer dedykowany. Uwaga: gra działająca w tle między testami
   to upływ czasu świata (doba = 30 min) — osadnicy w tym czasie jedzą zapasy.
 - **Świat `testo` po testach:** Totem Tragarza poziom 3 przy osadzie, krata jeńca i 2 greydwarfy (świat ma pasywne

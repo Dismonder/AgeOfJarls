@@ -23,6 +23,7 @@ namespace AgeOfJarls.Core
         internal static ConfigEntry<float> SettlerLootRange;
         internal static ConfigEntry<float> SettlerWanderRange;
         internal static ConfigEntry<bool> PermanentDeath;
+        internal static ConfigEntry<bool> FollowThroughPortals;
 
         internal static ConfigEntry<float> SettlementMinDistance;
         internal static ConfigEntry<int> MaxJarls;
@@ -33,7 +34,10 @@ namespace AgeOfJarls.Core
         internal static ConfigEntry<bool> CommandGestures;
         internal static ConfigEntry<float> CommandRange;
         internal static ConfigEntry<KeyCode> CommandWheelKey;
+        internal static ConfigEntry<KeyCode> ZoneKey;
         internal static ConfigEntry<float> CommandLookRange;
+        internal static ConfigEntry<float> GuardRange;
+        internal static ConfigEntry<float> GuardLeash;
 
         internal static ConfigEntry<int> TotemBaseSlots;
         internal static ConfigEntry<int> TotemMaxSlots;
@@ -65,6 +69,17 @@ namespace AgeOfJarls.Core
         internal static ConfigEntry<int> AlarmMinThreats;
         internal static ConfigEntry<float> AlarmCooldownSeconds;
         internal static ConfigEntry<float> UiScale;
+        internal static ConfigEntry<bool> SettlerPins;
+        internal static ConfigEntry<string> SettlerPinColor;
+
+        internal static ConfigEntry<bool> AutoUpdate;
+        internal static ConfigEntry<string> UpdateUrl;
+
+        internal static ConfigEntry<float> PlayerTeleportSeconds;
+        internal static ConfigEntry<float> DistantLoadSeconds;
+        internal static ConfigEntry<bool> SettlerPortals;
+        internal static ConfigEntry<bool> SettlementAreas;
+        internal static ConfigEntry<string> SettlementAreaColor;
 
         internal static void Bind(ConfigFile config)
         {
@@ -72,6 +87,28 @@ namespace AgeOfJarls.Core
                 "Size of the mod's windows (settler, Jarl's Table, totem) and their text; 1 = the original size. " +
                 "A window is never bigger than the screen.", synced: false,
                 acceptableValues: new AcceptableValueRange<float>(0.7f, 2f));
+            SettlerPins = config.BindConfig("UI", "SettlerPins", true,
+                "Settlers loaded around you are on the map like players, with their names, in SettlerPinColor.", synced: false);
+            SettlerPinColor = config.BindConfig("UI", "SettlerPinColor", "#FFC857",
+                "Colour of the settlers' map pins (HTML colour, e.g. #FFC857 gold, #7FD7FF light blue); players stay white.", synced: false);
+
+            AutoUpdate = config.BindConfig("Updates", "AutoUpdate", true,
+                "In the main menu, look for a newer version on the update page and install it for the next start of the game.", synced: false);
+            UpdateUrl = config.BindConfig("Updates", "Url", "https://aoj-updates.pages.dev/manifest.json",
+                "The update page's manifest (version, zip, SHA-256). Only https.", synced: false);
+
+            PlayerTeleportSeconds = config.BindConfig("Portals", "PlayerTeleportSeconds", 0.5f,
+                "How long (s) a portal holds you in the dark before you are moved (the game: 2).", synced: false,
+                acceptableValues: new AcceptableValueRange<float>(0.1f, 2f));
+            DistantLoadSeconds = config.BindConfig("Portals", "DistantLoadSeconds", 2f,
+                "How long (s) a portal waits for the far side to load at most before you step out, once it is loaded (the game: 6).",
+                synced: false, acceptableValues: new AcceptableValueRange<float>(0.1f, 6f));
+            SettlerPortals = config.BindConfig("Portals", "SettlerPortals", true,
+                "A settler far from its settlement takes a portal home when a portal within 80 m leads into the settlement.", synced: true);
+            SettlementAreas = config.BindConfig("UI", "SettlementAreas", true,
+                "Settlements loaded around you are drawn on the map as circles of their radius.", synced: false);
+            SettlementAreaColor = config.BindConfig("UI", "SettlementAreaColor", "#FFC85766",
+                "Colour of the settlement circles on the map (HTML colour with alpha).", synced: false);
             SettlerBlocking = config.BindConfig("Settlers", "Blocking", true,
                 "Settlers raise their shield (or weapon) against a blow about to land, time it for a perfect block once they " +
                 "know the attacker's wind-up, and turn to the enemy that is striking them.", synced: true);
@@ -119,6 +156,8 @@ namespace AgeOfJarls.Core
                 "A settler whose health runs out dies for good and leaves its gear in a grave anyone can open. " +
                 "Off (default): it is knocked out for a moment - nobody attacks it, it keeps all its gear - and gets up " +
                 "with a little health.", synced: true);
+            FollowThroughPortals = config.BindConfig("Settlers", "FollowThroughPortals", true,
+                "Settlers following you (within 20 m) come along when you take a portal, and arrive next to you.", synced: true);
 
             SettlementMinDistance = config.BindConfig("Settlement", "MinDistance", 150f,
                 "Minimum distance in meters between two Jarl's Tables.", synced: true,
@@ -144,6 +183,8 @@ namespace AgeOfJarls.Core
             CommandRange = config.BindConfig("Commands", "FollowMeRange", 20f,
                 "How far (m) \"Follow me!\" from the command wheel reaches settlers that follow nobody.", synced: false,
                 acceptableValues: new AcceptableValueRange<float>(5f, 60f));
+            ZoneKey = config.BindConfig("Commands", "ZoneKey", KeyCode.Z,
+                "On the big map: mark a settlement area (a warehouse, or any named area) under the cursor, or edit the one there.", synced: false);
             CommandWheelKey = config.BindConfig("Commands", "WheelKey", KeyCode.H,
                 "Opens the command wheel straight away, the way T opens the emotes: the orders of the settler you look at " +
                 "(from afar too), otherwise your squad's orders with the creature you look at as the target. " +
@@ -151,6 +192,13 @@ namespace AgeOfJarls.Core
             CommandLookRange = config.BindConfig("Commands", "LookRange", 40f,
                 "How far (m) the command wheel reaches the settler or the creature you look at.", synced: false,
                 acceptableValues: new AcceptableValueRange<float>(5f, 50f));
+            GuardRange = config.BindConfig("Commands", "GuardRange", 15f,
+                "A settler following you fights enemies within this distance (m) of you - the one going for you first - " +
+                "instead of whatever it notices.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(3f, 40f));
+            GuardLeash = config.BindConfig("Commands", "GuardLeash", 30f,
+                "A settler following you breaks off a fight that gets farther (m) than this from you and comes back.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(10f, 100f));
 
             TotemBaseSlots = config.BindConfig("Work", "TotemBaseSlots", 2,
                 "Workers a Work Totem takes in a new settlement; one more every second tier.", synced: true,
