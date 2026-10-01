@@ -69,7 +69,7 @@ namespace AgeOfJarls.Settlement
             double window = Math.Min(awaySeconds, maxSeconds);
             float days = (float)(window / WorldClock.DayLength);
             float radius = JarlTable.RadiusOf(data);
-            SettlementStorage.CollectChests(table.transform.position, radius, data, s_chests);
+            SettlementStorage.CollectChests(table, s_chests);
 
             List<Settler> residents = Settler.Loaded
                 .Where(s => s != null && s.Identity != null && s.HomeId == table.SettlementId && s.Zdo != null &&

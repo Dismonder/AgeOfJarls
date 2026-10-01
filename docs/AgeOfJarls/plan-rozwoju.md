@@ -116,6 +116,13 @@
   (`cloud/aoj-updates/site`), **nieopublikowana** — `pwsh tools/publish-update.ps1 AgeOfJarls` publikuje.
   Lista do sprawdzenia w grze: jak dla 0.7.0 powyżej, plus „Weź” od własnego osadnika solo (komunikat „took” i
   przedmiot w plecaku).
+- **Optymalizacja (0.7.1, 2026-10-01, statyczny przegląd gorących ścieżek):** lista skrzyń osady z cache per stół
+  (2 s, wspólna dla wszystkich osadników — wcześniej każdy osadnik przechodził `Piece.s_allPieces` co 3–5 s),
+  dedupe przez `HashSet`; `CombatSense.Scan` (10 Hz na osadnika) i `Escort.UpdateTargeting` sprawdzają odległość
+  przed `BaseAI.IsEnemy`; `PortalRoutes` z rejestru (`TeleportWorld.Awake`) zamiast `FindObjectsByType`;
+  `BowDrawPatch` bez `GetComponent` co klatkę. Pomiar z 2026-09-28 (architecture.md §11) mówi, że kod moda to
+  0,1% klatki przy 23 osadnikach, a koszt dużej osady to AI gry, animacja i fizyka — dalsze zyski wymagają pomiaru
+  `aoj_perf` na osadzie 60+ i ewentualnie rzadszego AI dla osadników daleko od graczy (decyzja po pomiarze).
 - **Do sprawdzenia w grze:** serwer dedykowany. Uwaga: gra działająca w tle między testami
   to upływ czasu świata (doba = 30 min) — osadnicy w tym czasie jedzą zapasy.
 - **Świat `testo` po testach:** Totem Tragarza poziom 3 przy osadzie, krata jeńca i 2 greydwarfy (świat ma pasywne

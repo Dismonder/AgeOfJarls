@@ -100,14 +100,82 @@ namespace AgeOfJarls.Settlement
         internal static void CollectChests(Vector3 center, float radius, SettlementData data, List<Container> chests)
         {
             chests.Clear();
+            s_seen.Clear();
             AddChests(center, radius, chests);
+            if (data != null)
+            {
+                foreach (SettlementZone zone in data.Zones)
+                {
+                    AddChests(zone.Center, zone.Radius, chests);
+                }
+            }
+            s_seen.Clear();
+        }
+
+        /// <summary>A settlement's chest list is kept this long and shared by everybody who asks for it.</summary>
+        private const float ChestCacheSeconds = 2f;
+
+        private sealed class ChestCache
+        {
+            internal float At = float.MinValue;
+            internal readonly List<Container> Chests = new List<Container>();
+        }
+
+        private static readonly Dictionary<JarlTable, ChestCache> s_chestCaches = new Dictionary<JarlTable, ChestCache>();
+        private static readonly HashSet<Container> s_seen = new HashSet<Container>();
+
+        /// <summary>
+        /// The settlement's chests (see <see cref="CollectChests(Vector3, float, SettlementData, List{Container})"/>),
+        /// gathered once every couple of seconds per settlement and copied to the caller: every settler plans its trips
+        /// from the same list, so a settlement with sixty settlers walks the base's pieces once, not sixty times.
+        /// Chests destroyed since are dropped on the way out. Empty without the table's data.
+        /// </summary>
+        internal static void CollectChests(JarlTable table, List<Container> chests)
+        {
+            chests.Clear();
+            SettlementData data = table != null ? table.Data : null;
             if (data == null)
             {
                 return;
             }
-            foreach (SettlementZone zone in data.Zones)
+            if (!s_chestCaches.TryGetValue(table, out ChestCache cache))
             {
-                AddChests(zone.Center, zone.Radius, chests);
+                if (s_chestCaches.Count >= 16)
+                {
+                    ForgetGoneTables();
+                }
+                cache = new ChestCache();
+                s_chestCaches[table] = cache;
+            }
+            if (Time.time - cache.At >= ChestCacheSeconds)
+            {
+                cache.At = Time.time;
+                CollectChests(table.transform.position, JarlTable.RadiusOf(data), data, cache.Chests);
+            }
+            else
+            {
+                cache.Chests.RemoveAll(c => c == null);
+            }
+            chests.AddRange(cache.Chests);
+        }
+
+        private static void ForgetGoneTables()
+        {
+            var gone = new List<JarlTable>();
+            foreach (JarlTable table in s_chestCaches.Keys)
+            {
+                if (table == null)
+                {
+                    gone.Add(table);
+                }
+            }
+            foreach (JarlTable table in gone)
+            {
+                s_chestCaches.Remove(table);
+            }
+            if (s_chestCaches.Count >= 16)
+            {
+                s_chestCaches.Clear();
             }
         }
 
@@ -119,9 +187,9 @@ namespace AgeOfJarls.Settlement
             {
                 // Carts and ships keep their container on a child object, so only root containers count.
                 Container chest = piece.GetComponent<Container>();
-                if (chest != null && chest.m_privacy == Container.PrivacySetting.Public &&
+                if (chest != null && chest.m_privacy == Container.PrivacySetting.Public && s_seen.Add(chest) &&
                     piece.GetComponent<Incinerator>() == null && piece.GetComponent<Army.Armory>() == null &&
-                    chest.m_nview != null && chest.m_nview.IsValid() && !IsInputChest(chest) && !chests.Contains(chest))
+                    chest.m_nview != null && chest.m_nview.IsValid() && !IsInputChest(chest))
                 {
                     chests.Add(chest);
                 }

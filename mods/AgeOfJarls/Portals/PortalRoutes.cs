@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using HarmonyLib;
 using UnityEngine;
 
 namespace AgeOfJarls.Portals
@@ -12,11 +13,11 @@ namespace AgeOfJarls.Portals
     {
         /// <summary>A portal farther than this from the settler is not worth the walk.</summary>
         internal const float SearchRange = 80f;
-        private const float RescanSeconds = 5f;
+        private const float PruneSeconds = 5f;
         private const float ExitDistance = 1f;
 
         private static readonly List<TeleportWorld> s_portals = new List<TeleportWorld>();
-        private static float s_scannedAt = float.MinValue;
+        private static float s_prunedAt = float.MinValue;
 
         internal sealed class Route
         {
@@ -121,15 +122,28 @@ namespace AgeOfJarls.Portals
             return true;
         }
 
+        // Every portal registers itself as it loads (see RegisterPatch); one unloaded or destroyed is a Unity null in
+        // the list and is dropped on the next look. No scan of the scene for them, ever.
         private static List<TeleportWorld> LoadedPortals()
         {
-            if (Time.time - s_scannedAt > RescanSeconds)
+            if (Time.time - s_prunedAt > PruneSeconds)
             {
-                s_scannedAt = Time.time;
-                s_portals.Clear();
-                s_portals.AddRange(Object.FindObjectsByType<TeleportWorld>(FindObjectsSortMode.None));
+                s_prunedAt = Time.time;
+                s_portals.RemoveAll(p => p == null);
             }
             return s_portals;
+        }
+
+        [HarmonyPatch(typeof(TeleportWorld), "Awake")]
+        private static class RegisterPatch
+        {
+            private static void Postfix(TeleportWorld __instance)
+            {
+                if (__instance != null && !s_portals.Contains(__instance))
+                {
+                    s_portals.Add(__instance);
+                }
+            }
         }
     }
 }

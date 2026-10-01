@@ -278,7 +278,7 @@ Każdy krok zapisuje w ZDO typ zadania, krok i cel (ZDOID), więc zadanie trwa d
   `$aoj_msg_followers_have_home`.
 - **Moduł portali (`Portals/`).** `PortalPatches`: prefix `Player.UpdateTeleport` przyspiesza licznik gry (faza
   ciemności 2 s → `Portals/PlayerTeleportSeconds`, czekanie 6 s po dalekim skoku → `DistantLoadSeconds`); warunki gry
-  (strefa wczytana, podłoga) zostają. `PortalRoutes`: wczytane `TeleportWorld` (skan co 5 s), wyjście jak u gracza
+  (strefa wczytana, podłoga) zostają. `PortalRoutes`: wczytane `TeleportWorld` (rejestr z postfixu `TeleportWorld.Awake`, nulle usuwane co 5 s — bez skanu sceny), wyjście jak u gracza
   (`GetConnectionZDOID` → ZDO celu, 1 m przed nim), `FindRoute` (cel w promieniu) i `FindShortcut` (droga przez portal
   krótsza o ≥ 60 m). **Noga portalowa w `PathMover.MoveTo`**: cel dalej niż 120 m → co 5 s szukanie skrótu; jest →
   marsz do wejścia (`MoveDirect`), przy portalu `Settler.JumpTo(exit)` i ścieżka od nowa po drugiej stronie;
@@ -289,7 +289,7 @@ Każdy krok zapisuje w ZDO typ zadania, krok i cel (ZDOID), więc zadanie trwa d
 - **Obszary osady (`SettlementZone`, format 6).** Lista stref w `SettlementData.Zones` (id, nazwa, rodzaj
   warehouse/other, środek, promień 5–80 m, maks. 16, ≤ 400 m od stołu); akcje `SetZone`/`RemoveZone` (Hersir+,
   właściciel stołu nadaje id `Keys.NewId`). `JarlTable.Contains` = promień stołu lub strefa; `FindContaining` z tego
-  korzysta (etykiety skrzyń). `SettlementStorage.CollectChests(center, radius, data, chests)` zbiera skrzynie też ze
+  korzysta (etykiety skrzyń). `SettlementStorage.CollectChests(table, chests)` (lista per stół, odświeżana co 2 s i kopiowana — jeden przebieg po kawałkach bazy na osadę, nie na osadnika) zbiera skrzynie też ze
   stref (bez duplikatów) — HomeRoutine, JobBase, SettlementSim, okno stołu. Mapa: `UI/ZoneWindow` — postfix
   `Minimap.UpdateMap` w trybie dużej mapy, klawisz `Commands/ZoneKey` (Z) nad mapą → `ScreenToWorldPoint(pointer)`;
   strefa pod kursorem → edycja, inaczej nowa w najbliższej wczytanej osadzie z prawem Manage. `UI/SettlementPins`
@@ -380,7 +380,7 @@ dla tych samych osadników 8,7 µs i skoki do 5,3 ms. Plan domowy (skan skrzyń,
 zapis ekwipunku ~140 µs. Wniosek: koszt dużej osady to przede wszystkim AI gry, animacja i fizyka postaci;
 w kodzie moda ważne jest tylko, żeby okresowa praca nie wypadała w tej samej klatce u wszystkich osadników
 (zegary planu, ticku, sprzętu i posterunków startują w losowej fazie). Pomiar przy 60/120 osadnikach w domu
-wymaga osady na wyższym poziomie.
+wymaga osady na wyższym poziomie. Przegląd 0.7.1 (2026-10-01, bez pomiaru): skrzynie osady z cache per stół, skany walki i strażnika z odległością przed IsEnemy, portale z rejestru. Następny krok: oj_perf na osadzie 60+.
 
 ## 12. Zgodność z innymi modami
 - Twoje mody z Vortexa:

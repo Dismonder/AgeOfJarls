@@ -116,8 +116,9 @@ namespace AgeOfJarls.AI
             {
                 if (__instance is SettlerCharacter body)
                 {
-                    // Drawn a little short without experience, fully by a veteran.
-                    ZNetView view = body.GetComponent<ZNetView>();
+                    // Drawn a little short without experience, fully by a veteran. Asked every frame of a draw: the
+                    // character's own view, no component lookup.
+                    ZNetView view = body.m_nview;
                     float skill = view != null && view.IsValid() ? CombatSkill.Level(view.GetZDO()) : 0f;
                     __result = Mathf.Lerp(0.75f, 1f, skill / 100f);
                 }

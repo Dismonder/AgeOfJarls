@@ -20,6 +20,8 @@ namespace AgeOfJarls.AI
         private const float ScanSeconds = 0.1f;
         /// <summary>An enemy whose edge is this close may reach the settler with a melee swing.</summary>
         private const float StrikeReach = 3.2f;
+        /// <summary>Centre to centre, farther than this nobody is a striker or a reason to kite, whatever its size (a troll's radius is under 3 m).</summary>
+        private const float BroadReachSqr = 8f * 8f;
         /// <summary>Wind-up of a creature nobody measured yet: on the long side, so the block is up when the hit comes.</summary>
         private const float DefaultWindup = 0.7f;
         /// <summary>The block goes up this long before the expected hit: inside the perfect-block window, with slack for the swing's drift.</summary>
@@ -162,14 +164,23 @@ namespace AgeOfJarls.AI
             _nearest = null;
             _nearestDistance = float.MaxValue;
             _stale.AddRange(_swingStarts.Keys);
-            foreach (Character other in Character.GetAllCharacters())
+            List<Character> all = Character.GetAllCharacters();
+            for (int i = 0; i < all.Count; i++)
             {
-                if (other == null || other == _body || other.IsDead() || !BaseAI.IsEnemy(_body, other))
+                Character other = all[i];
+                if (other == null || other == _body)
+                {
+                    continue;
+                }
+                // The cheap test first: ten scans a second for every settler over every loaded creature, and the
+                // faction check is the dear part - only creatures within reach of a swing or a kiting step matter.
+                Vector3 offset = other.transform.position - position;
+                if (offset.sqrMagnitude > BroadReachSqr || other.IsDead() || !BaseAI.IsEnemy(_body, other))
                 {
                     continue;
                 }
                 // From the edge of the enemy, not its middle: a troll's swing starts a long way from its centre.
-                float distance = Vector3.Distance(other.transform.position, position) - other.GetRadius();
+                float distance = offset.magnitude - other.GetRadius();
                 if (distance < _nearestDistance)
                 {
                     _nearest = other;

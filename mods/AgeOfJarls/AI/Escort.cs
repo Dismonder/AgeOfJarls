@@ -171,12 +171,13 @@ namespace AgeOfJarls.AI
             for (int i = 0; i < all.Count; i++)
             {
                 Character candidate = all[i];
-                if (candidate == null || candidate == _ai.Body || candidate.IsDead() || !BaseAI.IsEnemy(_ai.Body, candidate))
+                if (candidate == null || candidate == _ai.Body)
                 {
                     continue;
                 }
+                // Distance before the faction check: the latter is the dear part, and most creatures are far away.
                 float distance = Vector3.Distance(candidate.transform.position, at);
-                if (distance > range && candidate != current)
+                if ((distance > range && candidate != current) || candidate.IsDead() || !BaseAI.IsEnemy(_ai.Body, candidate))
                 {
                     continue;
                 }
