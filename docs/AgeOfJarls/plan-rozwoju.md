@@ -118,7 +118,12 @@
   co sekundę wybierało najbliższego — żołnierz biegałby tam i z powrotem (teraz `HoldVanillaTargeting` póki trwa
   walka oddziału); `Courtesy` nie rusza leżącego w łóżku; F6 nie otwiera instrukcji nad ekwipunkiem i sklepem.
   Drugi przebieg (adopcja domu, przyjmowanie podążających, patche walki, zbieranie łupu, akcje stołu, RPC totemu i
-  skrzyń, pętla serwera) bez nowych błędów. Znane ograniczenie, nienaprawione: akcja przekazana dalej przez
+  skrzyń, pętla serwera) bez nowych błędów. Trzeci przebieg (zadania Budowniczego/Rolnika/Hutnika/Kucharza, Drwal,
+  WorkScanner, indeks i przejmowanie skrzyń, oblężenia, wyłomy, koło rozkazów, okno osadnika, zużycie broni,
+  rekrutacja, totem, kronika, nadrabianie, potrzeby, doświadczenie bojowe, sztandary; sygnatury RPC gry
+  `RPC_AddOre/AddItem/RemoveDoneItem/UseDoor` i `WearNTear.Destroy` zgodne): jeden błąd — osadnik przeniesiony do
+  innej osady (`DropStaleRosters` → `RemoveSettler`) trafiał do kroniki starej osady jako „zmarł lub zaginął” i
+  osada go opłakiwała (`Mourn`, −10 morale); teraz wpis `$aoj_chr_moved` bez żałoby. Znane ograniczenie, nienaprawione: akcja przekazana dalej przez
   `OwnerRpc.Handles` (własność zmieniła się w locie) niesie tożsamość pośrednika, więc rangę sprawdza się dla
   niewłaściwego gracza — rzadkie, skutek to odmowa, nie utrata danych. Strona aktualizacji przygotowana lokalnie
   (`cloud/aoj-updates/site`), **nieopublikowana** — `pwsh tools/publish-update.ps1 AgeOfJarls` publikuje.

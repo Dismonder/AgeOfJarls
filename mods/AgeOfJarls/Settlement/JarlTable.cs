@@ -977,17 +977,21 @@ namespace AgeOfJarls.Settlement
                     if (removed)
                     {
                         Log.Info(Module, $"{entry.Name} left {DisplayName(data)}");
-                        bool dismissed = role.Allows(SettlementRight.Manage) && settler != null && !settler.GetComponent<Character>().IsDead();
+                        bool alive = settler != null && !settler.GetComponent<Character>().IsDead();
+                        bool dismissed = alive && role.Allows(SettlementRight.Manage);
                         if (dismissed)
                         {
                             Chronicle.Add(_nview, "$aoj_chr_dismissed_by", entry.Name, actor);
                         }
+                        else if (alive)
+                        {
+                            // Its owner reports it alive and elsewhere: it was taken into another settlement
+                            // (Settler.DropStaleRosters). Nobody died, nobody mourns.
+                            Chronicle.Add(_nview, "$aoj_chr_moved", entry.Name);
+                        }
                         else
                         {
                             Chronicle.Add(_nview, "$aoj_chr_lost", entry.Name);
-                        }
-                        if (!dismissed)
-                        {
                             Mourn();
                         }
                     }
