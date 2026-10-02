@@ -9,6 +9,7 @@ oblężeniami. Osadnik, który za tobą idzie, jest twoim strażnikiem.
 | | |
 |---|---|
 | **Pobierz (najnowsza wersja)** | **https://aoj-updates.pages.dev** — jeden klik, zip gotowy do rozpakowania |
+| Thunderstore (r2modman / Mod Manager) | https://thunderstore.io/c/valheim/p/Dismonder/AgeOfJarls/ |
 | Wydania na GitHub | https://github.com/Dismonder/AgeOfJarls/releases/latest |
 | Lista zmian | [mods/AgeOfJarls/Package/CHANGELOG.md](mods/AgeOfJarls/Package/CHANGELOG.md) |
 | Opis dla graczy (EN) | [mods/AgeOfJarls/Package/README.md](mods/AgeOfJarls/Package/README.md) |

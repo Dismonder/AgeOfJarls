@@ -26,3 +26,4 @@ communities = ["valheim"]
 
 [publish.categories]
 valheim = ["mods", "npcs", "building", "crafting", "server-side", "deep-north-update"]
+
