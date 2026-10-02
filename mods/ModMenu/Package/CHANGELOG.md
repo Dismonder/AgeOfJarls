@@ -7,7 +7,8 @@
 - Update check: parallel Thunderstore requests and batched Nexus queries (fast with 100+ mods); hand-installed Nexus mods are found by name.
 - Ctrl+M opens the menu even when another mod reworks the main menu (General/OpenKey).
 - Gamepad B closes the window; if Jotunn's GUI is not ready the main menu stays usable instead of hiding.
-- Restart also works outside Steam; the disabling patcher handles loaders that scan several plugin folders.
+- Numbers accept a decimal comma (0,5); a slider over a huge range can no longer throw.
+- Restart also works outside Steam and on Linux/macOS; the disabling patcher handles loaders that scan several plugin folders.
 
 ## 0.1.0
 - Mods button in the main menu with the list of every installed mod (loaded, switched off, failed).

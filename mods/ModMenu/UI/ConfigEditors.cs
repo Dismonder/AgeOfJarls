@@ -155,8 +155,15 @@ namespace ModMenu.UI
                 bool whole = type != typeof(float) && type != typeof(double) && type != typeof(decimal);
                 Slider slider = UiKit.Slider(parent, min, max, Convert.ToSingle(entry.BoxedValue), whole, v =>
                 {
-                    // Rounded in double, so a double setting gets 0.1 and not 0.100000001.
-                    set(Convert.ChangeType(whole ? Math.Round((double)v) : Math.Round((double)v, 3), type));
+                    try
+                    {
+                        // Rounded in double, so a double setting gets 0.1 and not 0.100000001.
+                        set(Convert.ChangeType(whole ? Math.Round((double)v) : Math.Round((double)v, 3), type));
+                    }
+                    catch (OverflowException)
+                    {
+                        // Float precision at the very end of a huge range (long.MaxValue); the typed field still works.
+                    }
                     field.SetTextWithoutNotify(ToText(entry.BoxedValue, type));
                 });
                 UiKit.PlaceLeft(slider.gameObject, 0f, EditorWidth - 100f, 24f);
@@ -215,10 +222,15 @@ namespace ModMenu.UI
         /// A value outside a list of allowed values is refused here: BepInEx would silently replace it with the first
         /// allowed one. Ranges are left to BepInEx, which clamps.
         /// </summary>
-        private static bool TryParse(string text, Type type, AcceptableValueBase acceptable, out object value)
+        internal static bool TryParse(string text, Type type, AcceptableValueBase acceptable, out object value)
         {
             try
             {
+                // "0,5" is how many players write a decimal; BepInEx reads numbers with a dot only.
+                if (IsNumber(type))
+                {
+                    text = text.Trim().Replace(',', '.');
+                }
                 value = TomlTypeConverter.ConvertToValue(text, type);
                 bool isRange = acceptable != null && acceptable.GetType().IsGenericType
                     && acceptable.GetType().GetGenericTypeDefinition() == typeof(AcceptableValueRange<>);

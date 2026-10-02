@@ -14,6 +14,20 @@ namespace ModMenu
         /// runs). Steam installs go through steam:// so Steam's launch options stay; any other install (Game Pass, a
         /// copied folder) restarts the same executable with the same arguments. A hidden PowerShell waits for the exit.
         /// </summary>
+        /// <summary>Linux / macOS: a detached shell waits for the exit, then asks Steam (or the same binary) to start again.</summary>
+        private static ProcessStartInfo UnixRestart(int pid, bool steam, string exe)
+        {
+            string opener = Application.platform == RuntimePlatform.OSXPlayer ? "open" : "xdg-open";
+            string launch = steam ? $"{opener} steam://rungameid/{SteamAppId}" : $"\"{exe.Replace("\"", "")}\"";
+            return new ProcessStartInfo
+            {
+                FileName = "/bin/sh",
+                Arguments = $"-c 'while kill -0 {pid} 2>/dev/null; do sleep 1; done; {launch} >/dev/null 2>&1 &'",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+        }
+
         public static void Restart()
         {
             try
@@ -27,14 +41,15 @@ namespace ModMenu
                 string launch = steam
                     ? $"Start-Process 'steam://rungameid/{SteamAppId}'"
                     : $"Start-Process -FilePath '{exe.Replace("'", "''")}'" + (argList.Length > 0 ? $" -ArgumentList {argList}" : "");
-                var start = new ProcessStartInfo
-                {
-                    FileName = "powershell.exe",
-                    Arguments = $"-NoProfile -WindowStyle Hidden -Command \"Wait-Process -Id {pid} -ErrorAction SilentlyContinue; {launch}\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                };
-                Process.Start(start);
+                Process.Start(Application.platform == RuntimePlatform.WindowsPlayer
+                    ? new ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = $"-NoProfile -WindowStyle Hidden -Command \"Wait-Process -Id {pid} -ErrorAction SilentlyContinue; {launch}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                    }
+                    : UnixRestart(pid, steam, exe));
             }
             catch (Exception e)
             {
