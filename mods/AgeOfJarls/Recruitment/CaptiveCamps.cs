@@ -83,6 +83,8 @@ namespace AgeOfJarls.Recruitment
                 }
             }
             Log.Info(Module, $"A captive waits in {location} at {spot:F0}");
+            // A lead for every player: the camp goes on everybody's map, saved; taken off when the captive is freed.
+            RecruitPins.Broadcast(RecruitPins.CaptiveToken, spot, true);
         }
 
         // From raids.json ("campGuards" by biome name), else the built-in line-up.

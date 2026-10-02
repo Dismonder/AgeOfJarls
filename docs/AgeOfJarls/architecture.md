@@ -287,6 +287,12 @@ Każdy krok zapisuje w ZDO typ zadania, krok i cel (ZDOID), więc zadanie trwa d
   (synced, domyślnie włączone). `Physics.IgnoreCollision` para po parze na kapsułach postaci (`Character.m_collider`):
   przy `Settler.Start` z każdym graczem i osadnikiem, postfix `Player.Awake` z każdym osadnikiem, `SettingChanged` →
   wszystkie pary od nowa. Ściany, meble i wrogowie bez zmian; trafienia to sphere casty, nie kontakty, więc lądują.
+- **Pinezki rekrutacji (`Recruitment/RecruitPins`).** Routowany RPC `AoJ_RecruitPin(token, pozycja, on)` do
+  wszystkich (gra obsługuje rozgłoszenie także u nadawcy): zapisywana pinezka `$aoj_pin_castaways` (Icon3) z
+  `Castaways.Arrive` i `$aoj_pin_captive` (Icon0) z `CaptiveCamps.Decide`, zdejmowana w `Settler.RPC_Free`; tylko te
+  dwa tokeny są przyjmowane; dubel = ta sama nazwa w 6 m (`Minimap.m_pins`). `SettlerPins` dokłada pinezkę obozu
+  lokalnie przy pierwszym wczytaniu jeńca (maszyna, która dołączyła później). Rozbitkowie dostają
+  `SetPatrolPoint(stół)` zaraz po spawnie, więc idą z brzegu do stołu.
 - **Osadnicy na mapie (`UI/SettlerPins`).** Postfix `Minimap.UpdateMap` co 0,5 s: pinezka `PinType.Player` z imieniem
   dla każdego z `Settler.Loaded` (tylko wczytani na tej maszynie — pozycji dalszych nikt tu nie zna), pozycja
   aktualizowana z `m_pinUpdateRequired`, usuwana, gdy osadnik zniknie; nowa instancja `Minimap` = nowa sesja → słownik

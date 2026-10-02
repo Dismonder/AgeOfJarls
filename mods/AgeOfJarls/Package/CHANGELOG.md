@@ -16,6 +16,11 @@
   "died or went missing", and the old settlement no longer mourns it.
 - A fault in a settler's own targeting or guard following can no longer stop the game's AI for that settler: the
   game's behaviour carries on and the fault is logged once in a while.
+- **Settlers are easier to find.** The castaways' shore and every camp found to hold a captive are pinned on
+  every player's map (saved pins; the camp's pin goes when the captive is freed) - before, only the founder's map got
+  the shore and no camp was ever marked. Castaways walk from the shore to the Jarl's Table on their own instead of
+  waiting up to 200 m away. Captives show on the map as "Captive: name" while loaded. Camps in old, long-explored
+  worlds decide whether they hold a captive the first time somebody comes near them with the mod, as before.
 - Lighter on big settlements: the settlement's chest list is gathered once every two seconds per settlement and
   shared by all its settlers (before, every settler walked the base's pieces for itself every few seconds); the
   block-and-kite scan (ten a second per settler) and the guard's target scan check distance before the faction

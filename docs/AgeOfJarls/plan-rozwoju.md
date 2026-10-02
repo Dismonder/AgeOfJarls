@@ -128,7 +128,19 @@
   totemu, rejestr definicji, tłumaczenia, dzikie jedzenie) bez błędów; utwardzenie: blok przed vanilla w
   `SettlerAI.UpdateAI` (rozkazy, cele strażnika i oddziału, blokowanie) w try/catch z logiem co 30 s — wyjątek tam
   wyłączał całe AI osadnika co klatkę; `Escort.FollowPatch` przy wyjątku oddaje podążanie vanilla; `Plugin.Update`
-  w try/catch; `SettlerCollision` pomija wyłączone kolidery. Znane ograniczenie, nienaprawione: akcja przekazana dalej przez
+  w try/catch; `SettlerCollision` pomija wyłączone kolidery.
+- **Rekrutacja na istniejącej mapie (2026-10-02, prośba: „ciężko było ich znaleźć”):** sprawdzone — obozy decydują o
+  jeńcu w postfixie `LocationProxy.SpawnLocation`, który biegnie przy każdym wczytaniu strefy obozu (także w starym
+  świecie), raz na obóz (`ZdoCampDecided`, szansa `Recruitment/CaptiveCampChance` 0,4); rozbitkowie raz na świat
+  (klucz globalny) 30 s po pierwszym stole, na brzegu do 200 m. Braki: pinezka brzegu tylko u założyciela
+  (klient/host bez), obozy bez żadnej pinezki. Zrobione: `Recruitment/RecruitPins` — routowany RPC `AoJ_RecruitPin`
+  (rejestracja w `RoutedRpcs`), zapisywane pinezki u wszystkich: brzeg rozbitków (`Icon3`) i obóz z jeńcem (`Icon0`,
+  usuwana przy uwolnieniu w `RPC_Free`), bez dubli (ta sama nazwa w 6 m); `SettlerPins` nazywa jeńca „Jeniec: imię”
+  i dokłada zapisaną pinezkę obozu u maszyny, która go wczytała (dołączający później); rozbitkowie dostają punkt
+  patrolu = stół, więc sami idą z brzegu do stołu. Świat, w którym rozbitkowie już byli (klucz ustawiony), nowych nie
+  dostanie — awaryjnie `aoj_spawn` przy graczu. **Do sprawdzenia:** u hosta i klienta pinezka „Rozbitkowie” po
+  postawieniu pierwszego stołu w nowym świecie; wejście w pobliże obozu z listy → log „A captive waits in …” i
+  pinezka „Jeniec” u obu; po uwolnieniu pinezka znika u obu. Znane ograniczenie, nienaprawione: akcja przekazana dalej przez
   `OwnerRpc.Handles` (własność zmieniła się w locie) niesie tożsamość pośrednika, więc rangę sprawdza się dla
   niewłaściwego gracza — rzadkie, skutek to odmowa, nie utrata danych. Strona aktualizacji przygotowana lokalnie
   (`cloud/aoj-updates/site`), **nieopublikowana** — `pwsh tools/publish-update.ps1 AgeOfJarls` publikuje.

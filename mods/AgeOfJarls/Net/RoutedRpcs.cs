@@ -31,6 +31,7 @@ namespace AgeOfJarls.Net
                 return;
             }
             Army.AlarmPins.OnNewSession(rpc);
+            Recruitment.RecruitPins.Register(rpc);
             Log.Debug(Module, "Routed RPCs registered");
         }
 

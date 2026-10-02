@@ -39,8 +39,9 @@ server and in co-op. Works in new **and existing** worlds.
   replant. Tools come from you (axe, pickaxe, hammer).
 - **While you are away** — when you come back, the settlement credits the work of your absence (up to 2 days): wood,
   stone, bars from the smelters, cooked food, the harvest.
-- **Recruitment** — castaways reach the shore after your first table; captives wait behind bars in enemy camps (also
-  in old worlds): beat the guards or break the bars and set them free.
+- **Recruitment** — castaways reach the shore after your first table and walk to it; captives wait behind bars in
+  enemy camps (also in old worlds): beat the guards or break the bars and set them free. The shore and every camp
+  with a captive are pinned on everybody's map.
 - **Troop and sieges** — combat roles (warrior, archer, shieldbearer, spearman, berserker), War Banners (posts) and an
   Armory the troop takes and returns gear to. From tier 1 settlements are sometimes besieged while you are home —
   later from several sides, with siege units that go for the walls; Builders put back what was destroyed. The alarm

@@ -277,6 +277,8 @@ namespace AgeOfJarls.Settlers
                 _ai.ResetPatrolPoint();
                 _ai.SetFollowTarget(player.gameObject);
             }
+            // The camp's pin has done its work: off everybody's map.
+            Recruitment.RecruitPins.Broadcast(Recruitment.RecruitPins.CaptiveToken, transform.position, false);
             Log.Info(Module, $"{DisplayName} was freed by {player.GetPlayerName()}");
         }
 

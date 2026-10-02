@@ -18,7 +18,11 @@ namespace AgeOfJarls.UI
         private const float RefreshSeconds = 0.5f;
 
         private static readonly Dictionary<Settler, Minimap.PinData> s_pins = new Dictionary<Settler, Minimap.PinData>();
+        private static readonly HashSet<Settler> s_captivesPinned = new HashSet<Settler>();
         private static readonly List<Settler> s_gone = new List<Settler>();
+
+        private static string Localize(string text, params string[] words) =>
+            Localization.instance != null ? Localization.instance.Localize(text, words) : text;
         private static Minimap s_map;
         private static float s_nextRefresh;
         private static Color s_color = Color.white;
@@ -30,6 +34,7 @@ namespace AgeOfJarls.UI
             {
                 // A new session has a new map: the last session's pins went with its map.
                 s_pins.Clear();
+                s_captivesPinned.Clear();
                 s_map = map;
             }
             if (Time.time < s_nextRefresh)
@@ -49,8 +54,15 @@ namespace AgeOfJarls.UI
                 {
                     continue;
                 }
-                string name = settler.DisplayName;
                 Vector3 position = settler.transform.position;
+                bool captive = settler.IsCaptive;
+                // A captive is named as one, and its camp gets the saved pin too (for a machine that joined after the
+                // camp was found, or whose map lacks it): once per settler, the pin itself is never doubled.
+                string name = captive ? Localize("$aoj_pin_captive_name", settler.DisplayName) : settler.DisplayName;
+                if (captive && s_captivesPinned.Add(settler))
+                {
+                    Recruitment.RecruitPins.Apply(Recruitment.RecruitPins.CaptiveToken, position, true);
+                }
                 if (s_pins.TryGetValue(settler, out Minimap.PinData pin))
                 {
                     if (pin.m_pos != position)
@@ -83,6 +95,7 @@ namespace AgeOfJarls.UI
             {
                 map.RemovePin(s_pins[settler]);
                 s_pins.Remove(settler);
+                s_captivesPinned.Remove(settler);
             }
             s_gone.Clear();
         }

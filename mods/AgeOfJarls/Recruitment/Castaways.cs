@@ -52,9 +52,12 @@ namespace AgeOfJarls.Recruitment
             for (int i = 0; i < Count; i++)
             {
                 Vector3 spot = shore + new Vector3(Random.Range(-2f, 2f), 0.3f, Random.Range(-2f, 2f));
-                Object.Instantiate(prefab, spot, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
+                GameObject castaway = Object.Instantiate(prefab, spot, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
+                // They make for the table on their own (the game's idle movement heads for the patrol point) instead
+                // of waiting on a shore up to 200 m away where nobody looks for them.
+                castaway.GetComponent<MonsterAI>()?.SetPatrolPoint(table.transform.position);
             }
-            Log.Info(Module, $"{Count} castaways reached the shore at {shore:F0}");
+            Log.Info(Module, $"{Count} castaways reached the shore at {shore:F0}, {Vector3.Distance(shore, table.transform.position):0} m from the table");
             if (table.NetView != null && table.NetView.IsValid())
             {
                 Chronicle.Add(table.NetView, "$aoj_chr_castaways", Count.ToString());
@@ -63,10 +66,8 @@ namespace AgeOfJarls.Recruitment
             {
                 MessageHud.instance.MessageAll(MessageHud.MessageType.Center, "$aoj_msg_castaways");
             }
-            if (Minimap.instance != null)
-            {
-                Minimap.instance.AddPin(shore, Minimap.PinType.Icon3, Localization.instance.Localize("$aoj_pin_castaways"), true, false);
-            }
+            // On everybody's map, not only the founder's: in co-op the other player looked for them without a pin.
+            RecruitPins.Broadcast(RecruitPins.CastawaysToken, shore, true);
         }
 
         // The nearest dry spot next to the sea: ground just above the water level, searched in rings around the table.

@@ -41,6 +41,8 @@ namespace AgeOfJarls.Core
         internal const string RpcSettlerNotify = "AoJ_SettlerNotify";
         /// <summary>On a settler: come along through the portal its leader just took - to this spot (Settler.RPC_Teleport).</summary>
         internal const string RpcSettlerTeleport = "AoJ_SettlerTeleport";
+        /// <summary>Routed to everybody: a saved map pin where settlers can be found - castaways, a captive - or its removal (Recruitment.RecruitPins).</summary>
+        internal const string RpcRecruitPin = "AoJ_RecruitPin";
 
         /// <summary>Chest: the kind of things settlers put in it (a storage.json kind or a built-in one); "" = anything.</summary>
         internal static readonly int ZdoChestKind = "aoj_chest_kind".GetStableHashCode();
