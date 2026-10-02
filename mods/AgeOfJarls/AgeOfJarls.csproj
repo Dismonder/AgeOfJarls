@@ -3,7 +3,7 @@
     <AssemblyName>AgeOfJarls</AssemblyName>
     <RootNamespace>AgeOfJarls</RootNamespace>
     <!-- Must be plain x.y.z (BepInEx parses it with System.Version). -->
-    <Version>0.7.1</Version>
+    <Version>0.7.2</Version>
     <Description>Settlements, settlers, work, sieges and co-op management for Valheim</Description>
     <!-- true = reference Jotunn.dll and define the JOTUNN symbol. -->
     <UseJotunn>true</UseJotunn>

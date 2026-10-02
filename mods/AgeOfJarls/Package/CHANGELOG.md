@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.2
+
+- New thumbnail: the settlement and its settlers (a woodcutter, a hauler, a guard by the Jarl's banner) instead of
+  two letters.
+- `aoj_version` also says whether an update is installed and waiting for a restart, and whether auto-update is on.
+- Released from one script (`tools/release.ps1`): the package, the update page, the GitHub release and Thunderstore
+  always carry the very same zip.
+
 ## 0.7.1
 
 - **Fixed:** taking an item (or the whole bag) from a settler your own machine simulates gave nothing and put the
