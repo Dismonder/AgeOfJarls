@@ -31,6 +31,8 @@ New-Item -ItemType Directory -Force $siteDir | Out-Null
 
 $zipName = Split-Path $zip -Leaf
 Copy-Item $zip (Join-Path $siteDir $zipName)
+# A fixed name for the big download button and for links that should not go stale.
+Copy-Item $zip (Join-Path $siteDir "$Name-latest.zip")
 $sha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 $baseUrl = "https://$Project.pages.dev"
 $date = Get-Date -Format 'yyyy-MM-dd HH:mm'
