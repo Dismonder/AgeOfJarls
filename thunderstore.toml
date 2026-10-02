@@ -7,7 +7,7 @@ repository = "https://thunderstore.io"
 [package]
 namespace = "Dismonder"
 name = "AgeOfJarls"
-versionNumber = "0.7.1"
+versionNumber = "0.7.2"
 description = "Found settlements, rescue settlers and let them work and fight for you. Co-op, existing worlds."
 websiteUrl = "https://github.com/Dismonder/AgeOfJarls"
 containsNsfwContent = false
@@ -26,4 +26,5 @@ communities = ["valheim"]
 
 [publish.categories]
 valheim = ["mods", "npcs", "building", "crafting", "server-side", "deep-north-update"]
+
 

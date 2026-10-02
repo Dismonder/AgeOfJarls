@@ -37,7 +37,13 @@ try {
     if (-not (Test-Path $zip)) { throw "Brak paczki: $zip" }
     $sha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 
-    # 2. Version files the scripts touched go into the release commit; the tag marks it.
+    # 2. Version files the scripts touched go into the release commit; the tag marks it. thunderstore.toml gets the
+    #    version here, before the commit, so the Thunderstore step later changes nothing.
+    $toml = Join-Path $RepoRoot 'thunderstore.toml'
+    if (Test-Path $toml) {
+        $text = [regex]::Replace((Get-Content $toml -Raw), 'versionNumber = "[^"]*"', "versionNumber = `"$version`"")
+        Set-Content $toml $text -Encoding utf8NoBOM
+    }
     git add -- $csproj "mods/$Name/Package/manifest.json" "mods/$Name/Package/CHANGELOG.md" thunderstore.toml 2>$null
     $staged = git diff --cached --name-only
     if ($staged) {
