@@ -35,6 +35,7 @@ namespace AgeOfJarls
             Recruitment.CaptiveCage.Register();
             ConsoleCommands.Register();
             UI.CommandWheel.RegisterKey();
+            SettlerCollision.Init();
 
             _harmony = new Harmony(PluginInfo.Guid);
             _harmony.PatchAll(typeof(Plugin).Assembly);
@@ -45,6 +46,7 @@ namespace AgeOfJarls
         private void Update()
         {
             ItemDelivery.Update();
+            UI.HelpWindow.Poll();
         }
 
         private void OnDestroy()

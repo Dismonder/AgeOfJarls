@@ -24,6 +24,9 @@ namespace AgeOfJarls.Core
         internal static ConfigEntry<float> SettlerWanderRange;
         internal static ConfigEntry<bool> PermanentDeath;
         internal static ConfigEntry<bool> FollowThroughPortals;
+        internal static ConfigEntry<bool> CollideWithPlayers;
+        internal static ConfigEntry<bool> CollideWithSettlers;
+        internal static ConfigEntry<KeyCode> HelpKey;
 
         internal static ConfigEntry<float> SettlementMinDistance;
         internal static ConfigEntry<int> MaxJarls;
@@ -91,6 +94,8 @@ namespace AgeOfJarls.Core
                 "Settlers loaded around you are on the map like players, with their names, in SettlerPinColor.", synced: false);
             SettlerPinColor = config.BindConfig("UI", "SettlerPinColor", "#FFC857",
                 "Colour of the settlers' map pins (HTML colour, e.g. #FFC857 gold, #7FD7FF light blue); players stay white.", synced: false);
+            HelpKey = config.BindConfig("UI", "HelpKey", KeyCode.F6,
+                "Opens (and closes) the mod's manual in the game: settlers, orders, work, storage, the troop, the map, portals, keys, console.", synced: false);
 
             AutoUpdate = config.BindConfig("Updates", "AutoUpdate", true,
                 "In the main menu, look for a newer version on the update page and install it for the next start of the game.", synced: false);
@@ -158,6 +163,11 @@ namespace AgeOfJarls.Core
                 "with a little health.", synced: true);
             FollowThroughPortals = config.BindConfig("Settlers", "FollowThroughPortals", true,
                 "Settlers following you (within 20 m) come along when you take a portal, and arrive next to you.", synced: true);
+            CollideWithPlayers = config.BindConfig("Settlers", "CollideWithPlayers", true,
+                "Settlers and players bump into each other, as the game has it. Off: you walk through settlers and they " +
+                "through you - no more being shoved in a doorway by a follower. Hits land either way.", synced: true);
+            CollideWithSettlers = config.BindConfig("Settlers", "CollideWithSettlers", true,
+                "Settlers bump into each other. Off: they walk through each other - a crowd at a chest or a gate no longer jams.", synced: true);
 
             SettlementMinDistance = config.BindConfig("Settlement", "MinDistance", 150f,
                 "Minimum distance in meters between two Jarl's Tables.", synced: true,

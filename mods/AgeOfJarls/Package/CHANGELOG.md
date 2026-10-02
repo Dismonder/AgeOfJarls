@@ -16,6 +16,13 @@
   test; portals register themselves instead of being searched for in the scene; a bow's draw no longer looks up a
   component every frame.
 
+- **The manual in the game:** press **F6** (`UI/HelpKey`) for fourteen chapters - getting started, settlers, orders
+  and guards, work, storage, needs, the troop and defence, the map, portals, playing together, keys, console
+  commands, settings - in English and Polish, with your own key bindings filled in.
+- **Collisions as an option:** `Settlers/CollideWithPlayers` and `Settlers/CollideWithSettlers` (both on by default,
+  as the game has it). Off, you and the settlers walk through each other - no more being shoved in a doorway by a
+  follower, no crowd jamming a gate; walls stay solid and hits land either way. Synced, so every machine does the same.
+
 **Smarter settlers**
 
 - **Work.** A worker whose own totem has nothing for it (no trees left, an empty input chest) lends a hand at

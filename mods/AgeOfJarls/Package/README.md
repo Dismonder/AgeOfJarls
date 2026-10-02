@@ -46,6 +46,11 @@ server and in co-op. Works in new **and existing** worlds.
   later from several sides, with siege units that go for the walls; Builders put back what was destroyed. The alarm
   sounds by itself and puts a pin on everyone's map.
 
+## Manual in the game
+
+Press **F6** (`UI/HelpKey`) in the game for the full manual: getting started, settlers, orders and guards, work,
+storage, needs, the troop and defence, the map, portals, playing together, keys, console commands and settings.
+
 ## Installation
 
 Install with r2modman / Thunderstore Mod Manager, or copy `plugins/AgeOfJarls` to `BepInEx/plugins`.
@@ -55,8 +60,10 @@ Everyone on a server needs the mod (the server too). Requires BepInEx and Jotunn
 
 `BepInEx/config/*AgeOfJarls*.cfg` (synced from the server): settler health and death, loot, work speed, hunger,
 catch-up, captive camps, sieges and the alarm (`Sieges/AlarmMinThreats`, `AlarmCooldownSeconds`), settler blocking,
-gear wear, the members' bonuses and the number of Jarls. Local: the command wheel key (`Commands/WheelKey`, default H)
-and reach (`Commands/LookRange`), and the size of the mod's windows (`UI/Scale`, default 1.3). Balance data in `BepInEx/config/AgeOfJarls/*.json`
+gear wear, the members' bonuses and the number of Jarls, and whether settlers bump into players and into each other
+(`Settlers/CollideWithPlayers`, `Settlers/CollideWithSettlers`; off = you walk through each other, hits land either
+way). Local: the command wheel key (`Commands/WheelKey`, default H) and reach (`Commands/LookRange`), the manual's
+key (`UI/HelpKey`, F6) and the size of the mod's windows (`UI/Scale`, default 1.3). Balance data in `BepInEx/config/AgeOfJarls/*.json`
 (traits, tiers, names, storage kinds, siege waves, totem levels).
 
 ## Console (devcommands)

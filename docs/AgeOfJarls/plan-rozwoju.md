@@ -139,6 +139,12 @@
   totemu górnika/tragarza (log „lends a hand”) i wraca, gdy posadzisz drzewa; `spawn Greydwarf 3` przy posterunku →
   żołnierze biją tego samego (trace „focus: …”); łucznik z kolegą przed sobą robi krok w bok; osadnicy przy stole
   stoją w kręgu, nie na stole; dwóch osadników naprzeciw siebie w korytarzu mija się.
+- **Instrukcja F6 i kolizje (0.7.1, 2026-10-02, kod bez testu w grze):** prośba użytkownika. `UI/HelpWindow` pod
+  `UI/HelpKey` (F6): 14 rozdziałów PL/EN (31 kluczy `aoj_help_*`), własny `ScrollRect`; `Settlers/SettlerCollision`
+  z opcjami `Settlers/CollideWithPlayers` i `Settlers/CollideWithSettlers` (domyślnie włączone = jak w grze).
+  **Do sprawdzenia w grze:** F6 otwiera okno, rozdziały przełączają się, kółko myszy przewija długi rozdział
+  (Praca), Esc/F6 zamyka, klawisze w nawiasach pokazują H/Z/F6; po wyłączeniu `CollideWithPlayers` (F1) gracz
+  przechodzi przez osadnika, a cios go trafia; po włączeniu znów się zderzają bez restartu.
 - **Do sprawdzenia w grze:** serwer dedykowany. Uwaga: gra działająca w tle między testami
   to upływ czasu świata (doba = 30 min) — osadnicy w tym czasie jedzą zapasy.
 - **Świat `testo` po testach:** Totem Tragarza poziom 3 przy osadzie, krata jeńca i 2 greydwarfy (świat ma pasywne

@@ -277,6 +277,16 @@ Każdy krok zapisuje w ZDO typ zadania, krok i cel (ZDOID), więc zadanie trwa d
 - **Posiłki i rany.** `Needs.IsPeckish` = sytość < `HungryBelow` + 15; między zadaniami (`_jobIdle`, bez ładunku) lekki
   posiłek `Eat(lightMeal)` tylko z plecaka lub kotła (bez skrzyń i zbieractwa, bez flagi głodu). `Recover`: wstaje przy
   95% nocą lub bez zadania, przy 75% w dzień z zadaniem (`FitForWorkAbove`).
+- **Instrukcja w grze (`UI/HelpWindow`).** `Plugin.Update` → `HelpWindow.Poll`: `ZInput.GetKeyDown(UI/HelpKey)` (F6)
+  poza konsolą, czatem, polami tekstowymi i menu; otwiera/zamyka okno `AojWindow` 1000×680: 14 rozdziałów (przyciski
+  z lewej, tokeny `aoj_help_<id>` / `aoj_help_<id>_text`), tekst w prawym panelu — własny `ScrollRect` (Image z
+  alfą 0,25 jako raycast target, `RectMask2D`, pasek treści, `Text` o wysokości `preferredHeight`), kółko/przeciąganie.
+  W tekstach podstawiane `{wheel}`, `{zone}`, `{help}` (aktualne klawisze), `{version}`, `{config}`. `Refresh` nic nie
+  robi (zresetowałby przewinięcie). Teksty w obu językach w `aoj.json` (31 kluczy).
+- **Kolizje (`Settlers/SettlerCollision`).** Opcje `Settlers/CollideWithPlayers` i `Settlers/CollideWithSettlers`
+  (synced, domyślnie włączone). `Physics.IgnoreCollision` para po parze na kapsułach postaci (`Character.m_collider`):
+  przy `Settler.Start` z każdym graczem i osadnikiem, postfix `Player.Awake` z każdym osadnikiem, `SettingChanged` →
+  wszystkie pary od nowa. Ściany, meble i wrogowie bez zmian; trafienia to sphere casty, nie kontakty, więc lądują.
 - **Osadnicy na mapie (`UI/SettlerPins`).** Postfix `Minimap.UpdateMap` co 0,5 s: pinezka `PinType.Player` z imieniem
   dla każdego z `Settler.Loaded` (tylko wczytani na tej maszynie — pozycji dalszych nikt tu nie zna), pozycja
   aktualizowana z `m_pinUpdateRequired`, usuwana, gdy osadnik zniknie; nowa instancja `Minimap` = nowa sesja → słownik

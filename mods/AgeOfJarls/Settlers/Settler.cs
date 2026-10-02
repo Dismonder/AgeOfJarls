@@ -405,6 +405,7 @@ namespace AgeOfJarls.Settlers
             StartCoroutine(InitIdentity());
             // A random phase: settlers loaded in one frame would otherwise all tick in one frame every second.
             InvokeRepeating(nameof(Tick), UnityEngine.Random.Range(0.2f, TickSeconds), TickSeconds);
+            SettlerCollision.OnSettlerLoaded(this);
         }
 
         private void OnDestroy()
