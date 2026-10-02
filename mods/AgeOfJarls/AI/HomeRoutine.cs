@@ -143,8 +143,8 @@ namespace AgeOfJarls.AI
                 return;
             }
 
-            // A player walking into it gets the way for a moment, whatever it was about to do.
-            if (_courtesy.Update(dt))
+            // A player walking into it gets the way for a moment, whatever it was about to do - unless it lies in bed.
+            if (!_character.IsLyingDown && _courtesy.Update(dt))
             {
                 return;
             }

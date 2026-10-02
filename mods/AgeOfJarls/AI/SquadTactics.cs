@@ -32,6 +32,8 @@ namespace AgeOfJarls.AI
         private readonly SettlerCharacter _body;
         private readonly Dictionary<Character, int> _onTarget = new Dictionary<Character, int>();
         private float _scanTimer;
+        /// <summary>Comrades are fighting (at the last scan): the troop picks the targets, not vanilla.</summary>
+        private bool _squadFight;
         private float _sidestepUntil;
         private float _sidestepCooldownUntil;
         private Vector3 _sidestepSpot;
@@ -47,6 +49,12 @@ namespace AgeOfJarls.AI
         /// <summary>Before vanilla, for a soldier at home (no leader, no order): the troop's target, if there is one to join.</summary>
         internal void UpdateTargeting(float dt)
         {
+            // While the troop fights, vanilla's own search is held back: it would pick the nearest enemy every second
+            // and the soldier would run back and forth between its choice and the troop's.
+            if (_squadFight)
+            {
+                _ai.HoldVanillaTargeting(ScanSeconds + 0.1f);
+            }
             _scanTimer -= dt;
             if (_scanTimer > 0f)
             {
@@ -55,11 +63,13 @@ namespace AgeOfJarls.AI
             _scanTimer = ScanSeconds;
             if (_settler.Role == CombatRole.None || _body.InAttack())
             {
+                _squadFight = false;
                 return;
             }
             long home = _settler.HomeId;
             if (home == 0L)
             {
+                _squadFight = false;
                 return;
             }
 
@@ -81,7 +91,8 @@ namespace AgeOfJarls.AI
                 _onTarget.TryGetValue(target, out int count);
                 _onTarget[target] = count + 1;
             }
-            if (_onTarget.Count == 0)
+            _squadFight = _onTarget.Count > 0;
+            if (!_squadFight)
             {
                 return;
             }

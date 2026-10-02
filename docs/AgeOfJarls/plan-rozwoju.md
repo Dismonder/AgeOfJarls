@@ -111,8 +111,12 @@
   w drodze do portalu → aktywność Idle↔Returning i zapis ZDO co klatkę → stop tylko przy starcie podróży;
   (3) strażnik ruszał przy każdym obrocie kamery (punkt odjeżdżał > 2,5 m) → przy stojącym graczu rusza tylko
   „w kadrze > 1 s” lub > 5 m od punktu, cel zamrożony; (4) `RPC_Teleport` przekazany dalej był odrzucany (nadawca =
-  pośrednik) → format `Request`; (5) `DropStaleRosters` co tick → co 10 s; podwójny log skoku. Wersja 0.7.1 (Jotunn
-  `VersionStrictness.Minor`, więc 0.7.0 i 0.7.1 łączą się ze sobą). Strona aktualizacji przygotowana lokalnie
+  pośrednik) → format `Request`; (5) `DropStaleRosters` co tick → co 10 s; podwójny log skoku. Wersja 0.7.1. **Przegląd
+  2026-10-02:** `VersionStrictness.Patch` zamiast Minor — format `AoJ_SettlerTeleport` zmienił się między 0.7.0 a
+  0.7.1, maszyna z 0.7.0 czytałaby pakiet jako Vector3 i rzucała w pętli RPC gry; obaj gracze muszą mieć dokładnie tę
+  samą wersję (auto-aktualizacja to załatwia). Poprawione też: `SquadTactics` trzymał cel tylko co 0,5 s, a vanilla
+  co sekundę wybierało najbliższego — żołnierz biegałby tam i z powrotem (teraz `HoldVanillaTargeting` póki trwa
+  walka oddziału); `Courtesy` nie rusza leżącego w łóżku. Strona aktualizacji przygotowana lokalnie
   (`cloud/aoj-updates/site`), **nieopublikowana** — `pwsh tools/publish-update.ps1 AgeOfJarls` publikuje.
   Lista do sprawdzenia w grze: jak dla 0.7.0 powyżej, plus „Weź” od własnego osadnika solo (komunikat „took” i
   przedmiot w plecaku).

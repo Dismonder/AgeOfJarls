@@ -13,7 +13,10 @@ namespace AgeOfJarls
 {
     [BepInPlugin(PluginInfo.Guid, PluginInfo.Name, PluginInfo.Version)]
     [BepInDependency(Jotunn.Main.ModGuid)]
-    [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
+    // Patch strictness: the settlers' network messages change between patch versions too (0.7.0 -> 0.7.1 changed the
+    // portal request), and a machine reading a message in the old format would throw inside the game's RPC loop.
+    // The auto-updater brings everyone to the same version at the next start.
+    [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Patch)]
     public class Plugin : BaseUnityPlugin
     {
         private Harmony _harmony;

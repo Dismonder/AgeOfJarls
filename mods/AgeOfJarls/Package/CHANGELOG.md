@@ -10,6 +10,8 @@
 - A follower's portal jump asked through another machine (the settler changed hands on the way) is no longer
   refused; the request carries who asked, like the item requests do.
 - A settler re-homed to another settlement asks its old roster to drop it every ten seconds, not every second.
+- Everyone on a server needs exactly the same version from now on (the settlers' network messages change between
+  patch versions too); the auto-updater brings everyone to it at the next start.
 - Lighter on big settlements: the settlement's chest list is gathered once every two seconds per settlement and
   shared by all its settlers (before, every settler walked the base's pieces for itself every few seconds); the
   block-and-kite scan (ten a second per settler) and the guard's target scan check distance before the faction
