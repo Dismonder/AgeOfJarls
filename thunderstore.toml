@@ -25,4 +25,4 @@ outdir = "dist"
 communities = ["valheim"]
 
 [publish.categories]
-valheim = ["mods", "gameplay", "building", "crafting", "server-side"]
+valheim = ["mods", "npcs", "building", "crafting", "server-side", "deep-north-update"]
