@@ -83,6 +83,16 @@ namespace AgeOfJarls.Commands
         public override void Run(string[] args, Terminal context)
         {
             context?.AddString($"{PluginInfo.Name} {PluginInfo.Version} | definitions: {DefsRegistry.Describe()}");
+            if (AutoUpdate.PendingVersion != null)
+            {
+                context?.AddString($"Update {AutoUpdate.PendingVersion} is installed and runs from the next start of the game.");
+            }
+            else if (AoJConfig.AutoUpdate != null)
+            {
+                context?.AddString(AoJConfig.AutoUpdate.Value
+                    ? $"Auto-update on ({AoJConfig.UpdateUrl.Value})"
+                    : "Auto-update off (Updates/AutoUpdate)");
+            }
         }
     }
 
