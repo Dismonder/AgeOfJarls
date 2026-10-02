@@ -1,8 +1,11 @@
 <Solution>
   <Folder Name="/mods/">
     <Project Path="mods/AgeOfJarls/AgeOfJarls.csproj" />
+    <Project Path="mods/ModMenu.Patcher/ModMenu.Patcher.csproj" />
+    <Project Path="mods/ModMenu/ModMenu.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AgeOfJarls.Tests/AgeOfJarls.Tests.csproj" />
+    <Project Path="tests/ModMenu.Tests/ModMenu.Tests.csproj" />
   </Folder>
 </Solution>

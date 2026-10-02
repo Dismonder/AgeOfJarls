@@ -3,6 +3,11 @@
 Found a settlement, rescue settlers and let them live, work and fight for you — in single player, on a dedicated
 server and in co-op. Works in new **and existing** worlds.
 
+> **Recommended: [Mod Menu](https://thunderstore.io/c/valheim/p/Dismonder/ModMenu/)** — a **Mods** button in the main
+> menu: edit Age of Jarls' settings (and every other mod's) in a window instead of the `.cfg` file, switch mods on and
+> off without touching files (Vortex and r2modman safe), mod profiles and update checks (Nexus, Thunderstore).
+> Client-side only: other players do not need it.
+
 ## Features
 
 - **Settlers** — every settler has a name, looks, an origin and up to three of 13 traits (diligent, strong,

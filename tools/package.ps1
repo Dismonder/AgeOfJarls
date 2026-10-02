@@ -20,6 +20,14 @@ if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Version w .csproj musi byc w 
 dotnet build $csproj -c Release -p:DeployToGame=false -v q -nologo
 if ($LASTEXITCODE -ne 0) { throw 'Build nieudany' }
 
+# Optional preloader patcher shipped with the mod: mods/<Name>.Patcher -> patchers/<Name>/ in the zip.
+$patcherDir = Join-Path $RepoRoot "mods\$Name.Patcher"
+$patcherProj = Join-Path $patcherDir "$Name.Patcher.csproj"
+if (Test-Path $patcherProj) {
+    dotnet build $patcherProj -c Release -p:DeployToGame=false -v q -nologo
+    if ($LASTEXITCODE -ne 0) { throw 'Build patchera nieudany' }
+}
+
 $manifestPath = Join-Path $pkgDir 'manifest.json'
 $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
 $manifest.version_number = $version
@@ -45,6 +53,10 @@ if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force (Join-Path $stage "plugins\$Name") | Out-Null
 Copy-Item (Join-Path $pkgDir '*') $stage -Recurse
 Copy-Item (Join-Path $modDir 'bin\Release\*') (Join-Path $stage "plugins\$Name") -Recurse
+if (Test-Path $patcherProj) {
+    New-Item -ItemType Directory -Force (Join-Path $stage "patchers\$Name") | Out-Null
+    Copy-Item (Join-Path $patcherDir 'bin\Release\*') (Join-Path $stage "patchers\$Name") -Recurse
+}
 
 $zip = Join-Path $RepoRoot "dist\$Name-$version.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }

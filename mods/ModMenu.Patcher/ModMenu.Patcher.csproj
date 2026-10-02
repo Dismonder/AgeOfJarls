@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- BepInEx preloader patcher of ModMenu: keeps the mods switched off in the menu out of the chainloader. -->
+    <AssemblyName>ModMenu.Patcher</AssemblyName>
+    <RootNamespace>ModMenu.Patcher</RootNamespace>
+    <Version>0.1.0</Version>
+    <Description>Preloader part of ModMenu</Description>
+    <DeployDir>$(BepInExDir)patchers\ModMenu\</DeployDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="$(BepInExDir)core\Mono.Cecil.dll" Private="false" />
+  </ItemGroup>
+</Project>

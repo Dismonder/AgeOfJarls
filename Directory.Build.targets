@@ -4,7 +4,7 @@
     <PluginGuid Condition="'$(PluginGuid)' == ''">com.$(ModAuthor.ToLowerInvariant()).$(AssemblyName.ToLowerInvariant())</PluginGuid>
     <PluginName Condition="'$(PluginName)' == ''">$(AssemblyName)</PluginName>
     <PluginInfoFile>$(IntermediateOutputPath)PluginInfo.g.cs</PluginInfoFile>
-    <DeployDir>$(BepInExDir)plugins\$(AssemblyName)\</DeployDir>
+    <DeployDir Condition="'$(DeployDir)' == ''">$(BepInExDir)plugins\$(AssemblyName)\</DeployDir>
   </PropertyGroup>
 
   <!-- PluginInfo.Guid/Name/Version come from the .csproj, so the version lives in one place. -->

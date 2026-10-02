@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
   Publishes the mod's Thunderstore zip (dist/<Name>-<version>.zip, from tools/package.ps1) to Thunderstore with the
-  official CLI (tcli, `dotnet tool install -g tcli`). Team, community and categories come from thunderstore.toml in
-  the repo root. The service-account token is read from a file outside the repository:
+  official CLI (tcli, `dotnet tool install -g tcli`). Team, community and categories come from mods/<Name>/thunderstore.toml,
+  or from thunderstore.toml in the repo root (Age of Jarls). The service-account token is read from a file outside the repository:
   %USERPROFILE%\.thunderstore-token (one line; create it at thunderstore.io -> Teams -> <team> -> Service Accounts).
 .EXAMPLE
   ./tools/publish-thunderstore.ps1 AgeOfJarls            # publish the current version's zip
@@ -27,7 +27,9 @@ $version = ([xml](Get-Content $csproj)).Project.PropertyGroup.Version | Where-Ob
 $zip     = Join-Path $RepoRoot "dist\$Name-$version.zip"
 if (-not (Test-Path $zip)) { throw "Brak paczki: $zip (uruchom z -Package albo tools/package.ps1 $Name)" }
 
-$toml = Join-Path $RepoRoot 'thunderstore.toml'
+# A mod may carry its own mods/<Name>/thunderstore.toml; the root one belongs to Age of Jarls.
+$toml = Join-Path $RepoRoot "mods\$Name\thunderstore.toml"
+if (-not (Test-Path $toml)) { $toml = Join-Path $RepoRoot 'thunderstore.toml' }
 if (-not (Test-Path $toml)) { throw "Brak $toml" }
 # Keep the version in thunderstore.toml in step with the csproj (tcli reads the manifest from the zip, but the
 # config must not disagree).

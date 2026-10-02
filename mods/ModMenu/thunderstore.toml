@@ -1,0 +1,28 @@
+[config]
+schemaVersion = "0.0.1"
+
+[general]
+repository = "https://thunderstore.io"
+
+[package]
+namespace = "Dismonder"
+name = "ModMenu"
+versionNumber = "0.1.0"
+description = "A Mods button in the main menu: switch mods on/off without touching files (Vortex-safe), edit every mod's settings, save mod profiles, and see updates from Nexus Mods and Thunderstore."
+websiteUrl = "https://github.com/Dismonder/AgeOfJarls/tree/master/mods/ModMenu"
+containsNsfwContent = false
+
+[package.dependencies]
+denikson-BepInExPack_Valheim = "5.4.2350"
+ValheimModding-Jotunn = "2.30.2"
+
+[build]
+icon = "mods/ModMenu/Package/icon.png"
+readme = "mods/ModMenu/Package/README.md"
+outdir = "dist"
+
+[publish]
+communities = ["valheim"]
+
+[publish.categories]
+valheim = ["mods", "tools", "utility", "client-side"]

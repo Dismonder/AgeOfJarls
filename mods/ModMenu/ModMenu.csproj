@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>ModMenu</AssemblyName>
+    <RootNamespace>ModMenu</RootNamespace>
+    <!-- Must be plain x.y.z (BepInEx parses it with System.Version). -->
+    <Version>0.1.0</Version>
+    <Description>Main-menu mod manager: switch mods on/off, edit their settings, profiles, update check (Nexus, Thunderstore)</Description>
+    <!-- true = reference Jotunn.dll and define the JOTUNN symbol. -->
+    <UseJotunn>true</UseJotunn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Package\**" />
+    <!-- Extra runtime files (translations, asset bundles) go in Assets\ and are deployed next to the DLL. -->
+    <None Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- tests/ModMenu.Tests checks version comparison and Vortex archive parsing. -->
+    <InternalsVisibleTo Include="ModMenu.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ships with the game (valheim_Data\Managed): reads Vortex/Thunderstore manifests and the update APIs. -->
+    <Reference Include="$(ManagedDir)Newtonsoft.Json.dll" Private="false" />
+    <!-- BepInEx's plugin scanner (TypeLoader) takes Cecil types. -->
+    <Reference Include="$(BepInExDir)core\Mono.Cecil.dll" Private="false" />
+  </ItemGroup>
+</Project>

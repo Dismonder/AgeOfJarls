@@ -19,6 +19,12 @@ Wymagania: Valheim 1.0.x, [BepInEx 5](https://thunderstore.io/c/valheim/p/deniks
 [Jotunn](https://thunderstore.io/c/valheim/p/ValheimModding/Jotunn/). Gra solo, co-op i serwer dedykowany.
 **Wszyscy na serwerze muszą mieć tę samą wersję moda** — gra odrzuca połączenie przy różnicy.
 
+> **Zalecany mod: [Mod Menu](mods/ModMenu/Package/README.md)** ([Thunderstore](https://thunderstore.io/c/valheim/p/Dismonder/ModMenu/),
+> [GitHub](https://github.com/Dismonder/AgeOfJarls/releases/tag/ModMenu-v0.1.0)) — przycisk **Mody** w menu głównym:
+> ustawienia Age of Jarls (i każdego innego moda) w wygodnym oknie zamiast grzebania w pliku `.cfg`, włączanie i
+> wyłączanie modów bez ruszania plików (działa z Vortexem i r2modman), profile modów i sprawdzanie aktualizacji
+> (Nexus, Thunderstore). Tylko po stronie klienta — kolega na serwerze nie musi go mieć.
+
 | | |
 |---|---|
 | ![Osadnicy przy pracy](docs/media/feature-settlers.png) **Praca** — drwal, tragarz, kucharz; zapasy w zwykłych skrzyniach | ![Strażnik](docs/media/feature-guard.png) **Strażnik** — osadnik, który za tobą idzie, trzyma się za ramieniem i broni cię |
