@@ -61,7 +61,24 @@ namespace ModMenu.UI
         {
             if (_instance == null)
             {
-                _instance = Create();
+                // Jotunn builds its GUI layer per scene; without it there is nowhere to draw, and the main menu must
+                // not stay hidden.
+                if (GUIManager.Instance == null || GUIManager.CustomGUIFront == null)
+                {
+                    Plugin.Log.LogWarning("Jotunn GUI is not ready yet; the Mods window cannot open now.");
+                    onClosed?.Invoke();
+                    return;
+                }
+                try
+                {
+                    _instance = Create();
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.LogError($"Could not build the Mods window: {e}");
+                    onClosed?.Invoke();
+                    return;
+                }
             }
             _instance._onClosed = onClosed;
             _instance._view = View.Mods;
@@ -98,7 +115,7 @@ namespace ModMenu.UI
             bool typing = field != null && field.isFocused;
             bool wasTyping = _typingLastFrame;
             _typingLastFrame = typing;
-            if (ZInput.GetKeyDown(KeyCode.Escape) && !typing && !wasTyping)
+            if ((ZInput.GetKeyDown(KeyCode.Escape) || ZInput.GetButtonDown("JoyButtonB")) && !typing && !wasTyping)
             {
                 if (_view == View.Mods)
                 {
@@ -133,7 +150,16 @@ namespace ModMenu.UI
                 panel.transform.localScale = Vector3.one * Mathf.Max(0.5f, scale);
             }
             var window = panel.AddComponent<ModMenuWindow>();
-            window.Build(panel.transform);
+            try
+            {
+                window.Build(panel.transform);
+            }
+            catch
+            {
+                // A half-built panel would stay on screen over the menu.
+                Destroy(panel);
+                throw;
+            }
             return window;
         }
 
