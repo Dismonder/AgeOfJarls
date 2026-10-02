@@ -84,12 +84,24 @@ namespace ModMenu.UI
             _instance._view = View.Mods;
             _instance.gameObject.SetActive(true);
             _instance.transform.SetAsLastSibling();
+            _instance.FitToScreen();
             _instance.Rebuild();
 
             if (!_checkedThisSession && Plugin.CheckUpdatesOnOpen.Value)
             {
                 _checkedThisSession = true;
                 _instance.StartUpdateCheck();
+            }
+        }
+
+        /// <summary>On every opening: the player may have changed the resolution since the window was built.</summary>
+        private void FitToScreen()
+        {
+            RectTransform canvas = GUIManager.CustomGUIFront != null ? GUIManager.CustomGUIFront.GetComponent<RectTransform>() : null;
+            if (canvas != null && canvas.rect.width > 0f && canvas.rect.height > 0f)
+            {
+                float scale = Mathf.Min(1f, (canvas.rect.width - 40f) / Width, (canvas.rect.height - 40f) / Height);
+                transform.localScale = Vector3.one * Mathf.Max(0.5f, scale);
             }
         }
 
@@ -143,12 +155,6 @@ namespace ModMenu.UI
             GameObject panel = GUIManager.Instance.CreateWoodpanel(GUIManager.CustomGUIFront.transform,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Width, Height, false);
             panel.name = "ModMenuWindow";
-            RectTransform canvas = GUIManager.CustomGUIFront.GetComponent<RectTransform>();
-            if (canvas != null && canvas.rect.width > 0f && canvas.rect.height > 0f)
-            {
-                float scale = Mathf.Min(1f, (canvas.rect.width - 40f) / Width, (canvas.rect.height - 40f) / Height);
-                panel.transform.localScale = Vector3.one * Mathf.Max(0.5f, scale);
-            }
             var window = panel.AddComponent<ModMenuWindow>();
             try
             {
