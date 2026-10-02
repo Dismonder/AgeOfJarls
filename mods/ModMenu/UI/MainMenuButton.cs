@@ -86,7 +86,7 @@ namespace ModMenu.UI
             Plugin.Log.LogInfo($"Main menu button added after \"{template.name}\"");
         }
 
-        private static void OpenWindow(FejdStartup startup)
+        internal static void OpenWindow(FejdStartup startup)
         {
             startup.m_menuList.SetActive(false);
             ModMenuWindow.Open(() =>

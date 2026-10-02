@@ -16,7 +16,7 @@ namespace ModMenu.Patcher
     internal static class ChainloaderFilter
     {
         private static System.Reflection.PropertyInfo _locationProperty;
-        private static bool _filtered;
+        private static readonly List<BepInEx.PluginInfo> _seen = new List<BepInEx.PluginInfo>();
 
         public static void Install()
         {
@@ -28,16 +28,17 @@ namespace ModMenu.Patcher
         // Runs after the cache was saved, so editing the result never poisons BepInEx's plugin cache.
         private static void FindPluginTypesPostfix(string cacheName, Dictionary<string, List<BepInEx.PluginInfo>> __result)
         {
-            // Only the chainloader's own pass; ModMenu later calls FindPluginTypes again to list every plugin.
-            if (cacheName != "chainloader" || __result == null || _filtered)
+            // Every chainloader pass (loaders like MultiFolderLoader run one per folder), except ModMenu's own listing,
+            // which needs every plugin and marks itself with DataDiscovering.
+            if (cacheName != "chainloader" || __result == null || AppDomain.CurrentDomain.GetData(Patcher.DataDiscovering) is bool listing && listing)
             {
                 return;
             }
-            _filtered = true;
             try
             {
                 HashSet<string> disabled = Patcher.ReadDisabled(Patcher.DisabledFile);
-                List<BepInEx.PluginInfo> all = __result.Values.SelectMany(list => list).ToList();
+                _seen.AddRange(__result.Values.SelectMany(list => list));
+                List<BepInEx.PluginInfo> all = _seen;
                 if (disabled.Count > 0 && !all.Any(i => string.Equals(i.Metadata.GUID, Patcher.ModMenuGuid, StringComparison.OrdinalIgnoreCase)))
                 {
                     // The menu itself was removed: nothing could switch these mods back on, so load everything.
@@ -45,7 +46,7 @@ namespace ModMenu.Patcher
                     return;
                 }
                 HashSet<string> protectedGuids = ProtectedGuids(all);
-                var skipped = new List<BepInEx.PluginInfo>();
+                var skipped = AppDomain.CurrentDomain.GetData(Patcher.DataSkipped) as List<BepInEx.PluginInfo> ?? new List<BepInEx.PluginInfo>();
 
                 foreach (string location in __result.Keys.ToList())
                 {

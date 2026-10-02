@@ -5,6 +5,7 @@
 .EXAMPLE
   ./tools/sendkey.ps1 G                 # open the radial menu
   ./tools/sendkey.ps1 E -Shift          # Shift+E
+  ./tools/sendkey.ps1 M -Ctrl           # Ctrl+M
   ./tools/sendkey.ps1 'MOVE:-300,0'     # turn the camera left
   ./tools/sendkey.ps1 W -HoldMs 900     # walk forward
   ./tools/sendkey.ps1 LCLICK
@@ -13,7 +14,8 @@ param(
     [Parameter(Mandatory)][string[]]$Keys,   # e.g. G, T, E, F5, ESC; prefix "hold:" not supported
     [int]$HoldMs = 60,
     [int]$GapMs = 150,
-    [switch]$Shift
+    [switch]$Shift,
+    [switch]$Ctrl
 )
 # `pwsh -File sendkey.ps1 A,B` passes "A,B" as one string: split it so several keys work from any caller.
 $Keys = @($Keys | ForEach-Object { [regex]::Matches($_, 'MOVE:-?\d+,-?\d+|[^,]+') | ForEach-Object { $_.Value } })
@@ -48,10 +50,11 @@ public static class ScanKeys {
 "@
 $scan = @{ ESC=0x01; '1'=0x02; '2'=0x03; '3'=0x04; '4'=0x05; '5'=0x06; '6'=0x07; '7'=0x08; '8'=0x09; Q=0x10; W=0x11; E=0x12; R=0x13; T=0x14; Y=0x15; U=0x16; I=0x17; O=0x18; P=0x19;
            A=0x1E; S=0x1F; D=0x20; F=0x21; G=0x22; H=0x23; J=0x24; K=0x25; L=0x26; Z=0x2C; X=0x2D; C=0x2E; V=0x2F; B=0x30; N=0x31; M=0x32;
-           TAB=0x0F; ENTER=0x1C; SPACE=0x39; LSHIFT=0x2A; F5=0x3F }
+           TAB=0x0F; ENTER=0x1C; SPACE=0x39; LSHIFT=0x2A; LCTRL=0x1D; F5=0x3F }
 (New-Object -ComObject WScript.Shell).AppActivate((Get-Process valheim | Select-Object -First 1).Id) | Out-Null
 Start-Sleep -Milliseconds 400
 if ($Shift) { [ScanKeys]::Send($scan.LSHIFT, $false) }
+if ($Ctrl) { [ScanKeys]::Send($scan.LCTRL, $false) }
 foreach ($k in $Keys) {
     if ($k -eq 'LCLICK' -or $k -eq 'RCLICK') { [ScanKeys]::Click($k -eq 'RCLICK'); Start-Sleep -Milliseconds $GapMs; continue }
     if ($k -match '^MOVE:(-?\d+),(-?\d+)$') {
@@ -65,6 +68,7 @@ foreach ($k in $Keys) {
     [ScanKeys]::Send([uint16]$code, $false); Start-Sleep -Milliseconds $HoldMs
     [ScanKeys]::Send([uint16]$code, $true);  Start-Sleep -Milliseconds $GapMs
 }
+if ($Ctrl) { [ScanKeys]::Send($scan.LCTRL, $true) }
 if ($Shift) { [ScanKeys]::Send($scan.LSHIFT, $true) }
 "sent: $($Keys -join ' ')"
 

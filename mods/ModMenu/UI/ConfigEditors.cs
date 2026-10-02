@@ -34,11 +34,24 @@ namespace ModMenu.UI
                 }
             }
             return entries
-                .OrderBy(e => e.Definition.Section, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(Category, StringComparer.OrdinalIgnoreCase)
                 .ThenByDescending(e => Attribute<int?>(e, "Order") ?? 0)
                 .ThenBy(e => e.Definition.Key, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
+
+        /// <summary>The ConfigurationManager "Category" tag when a mod sets one, the file section otherwise.</summary>
+        public static string Category(ConfigEntryBase entry) => Attribute<string>(entry, "Category") ?? entry.Definition.Section;
+
+        public static string DisplayName(ConfigEntryBase entry) => Attribute<string>(entry, "DispName") ?? entry.Definition.Key;
+
+        /// <summary>Search in the settings view: name, key, section and description.</summary>
+        public static bool Matches(ConfigEntryBase entry, string filter) =>
+            string.IsNullOrEmpty(filter)
+            || DisplayName(entry).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
+            || entry.Definition.Key.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
+            || entry.Definition.Section.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
+            || (entry.Description?.Description ?? "").IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
 
         public static void Row(Transform content, ConfigEntryBase entry, float rowWidth, Action onReset)
         {
@@ -46,7 +59,13 @@ namespace ModMenu.UI
             float textWidth = rowWidth - EditorWidth - ResetWidth - 50f;
 
             GameObject row = UiKit.Row(content, 50f, true);
-            Text name = UiKit.Label(row.transform, Attribute<string>(entry, "DispName") ?? entry.Definition.Key, 17, gui.ValheimBeige);
+            string title = DisplayName(entry);
+            if (Attribute<bool?>(entry, "IsAdvanced") == true)
+            {
+                title += "  <size=13><color=#a89a80>(" + T.Get("advanced") + ")</color></size>";
+            }
+            Text name = UiKit.Label(row.transform, title, 17, gui.ValheimBeige);
+            name.supportRichText = true;
             UiKit.Place(name.gameObject, 12f, 8f, textWidth, 24f);
 
             float height = 50f;
@@ -74,6 +93,7 @@ namespace ModMenu.UI
                 onReset();
             }, 14);
             UiKit.PlaceRight(reset.gameObject, 10f, ResetWidth, 32f);
+            reset.gameObject.SetActive(Attribute<bool?>(entry, "HideDefaultButton") != true);
             Action changed = () => UiKit.SetEnabled(reset, !readOnly && !Equals(entry.BoxedValue, entry.DefaultValue));
             changed();
 
@@ -102,11 +122,13 @@ namespace ModMenu.UI
 
             // Huge enums (KeyCode has ~500 values) are typed in instead: a dropdown that long is unusable and slow.
             bool smallEnum = type.IsEnum && !type.IsDefined(typeof(FlagsAttribute), false) && Enum.GetValues(type).Length <= MaxDropdownOptions;
-            if (isList || smallEnum)
+            object[] listValues = isList
+                ? ((Array)acceptableType.GetProperty("AcceptableValues").GetValue(acceptable, null)).Cast<object>().ToArray()
+                : null;
+            // Long lists of allowed values (item or prefab names) are typed in and checked, like huge enums.
+            if ((isList && listValues.Length <= MaxDropdownOptions) || (!isList && smallEnum))
             {
-                object[] values = isList
-                    ? ((Array)acceptableType.GetProperty("AcceptableValues").GetValue(acceptable, null)).Cast<object>().ToArray()
-                    : Enum.GetValues(type).Cast<object>().ToArray();
+                object[] values = listValues ?? Enum.GetValues(type).Cast<object>().ToArray();
                 string[] labels = values.Select(v => ToText(v, type)).ToArray();
                 int current = Array.FindIndex(values, v => Equals(v, entry.BoxedValue));
                 Dropdown dropdown = UiKit.Dropdown(parent, labels, Math.Max(0, current), i => set(values[i]));
@@ -142,7 +164,7 @@ namespace ModMenu.UI
                 UiKit.PlaceRight(field.gameObject, 0f, 90f, 34f);
                 field.onEndEdit.AddListener(text =>
                 {
-                    if (TryParse(text, type, out object value))
+                    if (TryParse(text, type, acceptable, out object value))
                     {
                         set(value);
                     }
@@ -155,7 +177,7 @@ namespace ModMenu.UI
             UiKit.Stretch(field.gameObject);
             field.onEndEdit.AddListener(text =>
             {
-                if (TryParse(text, type, out object value))
+                if (TryParse(text, type, acceptable, out object value))
                 {
                     set(value);
                 }
@@ -175,14 +197,32 @@ namespace ModMenu.UI
                 // The owning mod's SettingChanged handler threw; the value is stored anyway.
                 Plugin.Log.LogWarning($"Setting {entry.Definition} raised an error in its mod: {e.Message}");
             }
+            try
+            {
+                // Some mods turn auto-save off and save on their own schedule; the menu's change must still reach the file.
+                if (entry.ConfigFile != null && !entry.ConfigFile.SaveOnConfigSet)
+                {
+                    entry.ConfigFile.Save();
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"Could not save {entry.ConfigFile?.ConfigFilePath}: {e.Message}");
+            }
         }
 
-        private static bool TryParse(string text, Type type, out object value)
+        /// <summary>
+        /// A value outside a list of allowed values is refused here: BepInEx would silently replace it with the first
+        /// allowed one. Ranges are left to BepInEx, which clamps.
+        /// </summary>
+        private static bool TryParse(string text, Type type, AcceptableValueBase acceptable, out object value)
         {
             try
             {
                 value = TomlTypeConverter.ConvertToValue(text, type);
-                return true;
+                bool isRange = acceptable != null && acceptable.GetType().IsGenericType
+                    && acceptable.GetType().GetGenericTypeDefinition() == typeof(AcceptableValueRange<>);
+                return acceptable == null || isRange || acceptable.IsValid(value);
             }
             catch (Exception)
             {

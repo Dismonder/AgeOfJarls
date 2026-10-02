@@ -49,7 +49,10 @@ namespace ModMenu.UI
         private Button _allOnButton;
         private InputField _profileName;
         private Button _profileSave;
-        private Text _hint;
+        private InputField _configSearch;
+        private readonly HashSet<string> _collapsed = new HashSet<string>();
+        private ModEntry _collapsedFor;
+        private const int ExpandedLimit = 40;
         private RectTransform _list;
 
         public static bool IsOpen => _instance != null && _instance.gameObject.activeSelf;
@@ -184,8 +187,9 @@ namespace ModMenu.UI
             });
             UiKit.Place(_profileSave.gameObject, Margin + 370f, 114f, 220f, 38f);
 
-            _hint = UiKit.Label(root, "", 15, gui.ValheimBeige, false);
-            UiKit.Place(_hint.gameObject, Margin, 116f, Width - 2f * Margin, 34f);
+            _configSearch = UiKit.Input(root, T.Get("config_search"));
+            UiKit.Place(_configSearch.gameObject, Margin, 116f, 360f, 34f);
+            _configSearch.onValueChanged.AddListener(_ => _dirty = true);
 
             _list = UiKit.ScrollList(root, Margin, ListTop, Margin, Margin);
         }
@@ -193,7 +197,11 @@ namespace ModMenu.UI
         private void ShowView(View view, ModEntry configMod = null)
         {
             _view = view;
-            _configMod = configMod;
+            if (configMod != null && configMod != _configMod)
+            {
+                _configSearch.SetTextWithoutNotify("");
+            }
+            _configMod = configMod ?? _configMod;
             _list.anchoredPosition = Vector2.zero;
             _dirty = true;
         }
@@ -211,7 +219,7 @@ namespace ModMenu.UI
             _allOnButton.gameObject.SetActive(mods && ModCatalog.PatcherActive);
             _profileName.gameObject.SetActive(_view == View.Profiles);
             _profileSave.gameObject.SetActive(_view == View.Profiles);
-            _hint.gameObject.SetActive(_view == View.Config);
+            _configSearch.gameObject.SetActive(_view == View.Config);
             RefreshHeader();
             RebuildList();
         }
@@ -246,6 +254,10 @@ namespace ModMenu.UI
                 SetStatus(T.Get("restart_needed"), gui.ValheimYellow);
             }
             // Update news belongs to the mod list; the settings and profile views keep the line for their own notices.
+            else if (_view == View.Config)
+            {
+                SetStatus(T.Get("config_hint"), gui.ValheimBeige);
+            }
             else if (_view != View.Mods)
             {
                 SetStatus("", gui.ValheimBeige);
@@ -408,36 +420,94 @@ namespace ModMenu.UI
         private void BuildConfigRows()
         {
             GUIManager gui = GUIManager.Instance;
-            _hint.text = T.Get("config_hint");
-            ConfigFile config = _configMod?.Instance != null ? _configMod.Instance.Config : null;
-            if (config == null)
+            List<ConfigFile> files = _configMod?.Instance != null ? ConfigSources.For(_configMod.Instance) : new List<ConfigFile>();
+            if (_configMod?.Instance == null)
             {
                 Message(T.Get("config_off"));
                 return;
             }
 
-            List<ConfigEntryBase> entries = ConfigEditors.Visible(config);
-            if (entries.Count == 0)
+            // One group per section (per file and section when the mod has several files).
+            var groups = new List<(string key, string title, List<ConfigEntryBase> entries)>();
+            foreach (ConfigFile file in files)
+            {
+                string prefix = files.Count > 1 ? System.IO.Path.GetFileNameWithoutExtension(file.ConfigFilePath) + " / " : "";
+                foreach (IGrouping<string, ConfigEntryBase> section in ConfigEditors.Visible(file).GroupBy(ConfigEditors.Category))
+                {
+                    groups.Add((file.ConfigFilePath + "|" + section.Key, prefix + section.Key, section.ToList()));
+                }
+            }
+            if (groups.Count == 0)
             {
                 Message(T.Get("config_none"));
                 return;
             }
 
-            string section = null;
-            foreach (ConfigEntryBase entry in entries)
+            // Big mods (hundreds of settings) open with every section folded: building them all at once stalls the menu.
+            if (_collapsedFor != _configMod)
             {
-                if (entry.Definition.Section != section)
+                _collapsedFor = _configMod;
+                _collapsed.Clear();
+                if (groups.Sum(g => g.entries.Count) > ExpandedLimit)
                 {
-                    section = entry.Definition.Section;
-                    GameObject header = UiKit.Row(_list, 38f, false);
-                    Text label = UiKit.Label(header.transform, section, 21, gui.ValheimOrange);
-                    UiKit.Stretch(label.gameObject);
-                    label.rectTransform.offsetMin = new Vector2(8f, 0f);
+                    _collapsed.UnionWith(groups.Select(g => g.key));
                 }
-                ConfigEditors.Row(_list, entry, RowWidth, () => _dirty = true);
+            }
+
+            string filter = _configSearch.text.Trim();
+            bool searching = filter.Length > 0;
+            int shown = 0;
+            foreach ((string key, string title, List<ConfigEntryBase> entries) in groups)
+            {
+                List<ConfigEntryBase> matching = entries.Where(e => ConfigEditors.Matches(e, filter)).ToList();
+                if (matching.Count == 0)
+                {
+                    continue;
+                }
+                bool open = searching || !_collapsed.Contains(key);
+                SectionHeader(title, matching.Count, open, searching ? null : (Action)(() =>
+                {
+                    if (!_collapsed.Remove(key))
+                    {
+                        _collapsed.Add(key);
+                    }
+                    _dirty = true;
+                }));
+                if (!open)
+                {
+                    continue;
+                }
+                foreach (ConfigEntryBase entry in matching)
+                {
+                    ConfigEditors.Row(_list, entry, RowWidth, () => _dirty = true);
+                    shown++;
+                }
+            }
+            if (searching && shown == 0)
+            {
+                Message(T.Get("config_no_match"));
             }
         }
 
+        private void SectionHeader(string title, int count, bool open, Action toggle)
+        {
+            GUIManager gui = GUIManager.Instance;
+            GameObject header = UiKit.Row(_list, 38f, false);
+            string marker = toggle == null ? "" : open ? "[-]  " : "[+]  ";
+            Text label = UiKit.Label(header.transform, $"{marker}{title}  <size=15><color=#a89a80>({count})</color></size>", 21, gui.ValheimOrange);
+            label.supportRichText = true;
+            UiKit.Stretch(label.gameObject);
+            label.rectTransform.offsetMin = new Vector2(8f, 0f);
+            if (toggle != null)
+            {
+                var image = header.GetComponent<Image>();
+                image.raycastTarget = true;
+                image.color = new Color(0f, 0f, 0f, 0.25f);
+                var button = header.AddComponent<Button>();
+                button.targetGraphic = image;
+                button.onClick.AddListener(() => toggle());
+            }
+        }
         private void Message(string text)
         {
             GameObject row = UiKit.Row(_list, 60f, false);

@@ -43,6 +43,7 @@ namespace ModMenu
         private const string DataSkipped = "ModMenu.Patcher.Skipped";
         private const string DataProtected = "ModMenu.Patcher.Protected";
         private const string DataDisabledFile = "ModMenu.Patcher.DisabledFile";
+        private const string DataDiscovering = "ModMenu.Discovering";
 
         private static List<ModEntry> _mods;
         private static HashSet<string> _disabledAtStart;
@@ -187,6 +188,8 @@ namespace ModMenu
         private static IEnumerable<BepInEx.PluginInfo> DiscoverAll()
         {
             Dictionary<string, List<BepInEx.PluginInfo>> found;
+            // Tells ModMenu.Patcher not to filter this call: the menu lists switched-off mods too.
+            AppDomain.CurrentDomain.SetData(DataDiscovering, true);
             try
             {
                 found = TypeLoader.FindPluginTypes(Paths.PluginPath, Chainloader.ToPluginInfo, null, "chainloader");
@@ -195,6 +198,10 @@ namespace ModMenu
             {
                 Plugin.Log.LogWarning($"Could not list the plugins folder: {e.Message}");
                 yield break;
+            }
+            finally
+            {
+                AppDomain.CurrentDomain.SetData(DataDiscovering, false);
             }
             foreach (KeyValuePair<string, List<BepInEx.PluginInfo>> pair in found)
             {

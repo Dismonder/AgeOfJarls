@@ -19,6 +19,7 @@ namespace ModMenu.Patcher
         public const string DataSkipped = "ModMenu.Patcher.Skipped";
         public const string DataProtected = "ModMenu.Patcher.Protected";
         public const string DataDisabledFile = "ModMenu.Patcher.DisabledFile";
+        public const string DataDiscovering = "ModMenu.Discovering";
 
         internal static readonly ManualLogSource Log = Logger.CreateLogSource("ModMenu.Patcher");
 
