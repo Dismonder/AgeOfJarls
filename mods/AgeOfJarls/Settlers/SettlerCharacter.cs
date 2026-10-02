@@ -98,11 +98,20 @@ namespace AgeOfJarls.Settlers
             }
             if (Down && m_nview.IsValid() && m_nview.IsOwner())
             {
-                // Lies where it fell until the time is up.
+                // Lies where it fell until the time is up: Chill gets up, Realistic without help dies.
                 m_body.linearVelocity = Vector3.zero;
                 if (!IsDownIn(m_nview.GetZDO()))
                 {
-                    StandUp();
+                    // Switched to Chill while it waited: it gets up after all.
+                    if (m_nview.GetZDO().GetBool(Keys.ZdoSettlerNeedsRescue) && AoJConfig.Realistic)
+                    {
+                        DieUnaided();
+                    }
+                    else
+                    {
+                        m_nview.GetZDO().Set(Keys.ZdoSettlerNeedsRescue, false);
+                        StandUp();
+                    }
                 }
             }
             if (!_lying)
@@ -233,15 +242,64 @@ namespace AgeOfJarls.Settlers
                 m_nview.GetZDO().Set(ZDOVars.s_inBed, false);
             }
             SetHealth(Mathf.Max(1f, GetMaxHealth() * GetUpHealth));
-            WorldClock.Set(m_nview.GetZDO(), Keys.ZdoSettlerDownUntil, WorldClock.Now + DownSeconds);
+            ZDO zdo = m_nview.GetZDO();
+            bool realistic = AoJConfig.Realistic;
+            double downFor = realistic ? AoJConfig.RescueMinutes.Value * 60.0 : DownSeconds;
+            WorldClock.Set(zdo, Keys.ZdoSettlerDownUntil, WorldClock.Now + downFor);
+            zdo.Set(Keys.ZdoSettlerNeedsRescue, realistic);
             Down = true;
             m_zanim.SetBool(BedAnimation, true);
             m_body.linearVelocity = Vector3.zero;
             Player.MessageAllInRange(transform.position, KnockoutMessageRange, MessageHud.MessageType.TopLeft,
-                $"{GetHoverName()}: $aoj_msg_settler_down");
+                realistic ? $"{GetHoverName()}: $aoj_msg_settler_down_rescue" : $"{GetHoverName()}: $aoj_msg_settler_down");
         }
 
         private const float KnockoutMessageRange = 40f;
+
+        /// <summary>Realistic mode: nobody came in time. Dies for real (KnockoutPatches lets this death through).</summary>
+        internal bool ForceDeath { get; private set; }
+
+        /// <summary>Realistic mode: seconds a knocked-out settler can still wait for help (any machine).</summary>
+        internal static double RescueSecondsLeft(ZDO zdo) =>
+            zdo != null && zdo.GetBool(Keys.ZdoSettlerNeedsRescue) ? System.Math.Max(0.0, WorldClock.Get(zdo, Keys.ZdoSettlerDownUntil, 0.0) - WorldClock.Now) : 0.0;
+
+        /// <summary>
+        /// Owner only: helped up by a player or another settler - on its feet with a little health. Read from the ZDO,
+        /// not <see cref="Down"/>: a machine that just took the settler over sets that only at its next tick. Too late
+        /// (the time ran out) and the help does nothing: the next fixed update lets it die.
+        /// </summary>
+        internal bool Rescue()
+        {
+            if (!m_nview.IsValid() || !m_nview.IsOwner())
+            {
+                return false;
+            }
+            ZDO zdo = m_nview.GetZDO();
+            if (!zdo.GetBool(Keys.ZdoSettlerNeedsRescue) || !IsDownIn(zdo))
+            {
+                return false;
+            }
+            zdo.Set(Keys.ZdoSettlerNeedsRescue, false);
+            WorldClock.Set(zdo, Keys.ZdoSettlerDownUntil, 0.0);
+            SetHealth(Mathf.Max(GetHealth(), GetMaxHealth() * GetUpHealth));
+            StandUp();
+            return true;
+        }
+
+        private void DieUnaided()
+        {
+            ZDO zdo = m_nview.GetZDO();
+            zdo.Set(Keys.ZdoSettlerNeedsRescue, false);
+            StandUp();
+            ForceDeath = true;
+            Player.MessageAllInRange(transform.position, KnockoutMessageRange, MessageHud.MessageType.TopLeft,
+                $"{GetHoverName()}: $aoj_msg_settler_died_unaided");
+            // No hit: armour, resistances and other mods' damage patches could soften one. The death check runs at
+            // once: left to the next fixed update, the settler could change owners first, and the new owner (without
+            // ForceDeath) would knock it out again.
+            SetHealth(0f);
+            CheckDeath();
+        }
 
         private void StandUp()
         {

@@ -10,7 +10,9 @@ server and in co-op. Works in new **and existing** worlds.
   wheel): press **H** while looking at a settler — up to 40 m away — to call it (*come to me!*), stop it, send it to
   attack, fall back, go home or open its window; press H looking elsewhere for your squad's orders, with the creature
   in your sight as the attack target. The game's wheel (G) has the same squad orders under *Commands*. By default a
-  settler is **knocked out, not killed**: it gets up with its gear (permanent death is an option). Its window's
+  settler is **knocked out, not killed**: it gets up with its gear (permanent death is an option). In **Realistic** mode
+  (`General/Mode`) a knocked-out settler waits for help - you ([E]) or a settler nearby - and dies after
+  `Settlers/RescueMinutes` without it; workers then also carry a limited load per trip. Its window's
   Equipment tab takes single items back (**Take** / **Take 1**) or the whole bag, worn gear included, straight into
   your inventory - also in co-op, whichever machine simulates the settler. A settler that follows you is your
   **guard**: it keeps to your shoulder, out of the camera, and fights the enemies that come for you - never farther

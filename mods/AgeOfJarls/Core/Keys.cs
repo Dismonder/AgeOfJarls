@@ -41,6 +41,8 @@ namespace AgeOfJarls.Core
         internal const string RpcSettlerNotify = "AoJ_SettlerNotify";
         /// <summary>On a settler: come along through the portal its leader just took - to this spot (Settler.RPC_Teleport).</summary>
         internal const string RpcSettlerTeleport = "AoJ_SettlerTeleport";
+        /// <summary>On a knocked-out settler: help it up (a player by [Use], or a settler that walked over; Realistic mode).</summary>
+        internal const string RpcSettlerRescue = "AoJ_SettlerRescue";
         /// <summary>Routed to everybody: a saved map pin where settlers can be found - castaways, a captive - or its removal (Recruitment.RecruitPins).</summary>
         internal const string RpcRecruitPin = "AoJ_RecruitPin";
 
@@ -127,6 +129,8 @@ namespace AgeOfJarls.Core
         internal static readonly int ZdoSettlerSitting = "aoj_settler_sitting".GetStableHashCode();
         /// <summary>Settler: world time until which it lies knocked out (see Settlers.SettlerCharacter.KnockOut).</summary>
         internal static readonly int ZdoSettlerDownUntil = "aoj_settler_down_until".GetStableHashCode();
+        /// <summary>Realistic mode: down until helped up; when the time runs out it dies instead of getting up.</summary>
+        internal static readonly int ZdoSettlerNeedsRescue = "aoj_settler_needs_rescue".GetStableHashCode();
 
         /// <summary>ZDO blob with the whole settlement (see Settlement.SettlementData), stored on the Jarl's Table.</summary>
         internal static readonly int ZdoSettlement = "aoj_settlement".GetStableHashCode();

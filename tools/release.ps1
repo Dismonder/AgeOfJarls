@@ -47,7 +47,7 @@ try {
     git add -- $csproj "mods/$Name/Package/manifest.json" "mods/$Name/Package/CHANGELOG.md" thunderstore.toml 2>$null
     $staged = git diff --cached --name-only
     if ($staged) {
-        git commit -q -m "$Name $version`n`nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+        git commit -q -m "$Name $version`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
         if ($LASTEXITCODE -ne 0) { throw 'git commit nieudany' }
     }
     git tag $tag

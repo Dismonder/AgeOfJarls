@@ -383,6 +383,7 @@ namespace AgeOfJarls.Settlers
                 _nview.Register<long>(Keys.RpcSettlerDelivered, RPC_Delivered);
                 _nview.Register<string, string>(Keys.RpcSettlerNotify, RPC_Notify);
                 _nview.Register<ZPackage>(Keys.RpcSettlerTeleport, RPC_Teleport);
+                _nview.Register<long>(Keys.RpcSettlerRescue, RPC_Rescue);
                 _nview.Register(Keys.RpcSettlerGoHome, RPC_GoHome);
                 _nview.Register<string>(Keys.RpcSettlerRename, RPC_Rename);
                 _nview.Register<ZDOID>(Keys.RpcSettlerAttack, RPC_Attack);
@@ -618,7 +619,9 @@ namespace AgeOfJarls.Settlers
             if (_humanoid is SettlerCharacter body)
             {
                 // Monster AIs on any machine check it; the owner alone lets the settler get up (SettlerCharacter).
-                if (SettlerCharacter.IsDownIn(_nview.GetZDO()))
+                // Realistic mode: the time for help ran out while nobody had the area loaded - the owner lays it
+                // down again and SettlerCharacter lets it die, as if somebody had been watching.
+                if (SettlerCharacter.IsDownIn(_nview.GetZDO()) || (owner && _nview.GetZDO().GetBool(Keys.ZdoSettlerNeedsRescue)))
                 {
                     body.Down = true;
                 }
@@ -961,6 +964,13 @@ namespace AgeOfJarls.Settlers
                 return false;
             }
 
+            if (NeedsRescue)
+            {
+                // Realistic mode: [Use] on a knocked-out settler helps it up.
+                RequestRescue(player);
+                return true;
+            }
+
             if (IsCaptive)
             {
                 int guards = GuardsNearby();
@@ -1168,6 +1178,51 @@ namespace AgeOfJarls.Settlers
         }
 
         private void RPC_Delivered(long sender, long id) => Net.ItemDelivery.Acknowledged(id, sender);
+
+        // ---------------------------------------------------------------- knocked out (Realistic mode)
+
+        /// <summary>Realistic mode: still waiting for help (knocked out, the clock running).</summary>
+        internal bool NeedsRescue => IsDown && _nview != null && _nview.IsValid() && _nview.GetZDO().GetBool(Keys.ZdoSettlerNeedsRescue);
+
+        /// <summary>A player ([Use] on the downed settler) or a settler that walked over helps it up; the owner does it.</summary>
+        internal void RequestRescue(Player helper)
+        {
+            if (_nview == null || !_nview.IsValid())
+            {
+                return;
+            }
+            ClaimIfOwnerless();
+            long helperId = helper != null ? helper.GetPlayerID() : 0L;
+            if (_nview.IsOwner())
+            {
+                RPC_Rescue(ZDOMan.GetSessionID(), helperId);
+            }
+            else
+            {
+                _nview.InvokeRPC(Keys.RpcSettlerRescue, helperId);
+            }
+        }
+
+        private void RPC_Rescue(long sender, long helperId)
+        {
+            if (!OwnerHandles(Keys.RpcSettlerRescue, helperId) || !(_humanoid is SettlerCharacter body) || !body.Rescue())
+            {
+                return;
+            }
+            Log.Info(Module, $"{DisplayName} was helped up{(helperId != 0L ? $" by player {helperId}" : " by a settler")}");
+            Player.MessageAllInRange(transform.position, 40f, MessageHud.MessageType.TopLeft, $"{DisplayName}: $aoj_msg_settler_rescued");
+        }
+
+        // Hover line while down: Chill "coming round", Realistic the minutes of help left.
+        private string DownText()
+        {
+            if (!NeedsRescue)
+            {
+                return "$aoj_down";
+            }
+            double seconds = SettlerCharacter.RescueSecondsLeft(_nview.GetZDO());
+            return Localize("$aoj_down_rescue", System.Math.Ceiling(seconds / 60.0).ToString("0"));
+        }
 
         /// <summary>Its leader took a portal: come along, to a spot next to where the leader will arrive (any machine).</summary>
         internal void RequestTeleport(Vector3 arrival)
@@ -1729,8 +1784,8 @@ namespace AgeOfJarls.Settlers
             Log.Info(Module, $"{DisplayName} handed its {count} items to peer {requester}");
         }
 
-        // Character.OnDeath runs on the owner - only with Settlers/PermanentDeath, otherwise a settler is knocked out
-        // instead. Its gear waits in a grave where it fell, like a player's, instead of vanishing with it.
+        // Character.OnDeath runs on the owner - only with Settlers/PermanentDeath, or in Realistic mode when nobody
+        // helped a knocked-out settler up in time; otherwise a settler is knocked out instead. Its gear waits in a grave where it fell, like a player's, instead of vanishing with it.
         private void OnDeath()
         {
             if (_nview.IsValid() && _nview.IsOwner())
@@ -1807,7 +1862,7 @@ namespace AgeOfJarls.Settlers
             long me = Player.m_localPlayer != null ? Player.m_localPlayer.GetPlayerID() : 0L;
             bool following = me != 0L && _nview.IsValid() && _nview.GetZDO().GetLong(Keys.ZdoSettlerFollow) == me;
             ZDO zdo = _nview.GetZDO();
-            string doing = IsDown ? "$aoj_down"
+            string doing = IsDown ? DownText()
                 : IsAtHome ? "$aoj_activity_" + ((SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)).ToString().ToLowerInvariant()
                 : OrderText(zdo);
             Work.WorkTotem totem = JobTotem;
@@ -1875,7 +1930,7 @@ namespace AgeOfJarls.Settlers
                 return "";
             }
             ZDO zdo = _nview.GetZDO();
-            string doing = IsDown ? "$aoj_down"
+            string doing = IsDown ? DownText()
                 : IsAtHome ? "$aoj_activity_" + ((SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)).ToString().ToLowerInvariant()
                 : OrderText(zdo);
             Work.WorkTotem totem = JobTotem;
@@ -1925,7 +1980,7 @@ namespace AgeOfJarls.Settlers
                 TraitDef trait = DefsRegistry.Current.Traits.Find(t => t.Id == id);
                 // Carry weight only matters when the server limits what workers carry (Work/CarryLimit).
                 string[] effects = trait == null ? new string[0] : trait.Modifiers
-                    .Where(m => m.Key != TraitStat.CarryWeight || AoJConfig.CarryLimit.Value > 0)
+                    .Where(m => m.Key != TraitStat.CarryWeight || AoJConfig.EffectiveCarryLimit > 0)
                     .Select(m => StatText(m.Key, m.Value))
                     .ToArray();
                 if (effects.Length > 0)

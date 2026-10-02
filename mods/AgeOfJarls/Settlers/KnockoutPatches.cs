@@ -17,7 +17,9 @@ namespace AgeOfJarls.Settlers
             [HarmonyPrefix]
             private static bool Prefix(Character __instance)
             {
-                if (!(__instance is SettlerCharacter settler) || AoJConfig.PermanentDeath.Value || settler.IsDead() || settler.GetHealth() > 0f)
+                // ForceDeath: Realistic mode, nobody came to help in time - this one dies for real.
+                if (!(__instance is SettlerCharacter settler) || AoJConfig.PermanentDeath.Value || settler.ForceDeath ||
+                    settler.IsDead() || settler.GetHealth() > 0f)
                 {
                     return true;
                 }

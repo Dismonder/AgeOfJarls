@@ -84,8 +84,28 @@ namespace AgeOfJarls.Core
         internal static ConfigEntry<bool> SettlementAreas;
         internal static ConfigEntry<string> SettlementAreaColor;
 
+        internal static ConfigEntry<GameMode> Mode;
+        internal static ConfigEntry<float> RescueMinutes;
+        internal static ConfigEntry<int> RealisticCarryLimit;
+
+        /// <summary>Realistic mode: knocked-out settlers need help or die, workers carry a limited load.</summary>
+        internal static bool Realistic => Mode != null && Mode.Value == GameMode.Realistic;
+
+        /// <summary>Items a worker carries before a trip to the chests: Work/CarryLimit, or in Realistic mode at least Work/RealisticCarryLimit; 0 = no limit.</summary>
+        internal static int EffectiveCarryLimit => CarryLimit == null ? 0 : CarryLimit.Value > 0 ? CarryLimit.Value : Realistic && RealisticCarryLimit != null ? RealisticCarryLimit.Value : 0;
+
         internal static void Bind(ConfigFile config)
         {
+            Mode = config.BindConfig("General", "Mode", GameMode.Chill,
+                "Chill (default): a settler whose health runs out is knocked out and gets up by itself after a moment; workers carry " +
+                "their whole take. Realistic: a knocked-out settler stays down until a player ([Use] on it) or another settler helps it up - " +
+                "after Settlers/RescueMinutes without help it dies for good (grave) - and workers carry at most Work/RealisticCarryLimit items per trip.", synced: true);
+            RescueMinutes = config.BindConfig("Settlers", "RescueMinutes", 10f,
+                "Realistic mode: minutes a knocked-out settler can wait for help before it dies.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(1f, 120f));
+            RealisticCarryLimit = config.BindConfig("Work", "RealisticCarryLimit", 30,
+                "Realistic mode: items a worker gathers before carrying them to the chests when Work/CarryLimit is 0 (Strong settlers carry more).", synced: true,
+                acceptableValues: new AcceptableValueRange<int>(5, 1000));
             UiScale = config.BindConfig("UI", "Scale", 1.3f,
                 "Size of the mod's windows (settler, Jarl's Table, totem) and their text; 1 = the original size. " +
                 "A window is never bigger than the screen.", synced: false,

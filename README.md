@@ -53,6 +53,16 @@ pobiera ją, sprawdza sumę SHA-256 i podmienia pliki na następne uruchomienie 
 - **Okno osadnika**: ekwipunek (daj/weź), rola bojowa, imię. **F6**: podręcznik w grze.
 - **Obrona**: Sztandary Wojenne, Zbrojownia, alarm, oblężenia od 1. szczebla osady.
 
+## Tryby gry
+
+Ustawienie `General/Mode` w pliku konfiguracji (na serwerze decyduje host):
+
+- **Chill** (domyślny): osadnik, któremu skończy się zdrowie, jest powalony i po chwili sam wstaje ze sprzętem.
+- **Realistic**: powalony osadnik leży, dopóki ktoś nie pomoże mu wstać - Ty (**E**) albo inny osadnik z osady,
+  który sam podbiegnie. Bez pomocy przez `Settlers/RescueMinutes` (domyślnie 10 min, czas świata - także we śnie)
+  umiera, a sprzęt zostaje w grobie. Po najechaniu na niego widać, ile minut zostało. Pracownicy noszą najwyżej
+  `Work/RealisticCarryLimit` (30) przedmiotów na jeden kurs.
+
 ## Dla modderów
 
 Repozytorium to przestrzeń robocza (BepInEx 5 + Jotunn, .NET Framework 4.8):

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+- Two game modes (`General/Mode`, synced from the server). **Chill** (default) plays as before. **Realistic**: a
+  knocked-out settler stays down until a player helps it up ([E]) or a settler of its settlement (or following the same
+  player) walks over to do it; after `Settlers/RescueMinutes` (10, world time - sleeping through the night counts)
+  without help it dies, its gear in a grave. Its hover line counts the minutes left. Workers carry at most `Work/RealisticCarryLimit` (30) items per trip when
+  `Work/CarryLimit` is 0 (Strong settlers carry more).
+
 ## 0.7.2
 
 - New thumbnail: the settlement and its settlers (a woodcutter, a hauler, a guard by the Jarl's banner) instead of

@@ -19,7 +19,7 @@ Osadnik ma 1–3 cechy, co najmniej jedną pozytywną.
 |---|---|---|
 | Pracowity | +15% szybkości pracy | Łąki |
 | Leniwy | −15% szybkości pracy, szybciej odzyskuje morale | dowolne |
-| Silny | +50% udźwigu (gdy serwer ustawi `Work/CarryLimit`; domyślnie osadnicy noszą bez limitu), +10% obrażeń wręcz | Góry |
+| Silny | +50% udźwigu (gdy serwer ustawi `Work/CarryLimit` albo gra w trybie Realistic; w Chill domyślnie bez limitu), +10% obrażeń wręcz | Góry |
 | Zręczny | +20% szybkości chodu | dowolne |
 | Oszczędny | −20% zużycia jedzenia | Bagna |
 | Żarłok | +30% zużycia jedzenia, +10% zdrowia | dowolne |
@@ -45,6 +45,12 @@ W MVP: Pracowity, Leniwy, Silny, Oszczędny, Żarłok, Odważny.
 
 ### A5. Rany i śmierć — v1
 - Ranny osadnik wraca do łóżka i się leczy. Śmierć jest trwała (otwarte pytanie 3), sprzęt zostaje w nagrobku.
+- Tryby gry (`General/Mode`, od 0.8.0, synchronizowany z serwera):
+  - **Chill** (domyślny): osadnik bez zdrowia jest powalony i po ~15 s sam wstaje (chyba że `Settlers/PermanentDeath`).
+  - **Realistic**: powalony leży, dopóki gracz nie pomoże mu wstać ([E]) albo nie podejdzie inny osadnik z tej samej
+    osady / idący za tym samym graczem (do 40 m, poza walką). Bez pomocy przez `Settlers/RescueMinutes` (10, zakres
+    1-120; liczy się czas świata, także we śnie i gdy nikogo nie ma w pobliżu) umiera, sprzęt zostaje w nagrobku.
+    Pracownicy noszą najwyżej `Work/RealisticCarryLimit` (30) przedmiotów na kurs, gdy `Work/CarryLimit` = 0.
 - Gracze domyślnie nie ranią osadników (opcja w konfiguracji).
 
 ### A6. Rozkazy bezpośrednie — MVP: podążaj i czekaj · v1: szybkie menu

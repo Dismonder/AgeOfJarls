@@ -45,6 +45,7 @@ namespace AgeOfJarls.AI
 
         private Escort _escort;
         private PortalTravel _portals;
+        private RescueDuty _rescue;
         private SquadTactics _squad;
         private Courtesy _courtesy;
         private bool _travelling;
@@ -228,7 +229,8 @@ namespace AgeOfJarls.AI
                 // Far from home with a portal into the settlement nearby: the portal, otherwise the home routine.
                 // The routine is stopped once, when the trip begins: Stop() each frame would flip the activity
                 // (and its ZDO value) between idle and returning every frame.
-                bool travelling = _portals.Update(dt);
+                // A knocked-out neighbour comes first (Realistic mode), then the portal home, then the routine.
+                bool travelling = _rescue.Update(dt) || _portals.Update(dt);
                 if (travelling && !_travelling)
                 {
                     _home.Stop();
@@ -245,7 +247,7 @@ namespace AgeOfJarls.AI
                 _home.Stop();
                 Player leader = calm ? Leader : null;
                 // Out of a player's way first (a guard in a doorway); otherwise the loot around the leader.
-                if (leader != null && !_courtesy.Update(dt))
+                if (leader != null && !_rescue.Update(dt) && !_courtesy.Update(dt))
                 {
                     // A settler with a home keeps its loot for the chests there.
                     _loot.Follow(dt, leader, handOver: !_settler.HasHome);
@@ -271,6 +273,7 @@ namespace AgeOfJarls.AI
             _loot = new LootCollector(this, character, _mover);
             _escort = new Escort(this, _settler);
             _portals = new PortalTravel(this, _settler, _mover);
+            _rescue = new RescueDuty(this, _settler, _mover);
             _squad = new SquadTactics(this, _settler, character);
             _courtesy = new Courtesy(this);
             var context = new Jobs.JobContext { Ai = this, Settler = _settler, Body = character, Mover = _mover, Loot = _loot };

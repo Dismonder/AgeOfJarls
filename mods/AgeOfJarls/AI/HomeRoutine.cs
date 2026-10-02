@@ -453,7 +453,7 @@ namespace AgeOfJarls.AI
             }
             if ((_activeJob != null && !_jobIdle) || _helpBusy)
             {
-                int limit = AoJConfig.CarryLimit.Value;
+                int limit = AoJConfig.EffectiveCarryLimit;
                 return limit > 0 && CarriedCount() >= limit * Mathf.Max(0.25f, 1f + _settler.TraitSum(TraitStat.CarryWeight));
             }
             // Work just ran out with a part load: more often comes within moments (a drop, the input chest filled, a
