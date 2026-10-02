@@ -48,7 +48,7 @@ try {
     if (git status --porcelain) {
         $version = ([xml](Get-Content 'mods\ModMenu\ModMenu.csproj')).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
         $message = if ($env:SYNC_MESSAGE) { $env:SYNC_MESSAGE } else { "Mod Menu $version" }
-        git commit -q -m "$message`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+        git commit -q -m "$message"
         if ($LASTEXITCODE -ne 0) { throw 'git commit nieudany' }
     }
     if ($Push) {
