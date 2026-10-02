@@ -33,6 +33,12 @@ $zipName = Split-Path $zip -Leaf
 Copy-Item $zip (Join-Path $siteDir $zipName)
 # A fixed name for the big download button and for links that should not go stale.
 Copy-Item $zip (Join-Path $siteDir "$Name-latest.zip")
+# Artwork shared with the GitHub README (docs/media).
+$media = Join-Path $RepoRoot 'docs\media'
+if (Test-Path $media) {
+    New-Item -ItemType Directory -Force (Join-Path $siteDir 'media') | Out-Null
+    Copy-Item (Join-Path $media '*.png') (Join-Path $siteDir 'media')
+}
 $sha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 $baseUrl = "https://$Project.pages.dev"
 $date = Get-Date -Format 'yyyy-MM-dd HH:mm'

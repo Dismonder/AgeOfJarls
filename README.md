@@ -1,5 +1,7 @@
 # Age of Jarls — mod do Valheim
 
+![Age of Jarls: osada wikingów o zachodzie słońca, osadnicy przy pracy, gracz ze strażnikiem](docs/media/banner.png)
+
 **Osady, osadnicy, praca, oblężenia i zarządzanie w co-op.** Ratujesz wikingów z obozów wrogów, osiedlasz ich przy
 Stole Jarla, dajesz im pracę przez Totemy Zadań, karmisz z Kotła Osady i razem ze znajomym bronisz osady przed
 oblężeniami. Osadnik, który za tobą idzie, jest twoim strażnikiem.
@@ -15,6 +17,11 @@ oblężeniami. Osadnik, który za tobą idzie, jest twoim strażnikiem.
 Wymagania: Valheim 1.0.x, [BepInEx 5](https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/),
 [Jotunn](https://thunderstore.io/c/valheim/p/ValheimModding/Jotunn/). Gra solo, co-op i serwer dedykowany.
 **Wszyscy na serwerze muszą mieć tę samą wersję moda** — gra odrzuca połączenie przy różnicy.
+
+| | |
+|---|---|
+| ![Osadnicy przy pracy](docs/media/feature-settlers.png) **Praca** — drwal, tragarz, kucharz; zapasy w zwykłych skrzyniach | ![Strażnik](docs/media/feature-guard.png) **Strażnik** — osadnik, który za tobą idzie, trzyma się za ramieniem i broni cię |
+| ![Oblężenie](docs/media/feature-siege.png) **Oblężenia** — sztandary, alarm, łucznicy na murach | ![Portal](docs/media/feature-portal.png) **Portale** — osadnicy chodzą nimi sami, np. do magazynu z mapy |
 
 ## Instalacja (ręcznie)
 

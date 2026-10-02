@@ -26,13 +26,26 @@
   a { color: var(--accent); }
   .en { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); margin-top: 14px; padding-top: 10px; }
   kbd { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font: 13px ui-monospace, Consolas, monospace; }
+  .hero { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); margin-bottom: 18px; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 0 0 20px; }
+  .gallery figure { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .gallery img { display: block; width: 100%; height: auto; }
+  .gallery figcaption { padding: 8px 12px; font-size: 14px; color: var(--muted); }
 </style>
 </head>
 <body>
 <main>
+  <img class="hero" src="media/banner.png" alt="Osada wikingów o zachodzie słońca: osadnicy przy pracy, gracz ze strażnikiem" width="1672" height="941">
   <h1>Age of Jarls</h1>
   <p class="sub">Mod do Valheim (BepInEx 5 + Jotunn): osady, osadnicy, praca, strażnicy, oblężenia, co-op.
     Kod i wydania: <a href="https://github.com/Dismonder/AgeOfJarls">github.com/Dismonder/AgeOfJarls</a>.</p>
+
+  <div class="gallery">
+    <figure><img src="media/feature-settlers.png" alt="Osadnicy przy pracy wokół totemów zadań" loading="lazy"><figcaption>Osadnicy pracują: drwal, tragarz, kucharz. Zapasy trafiają do zwykłych skrzyń.</figcaption></figure>
+    <figure><img src="media/feature-guard.png" alt="Strażnik osłania gracza w Czarnym Lesie" loading="lazy"><figcaption>Osadnik, który za tobą idzie, jest twoim strażnikiem: trzyma się za ramieniem i broni cię.</figcaption></figure>
+    <figure><img src="media/feature-siege.png" alt="Oblężenie osady nocą, łucznicy na palisadzie" loading="lazy"><figcaption>Oblężenia: sztandary wojenne, alarm, łucznicy na murach.</figcaption></figure>
+    <figure><img src="media/feature-portal.png" alt="Osadnik wychodzi z portalu z workiem do magazynu" loading="lazy"><figcaption>Portale: osadnicy chodzą nimi sami, np. do magazynu oznaczonego na mapie.</figcaption></figure>
+  </div>
 
   <div class="card">
     <div class="ver">Najnowsza wersja: {{VERSION}}</div>
