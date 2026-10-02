@@ -116,7 +116,11 @@
   0.7.1, maszyna z 0.7.0 czytałaby pakiet jako Vector3 i rzucała w pętli RPC gry; obaj gracze muszą mieć dokładnie tę
   samą wersję (auto-aktualizacja to załatwia). Poprawione też: `SquadTactics` trzymał cel tylko co 0,5 s, a vanilla
   co sekundę wybierało najbliższego — żołnierz biegałby tam i z powrotem (teraz `HoldVanillaTargeting` póki trwa
-  walka oddziału); `Courtesy` nie rusza leżącego w łóżku. Strona aktualizacji przygotowana lokalnie
+  walka oddziału); `Courtesy` nie rusza leżącego w łóżku; F6 nie otwiera instrukcji nad ekwipunkiem i sklepem.
+  Drugi przebieg (adopcja domu, przyjmowanie podążających, patche walki, zbieranie łupu, akcje stołu, RPC totemu i
+  skrzyń, pętla serwera) bez nowych błędów. Znane ograniczenie, nienaprawione: akcja przekazana dalej przez
+  `OwnerRpc.Handles` (własność zmieniła się w locie) niesie tożsamość pośrednika, więc rangę sprawdza się dla
+  niewłaściwego gracza — rzadkie, skutek to odmowa, nie utrata danych. Strona aktualizacji przygotowana lokalnie
   (`cloud/aoj-updates/site`), **nieopublikowana** — `pwsh tools/publish-update.ps1 AgeOfJarls` publikuje.
   Lista do sprawdzenia w grze: jak dla 0.7.0 powyżej, plus „Weź” od własnego osadnika solo (komunikat „took” i
   przedmiot w plecaku).

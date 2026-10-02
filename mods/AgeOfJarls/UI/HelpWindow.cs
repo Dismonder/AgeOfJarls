@@ -51,7 +51,7 @@ namespace AgeOfJarls.UI
             }
             // Not while typing or in the game's own menus.
             if (global::Console.IsVisible() || (Chat.instance != null && Chat.instance.HasFocus()) || global::TextInput.IsVisible() ||
-                Minimap.InTextInput() || Menu.IsVisible())
+                Minimap.InTextInput() || Menu.IsVisible() || InventoryGui.IsVisible() || StoreGui.IsVisible())
             {
                 return;
             }
