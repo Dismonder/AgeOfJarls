@@ -288,9 +288,24 @@ namespace AgeOfJarls.AI
                 {
                     return true;
                 }
-                ai.Escort.Follow(leader, dt);
-                return false;
+                try
+                {
+                    ai.Escort.Follow(leader, dt);
+                    return false;
+                }
+                catch (System.Exception e)
+                {
+                    // Vanilla following instead, this frame; the game's AI loop must not see the exception.
+                    if (Time.time >= s_nextErrorLogTime)
+                    {
+                        s_nextErrorLogTime = Time.time + 30f;
+                        Log.Error(Module, $"{ai.name}: guard following failed, vanilla follows instead: {e}");
+                    }
+                    return true;
+                }
             }
+
+            private static float s_nextErrorLogTime;
         }
 
         /// <summary>A hit on a player (applied on that player's machine): its guards simulated here go for the attacker.</summary>

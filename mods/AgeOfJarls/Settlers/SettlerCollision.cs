@@ -74,7 +74,12 @@ namespace AgeOfJarls.Settlers
             {
                 for (int j = 0; j < s_b.Count; j++)
                 {
-                    Physics.IgnoreCollision(s_a[i], s_b[j], ignore);
+                    // Unity refuses a pair with a collider switched off (a body mid-destruction): that pair is skipped,
+                    // the next load of either side pairs them again.
+                    if (s_a[i].enabled && s_b[j].enabled && s_a[i].gameObject.activeInHierarchy && s_b[j].gameObject.activeInHierarchy)
+                    {
+                        Physics.IgnoreCollision(s_a[i], s_b[j], ignore);
+                    }
                 }
             }
             s_a.Clear();

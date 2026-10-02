@@ -14,6 +14,8 @@
   patch versions too); the auto-updater brings everyone to it at the next start.
 - A settler taken into another settlement is written in its old settlement's chronicle as having moved, not as
   "died or went missing", and the old settlement no longer mourns it.
+- A fault in a settler's own targeting or guard following can no longer stop the game's AI for that settler: the
+  game's behaviour carries on and the fault is logged once in a while.
 - Lighter on big settlements: the settlement's chest list is gathered once every two seconds per settlement and
   shared by all its settlers (before, every settler walked the base's pieces for itself every few seconds); the
   block-and-kite scan (ten a second per settler) and the guard's target scan check distance before the faction

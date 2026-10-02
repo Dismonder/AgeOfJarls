@@ -104,25 +104,38 @@ namespace AgeOfJarls.AI
                 _sense?.Release();
                 return true;
             }
-            // Before vanilla: its targeting then sees the ordered target (or none) and keeps it, since the
-            // retarget timer is held back while an order stands.
-            ApplyOrders();
-            // A guard fights for the player it follows: its target comes from the escort, not from vanilla's search.
-            // A soldier at home fights with the troop: the enemy its comrades are on (SquadTactics).
-            if (_escort != null && _orderedTarget == null && Time.time >= _ceaseFireUntil)
+            // Before vanilla, guarded like the behaviours after it: an exception here would take the game's own AI
+            // down with it every frame (BaseAI.FixedUpdate does not catch), and the settler would stand frozen.
+            try
             {
-                Player leader = Leader;
-                if (leader != null)
+                // Its targeting then sees the ordered target (or none) and keeps it, since the retarget timer is
+                // held back while an order stands.
+                ApplyOrders();
+                // A guard fights for the player it follows: its target comes from the escort, not from vanilla's
+                // search. A soldier at home fights with the troop: the enemy its comrades are on (SquadTactics).
+                if (_escort != null && _orderedTarget == null && Time.time >= _ceaseFireUntil)
                 {
-                    _escort.UpdateTargeting(dt, leader);
+                    Player leader = Leader;
+                    if (leader != null)
+                    {
+                        _escort.UpdateTargeting(dt, leader);
+                    }
+                    else if (_settler.HasHome)
+                    {
+                        _squad.UpdateTargeting(dt);
+                    }
                 }
-                else if (_settler.HasHome)
+                // Blocks and the striker as target before vanilla swings: a swing of its own would cancel the block.
+                _sense?.Update(dt);
+            }
+            catch (Exception e)
+            {
+                if (Time.time >= _nextErrorLogTime)
                 {
-                    _squad.UpdateTargeting(dt);
+                    _nextErrorLogTime = Time.time + ErrorLogSeconds;
+                    Log.Error(Module, $"{name}: settler targeting failed, vanilla AI carries on: {e}");
                 }
             }
-            // Blocks and the striker as target before vanilla swings: a swing of its own would cancel the block.
-            _sense?.Update(dt);
             long perf = Perf.Start();
             bool running = base.UpdateAI(dt);
             Perf.Stop(Perf.Section.VanillaAi, perf);

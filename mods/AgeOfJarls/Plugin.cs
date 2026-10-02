@@ -48,9 +48,23 @@ namespace AgeOfJarls
 
         private void Update()
         {
-            ItemDelivery.Update();
-            UI.HelpWindow.Poll();
+            try
+            {
+                ItemDelivery.Update();
+                UI.HelpWindow.Poll();
+            }
+            catch (System.Exception e)
+            {
+                // Once a while, not every frame: Unity would otherwise flood the log and the console.
+                if (UnityEngine.Time.time >= _nextUpdateErrorAt)
+                {
+                    _nextUpdateErrorAt = UnityEngine.Time.time + 30f;
+                    Log.Error("Core", $"Frame update failed: {e}");
+                }
+            }
         }
+
+        private float _nextUpdateErrorAt;
 
         private void OnDestroy()
         {

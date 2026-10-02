@@ -123,7 +123,12 @@
   rekrutacja, totem, kronika, nadrabianie, potrzeby, doświadczenie bojowe, sztandary; sygnatury RPC gry
   `RPC_AddOre/AddItem/RemoveDoneItem/UseDoor` i `WearNTear.Destroy` zgodne): jeden błąd — osadnik przeniesiony do
   innej osady (`DropStaleRosters` → `RemoveSettler`) trafiał do kroniki starej osady jako „zmarł lub zaginął” i
-  osada go opłakiwała (`Mourn`, −10 morale); teraz wpis `$aoj_chr_moved` bez żałoby. Znane ograniczenie, nienaprawione: akcja przekazana dalej przez
+  osada go opłakiwała (`Mourn`, −10 morale); teraz wpis `$aoj_chr_moved` bez żałoby. Czwarty przebieg (format
+  danych osady i migracje, szczeble, jeńcy, zapis ekwipunku, śmierć i grób, `SettlerCharacter`, okna stołu i
+  totemu, rejestr definicji, tłumaczenia, dzikie jedzenie) bez błędów; utwardzenie: blok przed vanilla w
+  `SettlerAI.UpdateAI` (rozkazy, cele strażnika i oddziału, blokowanie) w try/catch z logiem co 30 s — wyjątek tam
+  wyłączał całe AI osadnika co klatkę; `Escort.FollowPatch` przy wyjątku oddaje podążanie vanilla; `Plugin.Update`
+  w try/catch; `SettlerCollision` pomija wyłączone kolidery. Znane ograniczenie, nienaprawione: akcja przekazana dalej przez
   `OwnerRpc.Handles` (własność zmieniła się w locie) niesie tożsamość pośrednika, więc rangę sprawdza się dla
   niewłaściwego gracza — rzadkie, skutek to odmowa, nie utrata danych. Strona aktualizacji przygotowana lokalnie
   (`cloud/aoj-updates/site`), **nieopublikowana** — `pwsh tools/publish-update.ps1 AgeOfJarls` publikuje.
