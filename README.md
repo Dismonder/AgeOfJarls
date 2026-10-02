@@ -81,4 +81,8 @@ pwsh -NoProfile -File tools/publish-update.ps1 AgeOfJarls   # zip + strona aktua
 ```
 
 Ścieżkę gry nadpisuje `$env:VALHEIM_DIR`. Dekompilacja kodu gry do `_ref/`: `pwsh -NoProfile -File tools/decompile.ps1`
-(katalog `_ref` nie trafia do repozytorium). Szczegóły: [CLAUDE.md](CLAUDE.md), [docs/AgeOfJarls/architecture.md](docs/AgeOfJarls/architecture.md).
+(katalog `_ref` nie trafia do repozytorium). Szczegóły: [docs/AgeOfJarls/architecture.md](docs/AgeOfJarls/architecture.md).
+
+## Licencja
+
+[MIT](LICENSE) — kod jest otwarty: można go czytać, wykorzystywać i zmieniać, z zachowaniem informacji o autorze.
