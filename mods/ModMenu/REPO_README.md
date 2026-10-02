@@ -8,6 +8,8 @@ A **Mods** button in Valheim's main menu: manage every installed mod without lea
 |---|---|
 | **Download** | [Releases](https://github.com/Dismonder/ModMenu/releases/latest) · [Thunderstore (r2modman)](https://thunderstore.io/c/valheim/p/Dismonder/ModMenu/) |
 | Changelog | [CHANGELOG.md](mods/ModMenu/Package/CHANGELOG.md) |
+| For mod authors | [MOD_AUTHORS.md](MOD_AUTHORS.md) - how your settings show up, supported tags, update matching |
+| License | [MIT](LICENSE) - open source, use and adapt freely |
 | Requires | Valheim 1.0.x, [BepInEx 5](https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/), [Jotunn](https://thunderstore.io/c/valheim/p/ValheimModding/Jotunn/) |
 
 ## Features
@@ -33,6 +35,12 @@ switching a mod off, delete `BepInEx/config/ModMenu/disabled.txt` and every mod 
 - **By hand:** unpack the release zip into `Valheim/BepInEx/` so that `plugins/ModMenu` ends up in `BepInEx/plugins`
   and `patchers/ModMenu` in `BepInEx/patchers`.
 
+## For mod authors
+
+Mod Menu reads standard BepInEx config entries - your mod needs no dependency on it. [MOD_AUTHORS.md](MOD_AUTHORS.md)
+shows which editor each setting type gets, the ConfigurationManager tags it honours, how extra config files are found
+and how update notices are matched. Issues and pull requests are welcome.
+
 ## Build
 
 .NET SDK 8+ and an installed Valheim with BepInEx and Jotunn (game DLLs are referenced from the install; set
@@ -55,4 +63,7 @@ i r2modman), ustawienia każdego moda w wygodnym oknie, profile modów i sprawdz
 do `Valheim/BepInEx/` albo zainstaluj przez r2modman. Gdyby gra nie wstała po wyłączeniu jakiegoś moda, usuń
 `BepInEx/config/ModMenu/disabled.txt`.
 
-Made by the author of [Age of Jarls](https://github.com/Dismonder/AgeOfJarls).
+Kod jest otwarty (licencja MIT): inni twórcy mogą go sprawdzać, wykorzystywać i dopasować swoje mody - zobacz
+[MOD_AUTHORS.md](MOD_AUTHORS.md).
+
+Made by the author of [Age of Jarls](https://github.com/Dismonder/AgeOfJarls). License: [MIT](LICENSE).

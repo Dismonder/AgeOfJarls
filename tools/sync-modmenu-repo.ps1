@@ -26,7 +26,10 @@ New-Item -ItemType Directory -Force (Join-Path $Target 'tools') | Out-Null
 foreach ($file in 'Directory.Build.props', 'Directory.Build.targets', '.gitignore', 'tools\_common.ps1', 'tools\package.ps1') {
     Copy-Item (Join-Path $RepoRoot $file) (Join-Path $Target $file) -Force
 }
+# Repository-level files live with the mod here and go to the repo root there.
 Move-Item (Join-Path $Target 'mods\ModMenu\REPO_README.md') (Join-Path $Target 'README.md') -Force
+Move-Item (Join-Path $Target 'mods\ModMenu\LICENSE') (Join-Path $Target 'LICENSE') -Force
+Move-Item (Join-Path $Target 'mods\ModMenu\MOD_AUTHORS.md') (Join-Path $Target 'MOD_AUTHORS.md') -Force
 @'
 <Solution>
   <Folder Name="/mods/">
@@ -44,7 +47,8 @@ try {
     git add -A
     if (git status --porcelain) {
         $version = ([xml](Get-Content 'mods\ModMenu\ModMenu.csproj')).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
-        git commit -q -m "Mod Menu $version`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+        $message = if ($env:SYNC_MESSAGE) { $env:SYNC_MESSAGE } else { "Mod Menu $version" }
+        git commit -q -m "$message`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
         if ($LASTEXITCODE -ne 0) { throw 'git commit nieudany' }
     }
     if ($Push) {
