@@ -13,4 +13,4 @@ Mod Menu and Jotunn cannot be switched off from the menu (you would lose the men
 
 If the game does not start after switching a mod off, delete `BepInEx/config/ModMenu/disabled.txt` and every mod loads again.
 
-Source code and issues: https://github.com/Dismonder/AgeOfJarls/tree/master/mods/ModMenu
+Source code and issues: https://github.com/Dismonder/ModMenu

@@ -9,7 +9,7 @@ namespace = "Dismonder"
 name = "ModMenu"
 versionNumber = "0.1.0"
 description = "A Mods button in the main menu: switch mods on/off without touching files (Vortex-safe), edit every mod's settings, save mod profiles, and see updates from Nexus Mods and Thunderstore."
-websiteUrl = "https://github.com/Dismonder/AgeOfJarls/tree/master/mods/ModMenu"
+websiteUrl = "https://github.com/Dismonder/ModMenu"
 containsNsfwContent = false
 
 [package.dependencies]

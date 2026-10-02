@@ -20,7 +20,7 @@ Wymagania: Valheim 1.0.x, [BepInEx 5](https://thunderstore.io/c/valheim/p/deniks
 **Wszyscy na serwerze muszą mieć tę samą wersję moda** — gra odrzuca połączenie przy różnicy.
 
 > **Zalecany mod: [Mod Menu](mods/ModMenu/Package/README.md)** ([Thunderstore](https://thunderstore.io/c/valheim/p/Dismonder/ModMenu/),
-> [GitHub](https://github.com/Dismonder/AgeOfJarls/releases/tag/ModMenu-v0.1.0)) — przycisk **Mody** w menu głównym:
+> [GitHub](https://github.com/Dismonder/ModMenu/releases/latest)) — przycisk **Mody** w menu głównym:
 > ustawienia Age of Jarls (i każdego innego moda) w wygodnym oknie zamiast grzebania w pliku `.cfg`, włączanie i
 > wyłączanie modów bez ruszania plików (działa z Vortexem i r2modman), profile modów i sprawdzanie aktualizacji
 > (Nexus, Thunderstore). Tylko po stronie klienta — kolega na serwerze nie musi go mieć.
