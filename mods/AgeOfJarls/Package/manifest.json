@@ -1,6 +1,6 @@
 {
   "name": "AgeOfJarls",
-  "version_number": "0.8.0",
+  "version_number": "0.9.0",
   "website_url": "https://github.com/Dismonder/AgeOfJarls",
   "description": "Found settlements, rescue settlers and let them work and fight for you. Co-op, existing worlds.",
   "dependencies": [

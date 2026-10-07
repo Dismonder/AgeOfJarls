@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0
+
+- **Families**: courtship, arranged couples, weddings with a feast, pregnancy with rest, births, four stages with a growing model and abilities per stage (what youths may work at, what minors never do), beds shared by couples in a double bed, children sleeping at a parent's bed, grief, the Families tab, `Family/*` config keys with defaults, `aoj_family` verbs, save format 7 — everyone must update, old mod versions cannot read the new table data.
+- **Interface**: scrollable lists everywhere instead of pages and fixed rows, nothing clipped, item icons in the settler's bag, Enter renames, gamepad cycles tabs, one colour palette, Family/Families tabs, help chapter.
+
 ## 0.8.0
 
 - Two game modes (`General/Mode`, synced from the server). **Chill** (default) plays as before. **Realistic**: a
