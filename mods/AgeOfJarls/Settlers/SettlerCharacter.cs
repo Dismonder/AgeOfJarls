@@ -20,9 +20,79 @@ namespace AgeOfJarls.Settlers
         private Settler _settler;
         private bool _lying;
         private Transform _bedPoint;
+        private float _bedSideOffset;
         private Collider[] _bedColliders;
 
         internal bool IsLyingDown => _lying;
+
+        // ---------------------------------------------------------------- emotes
+
+        /// <summary>Emote names are animator parameters: the mod's own, short and plain, before anything is sent or played.</summary>
+        private const int MaxEmoteName = 16;
+        /// <summary>Emotes that come with hearts.</summary>
+        private const string BlowKiss = "blowkiss";
+        private const string LoveYou = "loveyou";
+        private static readonly Vector3 HeartsOffset = new Vector3(0f, 1.4f, 0f);
+
+        /// <summary>
+        /// Owner only: plays a one-shot emote (wave, laugh, blowkiss, loveyou, dance, cheer...) on every machine that has
+        /// the settler loaded. Vanilla's emote replay is Player-only, so this goes by the settler's own RPC
+        /// (<see cref="Settler"/> registers it and calls <see cref="OnEmote"/>).
+        /// </summary>
+        internal void PlayEmote(string name)
+        {
+            if (!IsEmoteName(name) || !m_nview.IsValid() || !m_nview.IsOwner())
+            {
+                return;
+            }
+            m_nview.InvokeRPC(ZNetView.Everybody, Keys.RpcSettlerEmote, name);
+        }
+
+        /// <summary>Every machine, from the RPC: fires the animator trigger when the controller has it, and hearts for the loving ones.</summary>
+        internal void OnEmote(string name)
+        {
+            if (!IsEmoteName(name) || m_zanim == null || m_animator == null)
+            {
+                return;
+            }
+            string parameter = "emote_" + name;
+            if (!m_zanim.HasParameter(parameter, AnimatorControllerParameterType.Trigger))
+            {
+                return;
+            }
+            m_animator.SetTrigger(parameter);
+            if (name == BlowKiss || name == LoveYou)
+            {
+                // Scaled with the model: a child's hearts float at its own chest height.
+                Family.LoveEffects.Hearts(transform.position + HeartsOffset * transform.localScale.y);
+            }
+        }
+
+        private static bool IsEmoteName(string name)
+        {
+            if (string.IsNullOrEmpty(name) || name.Length > MaxEmoteName)
+            {
+                return false;
+            }
+            foreach (char c in name)
+            {
+                if (c < 'a' || c > 'z')
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // A child's ragdoll (PermanentDeath, Realistic) at the child's size: the death effect does not copy the scale.
+        public override void OnRagdollCreated(Ragdoll ragdoll)
+        {
+            base.OnRagdollCreated(ragdoll);
+            if (ragdoll != null)
+            {
+                ragdoll.transform.localScale = transform.localScale;
+            }
+        }
 
         public override string GetHoverText()
         {
@@ -41,7 +111,13 @@ namespace AgeOfJarls.Settlers
         // ---------------------------------------------------------------- bed
 
         /// <summary>Owner only: lie down in the bed until <see cref="GetUp"/>.</summary>
-        internal void LieDown(Bed bed)
+        internal void LieDown(Bed bed) => LieDown(bed, 0f);
+
+        /// <summary>
+        /// Owner only: lie down in the bed, <paramref name="sideOffset"/> metres to the side of its spawn point (a
+        /// couple in a double bed: one at -0.45, the other at +0.45; a bed has a single spawn point).
+        /// </summary>
+        internal void LieDown(Bed bed, float sideOffset)
         {
             if (_lying || bed == null || !m_nview.IsValid() || !m_nview.IsOwner())
             {
@@ -49,6 +125,7 @@ namespace AgeOfJarls.Settlers
             }
             FinishPassingThrough();
             _lying = true;
+            _bedSideOffset = sideOffset;
             _bedPoint = bed.m_spawnPoint != null ? bed.m_spawnPoint : bed.transform;
             _bedColliders = bed.GetComponentsInChildren<Collider>();
             SetBedCollisions(ignore: true);
@@ -151,7 +228,7 @@ namespace AgeOfJarls.Settlers
 
         private void PinToBed()
         {
-            transform.position = _bedPoint.position;
+            transform.position = _bedPoint.position + _bedPoint.right * _bedSideOffset;
             transform.rotation = _bedPoint.rotation;
             m_body.useGravity = false;
             m_body.linearVelocity = Vector3.zero;

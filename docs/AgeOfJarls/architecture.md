@@ -102,6 +102,8 @@ który już sprawnie walczy bronią.
 | Totem: typ, promień, sloty, filtry, skrzynie, pula zasobów | ZDO totemu | blob `aoj_totem` |
 | Klatka: jeńcy, stan zamka | ZDO klatki | proste pola |
 | „Obóz już dodany” dla lokacji | ZDO lokacji (`LocationProxy`) | `aoj_camp` |
+| Rodziny: pary, dzieci, ciąże, żałoba (format 7) | ZDO Stołu Jarla | dodane do blobu `aoj_settlement` |
+| Rodzina osadnika | ZDO osadnika | 4 klucze: `aoj_family_partner`, `aoj_family_mother`, `aoj_family_father`, `aoj_settler_born` |
 
 ### 4.2 Wersjonowanie i bezpieczeństwo
 - Każdy blob zaczyna się numerem wersji; czytnik obsługuje wszystkie starsze wersje (migracje).
@@ -369,6 +371,8 @@ Każdy krok zapisuje w ZDO typ zadania, krok i cel (ZDOID), więc zadanie trwa d
   do 4 s (pytając co 1 s), zanim uzna cel za nieosiągalny — inaczej daleka strefa traciła wszystkie cele naraz.
 - **Skanowanie.** `Physics.OverlapSphere` z maską warstw, wynik trzymany kilka sekund w cache; żadnego
   `FindObjectsOfType` w pętli.
+- **Rodziny (Family/).** Autorytet = właściciel Stołu Jarla zapisuje pary/zaloty/dzieci/nastroje do blobu osady; osadnicy tylko czytają przez `FamilyInfo` cachowane po `DataRevision`. Etap życia liczony z `aoj_settler_born` i konfiguracji (synchronizowanej) na każdej maszynie; `ApplyStage` ustawia skalę na każdej maszynie. Emotki wysyłane przez `AoJ_SettlerEmote` (RPC do `Everybody`). Pary dzielą podwójne łóżko z przesunięciem na boki; dzieci śpią obok łóżka rodzica. Nieletni nigdy nie walczą (cele zerowane przed vanilla AI).
+- **Zestaw UI (UI/UiKit).** Zaimplementowano uniwersalne komponenty: `ScrollList` (zamiast paginacji), `TextArea`, `Palette`, `ConfirmButton`, listy bez paginacji.
 
 ## 8. Punkty zaczepienia w grze
 

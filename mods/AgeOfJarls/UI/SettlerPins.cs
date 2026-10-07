@@ -22,7 +22,7 @@ namespace AgeOfJarls.UI
         private static readonly List<Settler> s_gone = new List<Settler>();
 
         private static string Localize(string text, params string[] words) =>
-            Localization.instance != null ? Localization.instance.Localize(text, words) : text;
+            AgeOfJarls.Core.TextUtil.Localize(text, words);
         private static Minimap s_map;
         private static float s_nextRefresh;
         private static Color s_color = Color.white;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using AgeOfJarls.Core;
+using AgeOfJarls.Family;
 using AgeOfJarls.Settlement;
 using AgeOfJarls.Settlers;
 using Jotunn.Managers;
@@ -11,7 +12,7 @@ using UnityEngine.UI;
 namespace AgeOfJarls.UI
 {
     /// <summary>
-    /// Window for one settler ([E] on a settler), in three tabs: orders, what it carries, and who it is. Everything
+    /// Window for one settler ([E] on a settler), in four tabs: orders, inventory, family, and information. Everything
     /// shown comes from the settler's ZDO and every order is an RPC, so it looks and works the same for both players
     /// whichever of them simulates the settler.
     /// </summary>
@@ -30,31 +31,38 @@ namespace AgeOfJarls.UI
         private Text _title;
 
         // Orders tab
-        private Text _status;
+        private TextArea _status;
         private Text _followLabel;
 
         // Inventory tab: one row per item, with buttons to take it (all of it, or one of a stack)
-        private const int ItemRows = 10;
-        private const float ItemRowTop = 178f;
-        private const float ItemRowStep = 34f;
+        private ScrollList _items;
         private readonly List<ItemRow> _itemRows = new List<ItemRow>();
         private readonly List<ItemDrop.ItemData> _carried = new List<ItemDrop.ItemData>();
         private Text _itemsEmpty;
-        private Text _itemPageLabel;
-        private GameObject _itemPager;
-        private int _itemPage;
         private int _itemsRevision = -1;
 
         private sealed class ItemRow
         {
-            internal GameObject Root;
+            internal Image Icon;
             internal Text Name;
+            internal Text Count;
             internal GameObject TakeOne;
             internal ItemDrop.ItemData Item;
         }
 
-        // Info tab
-        private Text _info;
+        private TextArea _info;
+        private TextArea _familyDetails;
+        private ScrollList _children;
+        private readonly List<ChildRow> _childRows = new List<ChildRow>();
+
+        private sealed class ChildRow
+        {
+            internal Text Name;
+            internal Text Stage;
+            internal Text Age;
+            internal Text Show;
+            internal long Uid;
+        }
 
         /// <summary>Opens the window; opened from afar (the command wheel), it stays open up to <paramref name="reach"/> metres away.</summary>
         /// <summary>This settler's window is open here: it stops and faces the player talking to it.</summary>
@@ -74,7 +82,6 @@ namespace AgeOfJarls.UI
             s_instance._settler = settler;
             s_instance._reach = Mathf.Max(MaxDistance, reach);
             s_instance._itemsRevision = -1;
-            s_instance._itemPage = 0;
             s_instance.TextEntry.text = "";
             s_instance.ShowWindow();
         }
@@ -84,17 +91,19 @@ namespace AgeOfJarls.UI
             _title = Label(root, new Vector2(0f, 265f), 26, GUIManager.Instance.ValheimOrange, Width - 40f, 40f, TextAnchor.MiddleCenter);
             Transform orders = Page(root, "Orders");
             Transform inventory = Page(root, "Inventory");
+            Transform family = Page(root, "Family");
             Transform info = Page(root, "Info");
             BuildOrders(orders);
             BuildInventory(inventory);
             BuildInfo(info);
+            BuildFamily(family);
             Button(root, "$aoj_close", new Vector2(0f, -262f), 200f, Hide);
-            Tabs(root, 220f, 190f, ("$aoj_tab_orders", orders), ("$aoj_tab_inventory", inventory), ("$aoj_tab_info", info));
+            Tabs(root, 220f, 0f, ("$aoj_tab_orders", orders), ("$aoj_tab_inventory", inventory), ("$aoj_tab_family", family), ("$aoj_tab_info", info));
         }
 
         private void BuildOrders(Transform page)
         {
-            _status = Label(page, new Vector2(0f, 122f), 15, GUIManager.Instance.ValheimBeige, Width - 60f, 150f, TextAnchor.UpperLeft);
+            _status = UiKit.TextArea(page, new Vector2(0f, 122f), 600f, 150f);
             _followLabel = Button(page, "", new Vector2(-ColumnOffset, 15f), ButtonWidth, () => Act(s => s.ToggleFollow(Player.m_localPlayer)));
             Button(page, "$aoj_go_home", new Vector2(ColumnOffset, 15f), ButtonWidth, () => Act(s => s.RequestGoHome(Player.m_localPlayer)));
             Button(page, "$aoj_cmd_wait", new Vector2(-ColumnOffset, -35f), ButtonWidth, () => Act(s =>
@@ -105,7 +114,7 @@ namespace AgeOfJarls.UI
             Button(page, "$aoj_takeback", new Vector2(ColumnOffset, -35f), ButtonWidth, () => Act(s => s.RequestTakeBack(Player.m_localPlayer)));
             _jobLabel = Button(page, "", new Vector2(-ColumnOffset, -85f), ButtonWidth, () => Act(NextJob));
             _roleLabel = Button(page, "", new Vector2(ColumnOffset, -85f), ButtonWidth, () => Act(NextRole));
-            TextEntry = TextInput(page, "$aoj_new_name", new Vector2(-ColumnOffset, -140f), ButtonWidth);
+            TextEntry = TextInput(page, "$aoj_new_name", new Vector2(-ColumnOffset, -140f), ButtonWidth, Rename);
             Button(page, "$aoj_rename", new Vector2(ColumnOffset, -140f), ButtonWidth, Rename);
             Label(page, new Vector2(0f, -195f), 14, GUIManager.Instance.ValheimBeige, Width - 60f, 36f, TextAnchor.MiddleCenter).text =
                 Localize("$aoj_wheel_hint", CommandWheel.KeyName);
@@ -185,31 +194,9 @@ namespace AgeOfJarls.UI
 
         private void BuildInventory(Transform page)
         {
-            _itemsEmpty = Label(page, new Vector2(0f, 120f), 18, GUIManager.Instance.ValheimBeige, Width - 60f, 40f, TextAnchor.MiddleCenter);
-            for (int i = 0; i < ItemRows; i++)
-            {
-                int index = i;
-                float y = ItemRowTop - i * ItemRowStep;
-                var row = new ItemRow { Root = Page(page, "Item" + i).gameObject };
-                row.Name = Label(row.Root.transform, new Vector2(-120f, y), 17, GUIManager.Instance.ValheimBeige, 340f, RowButtonHeight, TextAnchor.MiddleLeft);
-                Button(row.Root.transform, "$aoj_take", new Vector2(150f, y), 110f, () => TakeRow(index, all: true), RowButtonHeight);
-                row.TakeOne = Button(row.Root.transform, "$aoj_take_one", new Vector2(255f, y), 90f, () => TakeRow(index, all: false), RowButtonHeight)
-                    .GetComponentInParent<Button>().gameObject;
-                _itemRows.Add(row);
-            }
-            _itemPager = Page(page, "ItemPager").gameObject;
-            Button(_itemPager.transform, "<", new Vector2(-90f, -170f), 60f, () => TurnItemPage(-1), RowButtonHeight);
-            _itemPageLabel = Label(_itemPager.transform, new Vector2(0f, -170f), 16, GUIManager.Instance.ValheimBeige, 120f, RowButtonHeight, TextAnchor.MiddleCenter);
-            Button(_itemPager.transform, ">", new Vector2(90f, -170f), 60f, () => TurnItemPage(1), RowButtonHeight);
+            _itemsEmpty = Label(page, new Vector2(0f, 182f), 16, GUIManager.Instance.ValheimBeige, Width - 60f, 28f, TextAnchor.MiddleCenter);
+            _items = UiKit.List(page, new Vector2(0f, -10f), 600f, 352f, 34f);
             Button(page, "$aoj_takeback", new Vector2(0f, -212f), ButtonWidth, () => Act(s => s.RequestTakeBack(Player.m_localPlayer)));
-        }
-
-        private int ItemPages => Mathf.Max(1, (_carried.Count + ItemRows - 1) / ItemRows);
-
-        private void TurnItemPage(int step)
-        {
-            _itemPage = (_itemPage + step + ItemPages) % ItemPages;
-            FillItemRows();
         }
 
         private void TakeRow(int index, bool all)
@@ -223,29 +210,117 @@ namespace AgeOfJarls.UI
 
         private void FillItemRows()
         {
-            _itemPage = Mathf.Clamp(_itemPage, 0, ItemPages - 1);
-            for (int i = 0; i < _itemRows.Count; i++)
+            for (int i = 0; i < _carried.Count; i++)
             {
-                ItemRow row = _itemRows[i];
-                int at = _itemPage * ItemRows + i;
-                row.Item = at < _carried.Count ? _carried[at] : null;
-                row.Root.SetActive(row.Item != null);
-                if (row.Item == null)
+                if (i == _itemRows.Count)
                 {
-                    continue;
+                    int index = i;
+                    RectTransform root = _items.Row(i);
+                    var cells = new ItemRow();
+                    cells.Icon = _items.Icon(root, 28f);
+                    cells.Name = _items.Text(root, 246f);
+                    cells.Count = _items.Text(root, 64f, 14);
+                    _items.Button(root, "$aoj_take", 110f, () => TakeRow(index, true));
+                    cells.TakeOne = _items.Button(root, "$aoj_take_one", 90f, () => TakeRow(index, false)).GetComponentInParent<Button>().gameObject;
+                    _itemRows.Add(cells);
                 }
-                string line = row.Item.m_stack > 1 ? $"{row.Item.m_shared.m_name} ×{row.Item.m_stack}" : row.Item.m_shared.m_name;
-                row.Name.text = Localize(row.Item.m_equipped ? line + " <color=#b0b0b0>($aoj_equipped)</color>" : line);
+                ItemRow row = _itemRows[i];
+                row.Item = _carried[i];
+                row.Icon.sprite = ItemIcon(row.Item);
+                SetText(row.Name, Localize(row.Item.m_shared.m_name + (row.Item.m_equipped ? " " + Palette.Colored("($aoj_equipped)", Palette.Muted) : "")));
+                SetText(row.Count, $"Q{row.Item.m_quality} ×{row.Item.m_stack}");
                 row.TakeOne.SetActive(row.Item.m_stack > 1);
             }
-            _itemsEmpty.text = _carried.Count == 0 ? Localize("$aoj_inventory_empty") : "";
-            _itemPager.SetActive(ItemPages > 1);
-            _itemPageLabel.text = $"{_itemPage + 1} / {ItemPages}";
+            _items.SetCount(_carried.Count);
+            SetText(_itemsEmpty, _carried.Count == 0 ? Localize("$aoj_inventory_empty") : "");
         }
 
         private void BuildInfo(Transform page)
         {
-            _info = Label(page, new Vector2(0f, -10f), 16, GUIManager.Instance.ValheimBeige, Width - 60f, 400f, TextAnchor.UpperLeft);
+            _info = UiKit.TextArea(page, new Vector2(0f, -18f), 600f, 424f);
+        }
+
+        /// <summary>Saved variants can outlive a prefab's icon array; render such items without an icon.</summary>
+        internal static Sprite ItemIcon(ItemDrop.ItemData item)
+        {
+            Sprite[] icons = item?.m_shared?.m_icons;
+            int variant = item?.m_variant ?? -1;
+            return icons != null && variant >= 0 && variant < icons.Length ? icons[variant] : null;
+        }
+
+        private void BuildFamily(Transform page)
+        {
+            _familyDetails = UiKit.TextArea(page, new Vector2(0f, 110f), 600f, 160f);
+            Label(page, new Vector2(0f, 10f), 16, GUIManager.Instance.ValheimOrange, 580f, 28f, TextAnchor.MiddleLeft).text = Localize("$aoj_family_children");
+            _children = UiKit.List(page, new Vector2(0f, -118f), 600f, 220f, 36f);
+        }
+
+        private void RefreshFamily()
+        {
+            FamilyInfo family = _settler.Family;
+            SettlementData data = _settler.HomeTable?.Data;
+            Couple couple = data?.FindCouple(_settler.Uid);
+            string details = _settler.FamilyDetails();
+            // Reuse the backend's minor stage/next-stage line; compose relationships with live full names.
+            details = !_settler.IsAdult && details.Length > 0 ? details.Split('\n')[0] :
+                FamilyRules.StageToken(_settler.Stage, _settler.Identity?.Female ?? false) +
+                (_settler.Born > 0.0 ? ", " + Localize("$aoj_family_age", Days(_settler.Age)) : "");
+            if (family.PartnerUid != 0L)
+            {
+                Settler partner = Settler.FindByUid(family.PartnerUid);
+                details += "\n$aoj_family_partner: " + (partner != null ? partner.FullName : family.PartnerName);
+                if (couple != null) details += " · " + Localize("$aoj_family_since", ((int)(couple.Since / WorldClock.DayLength) + 1).ToString());
+            }
+            else if (family.CourtingUid != 0L)
+            {
+                Settler courting = Settler.FindByUid(family.CourtingUid);
+                details += "\n$aoj_family_courting: " + (courting != null ? courting.FullName : family.CourtingName);
+            }
+            else details += "\n$aoj_family_single";
+            if (family.IsExpecting || family.PartnerExpecting)
+                details += "\n" + Localize(family.PartnerExpecting ? "$aoj_family_partner_expecting" : "$aoj_family_expecting", Days(family.DueAt - WorldClock.Now));
+            // The blob clears dead parents; immutable birth ZDO keys must not bring them back.
+            ChildRecord own = family.Own;
+            details += "\n$aoj_family_parents: " + ParentName(data, own != null ? own.Mother : _settler.MotherUid) + " / " + ParentName(data, own != null ? own.Father : _settler.FatherUid);
+            _familyDetails.SetText(Localize(details));
+            for (int i = 0; i < family.Children.Count; i++)
+            {
+                if (i == _childRows.Count)
+                {
+                    int index = i;
+                    RectTransform root = _children.Row(i);
+                    var cells = new ChildRow { Name = _children.Text(root, 225f), Stage = _children.Text(root, 110f), Age = _children.Text(root, 120f) };
+                    cells.Show = _children.Button(root, "$aoj_btn_show", 85f, () => ShowChild(index));
+                    _childRows.Add(cells);
+                }
+                ChildRecord child = family.Children[i];
+                ChildRow row = _childRows[i];
+                row.Uid = child.Uid;
+                Settler loaded = Settler.FindByUid(child.Uid);
+                SetText(row.Name, loaded != null ? loaded.FullName : child.Name);
+                SetText(row.Stage, Localize(FamilyRules.StageToken(FamilyRules.StageAt(child.Born, WorldClock.Now, WorldClock.DayLength, FamilyConfig.Live), child.Female)));
+                SetText(row.Age, Localize("$aoj_family_age", Days(WorldClock.Now - child.Born)));
+                bool reachable = ChildWithinReach(loaded);
+                row.Show.GetComponentInParent<Button>().interactable = reachable;
+                row.Show.color = reachable ? GUIManager.Instance.ValheimBeige : Color.gray;
+            }
+            _children.SetCount(family.Children.Count);
+        }
+
+        private static string Days(double seconds) => (Math.Max(0.0, seconds) / WorldClock.DayLength).ToString("0.0");
+        private static string ParentName(SettlementData data, long uid)
+        {
+            string name = data != null ? FamilyInfo.NameOf(data, uid) : "";
+            return name.Length > 0 ? name : "—";
+        }
+
+        private bool ChildWithinReach(Settler child) => child != null && child.Zdo != null && Player.m_localPlayer != null &&
+            Vector3.Distance(child.transform.position, Player.m_localPlayer.transform.position) <= _reach;
+
+        private void ShowChild(int index)
+        {
+            Settler child = Settler.FindByUid(_childRows[index].Uid);
+            if (ChildWithinReach(child)) Open(child, _reach);
         }
 
         protected override bool IsTargetValid()
@@ -257,23 +332,29 @@ namespace AgeOfJarls.UI
 
         protected override void Refresh()
         {
-            _title.text = _settler.DisplayName;
+            SetText(_title, _settler.FullName);
             switch (ActiveTab)
             {
                 case 0:
-                    _status.text = Localize(_settler.BuildDetails());
-                    _followLabel.text = Localize(_settler.IsFollowing(Player.m_localPlayer) ? "$aoj_stay" : "$aoj_follow");
+                    _status.SetText(Localize(FamilyRules.StageToken(_settler.Stage, _settler.Identity?.Female ?? false) +
+                        (_settler.Born > 0.0 ? " · " + Localize("$aoj_family_age", Days(_settler.Age)) : "") + "\n" + _settler.BuildDetails()));
+                    _jobLabel.GetComponentInParent<Button>().gameObject.SetActive(_settler.IsAdult);
+                    _roleLabel.GetComponentInParent<Button>().gameObject.SetActive(_settler.IsAdult);
+                    SetText(_followLabel, Localize(_settler.IsFollowing(Player.m_localPlayer) ? "$aoj_stay" : "$aoj_follow"));
                     Work.WorkTotem totem = _settler.JobTotem;
-                    _jobLabel.text = Localize("$aoj_job: " + (_settler.JobId == 0L ? "$aoj_job_none" : totem != null ? Work.JobInfo.Token(totem.Job) : "$aoj_job_far"));
-                    _roleLabel.text = Localize("$aoj_role: " + (_settler.Role == Army.CombatRole.None ? "$aoj_role_none" : Army.CombatRoles.Token(_settler.Role)));
+                    SetText(_jobLabel, Localize("$aoj_job: " + (_settler.JobId == 0L ? "$aoj_job_none" : totem != null ? Work.JobInfo.Token(totem.Job) : "$aoj_job_far")));
+                    SetText(_roleLabel, Localize("$aoj_role: " + (_settler.Role == Army.CombatRole.None ? "$aoj_role_none" : Army.CombatRoles.Token(_settler.Role))));
                     break;
                 case 1:
                     RefreshItems();
                     break;
+                case 2:
+                    RefreshFamily();
+                    break;
                 default:
-                    _info.text = Localize("<color=#e0c080>$aoj_traits</color>\n" + _settler.TraitDetails() +
-                                          "\n\n<color=#e0c080>$aoj_skills</color>: " + _settler.SkillsText() +
-                                          "\n\n" + _settler.BuildDetails());
+                    _info.SetText(Localize(Palette.Colored("$aoj_traits", Palette.Accent) + "\n" + _settler.TraitDetails() +
+                                          "\n\n" + Palette.Colored("$aoj_skills", Palette.Accent) + ": " + _settler.SkillsText() +
+                                          "\n\n" + _settler.BuildDetails()));
                     break;
             }
         }
@@ -287,10 +368,10 @@ namespace AgeOfJarls.UI
             {
                 return;
             }
-            _itemsRevision = revision;
             _carried.Clear();
             _carried.AddRange(_settler.CarriedItemData());
             FillItemRows();
+            _itemsRevision = revision;
         }
 
         protected override void OnHidden()

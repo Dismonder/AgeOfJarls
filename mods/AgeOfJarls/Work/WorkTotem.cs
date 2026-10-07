@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using AgeOfJarls.Core;
 using AgeOfJarls.Core.Defs;
+using AgeOfJarls.Family;
 using AgeOfJarls.Net;
 using AgeOfJarls.Settlement;
 using AgeOfJarls.Settlers;
@@ -227,7 +228,8 @@ namespace AgeOfJarls.Work
                 return null;
             }
             return Settler.Loaded
-                .Where(s => s.Identity != null && s.HomeId == settlementId && s.JobId == 0L)
+                .Where(s => s != null && s.Identity != null && s.HomeId == settlementId && s.JobId == 0L &&
+                            FamilyRules.CanWorkAt(s.Stage, Job))
                 .OrderBy(s => Vector3.Distance(s.transform.position, transform.position))
                 .FirstOrDefault();
         }
@@ -335,7 +337,7 @@ namespace AgeOfJarls.Work
 
         private void RPC_Config(long sender, ZPackage package)
         {
-            if (!Net.OwnerRpc.Handles(_nview, Keys.RpcTotemConfig, package))
+            if (!Net.OwnerRpc.HandlesWithoutForward(_nview, Keys.RpcTotemConfig))
             {
                 return;
             }

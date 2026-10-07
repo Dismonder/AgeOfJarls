@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using AgeOfJarls.Core;
+using AgeOfJarls.Family;
 using UnityEngine;
 
 namespace AgeOfJarls.Settlement
@@ -73,7 +74,13 @@ namespace AgeOfJarls.Settlement
     internal sealed class SettlementData
     {
         /// <summary>Bump on format changes; <see cref="Deserialize"/> keeps reading older versions.</summary>
-        private const int FormatVersion = 6;
+        private const int FormatVersion = 7;
+        /// <summary>Version 7 added the families: couples, courtships, children, moods and the family flags.</summary>
+        private const int FirstFamiliesVersion = 7;
+        internal const int MaxCouples = 128;
+        internal const int MaxCourtships = 64;
+        internal const int MaxChildren = 128;
+        internal const int MaxMoods = 256;
         /// <summary>Version 6 added the areas marked on the map.</summary>
         private const int FirstZonesVersion = 6;
         internal const int MaxZones = 16;
@@ -82,7 +89,7 @@ namespace AgeOfJarls.Settlement
         /// <summary>Version 5 added the Karl and Huskarl ranks below the Hersir, which moved the saved values.</summary>
         private const int FirstRankLadderVersion = 5;
         private const int MaxMembers = 64;
-        private const int MaxRoster = 256;
+        internal const int MaxRoster = 256;
         private const int MaxNameLength = 32;
         private const string Module = "Settlement";
 
@@ -93,9 +100,298 @@ namespace AgeOfJarls.Settlement
         internal List<RosterEntry> Settlers = new List<RosterEntry>();
         /// <summary>Areas marked on the map (<see cref="SettlementZone"/>), at most <see cref="MaxZones"/>.</summary>
         internal List<SettlementZone> Zones = new List<SettlementZone>();
+        /// <summary>Family records (format 7), written only by the table's owner; see <see cref="Couple"/>.</summary>
+        internal List<Couple> Couples = new List<Couple>();
+        internal List<Courtship> Courtships = new List<Courtship>();
+        internal List<ChildRecord> Children = new List<ChildRecord>();
+        internal List<Mood> Moods = new List<Mood>();
+        /// <summary>Bits of <see cref="Family.FamilyFlags"/> (no new couples, no births), toggled by Manage.</summary>
+        internal byte FamilyFlags;
 
         /// <summary>Read from an older format: the table's owner saves it again in the current one.</summary>
         internal bool NeedsRewrite;
+
+        /// <summary>True when the pairs {a, b} and {x, y} are the same two settlers, in either order.</summary>
+        internal static bool SameUids(long a, long b, long x, long y) => (a == x && b == y) || (a == y && b == x);
+
+        internal bool HasFamilyFlag(byte flag) => (FamilyFlags & flag) != 0;
+
+        /// <summary>Changes one supported policy bit, preserving concurrent changes to the others.</summary>
+        internal bool SetFamilyFlag(byte bit, bool enabled)
+        {
+            if (bit != Family.FamilyFlags.NoNewCouples && bit != Family.FamilyFlags.NoBirths) return false;
+            byte flags = enabled ? (byte)(FamilyFlags | bit) : (byte)(FamilyFlags & ~bit);
+            if (FamilyFlags == flags) return false;
+            FamilyFlags = flags;
+            return true;
+        }
+
+        /// <summary>The settler's couple; null when single. A record with one side 0 is a widowed carrier still expecting.</summary>
+        internal Couple FindCouple(long uid)
+        {
+            if (uid == 0L)
+            {
+                return null;
+            }
+            foreach (Couple couple in Couples)
+            {
+                if (couple.Has(uid))
+                {
+                    return couple;
+                }
+            }
+            return null;
+        }
+
+        internal Couple FindCouple(long a, long b)
+        {
+            foreach (Couple couple in Couples)
+            {
+                if (SameUids(couple.A, couple.B, a, b))
+                {
+                    return couple;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>The settler's spouse; 0 when single.</summary>
+        internal long PartnerOf(long uid) => FindCouple(uid)?.Other(uid) ?? 0L;
+
+        internal Courtship FindCourtship(long uid)
+        {
+            if (uid == 0L)
+            {
+                return null;
+            }
+            foreach (Courtship courtship in Courtships)
+            {
+                if (courtship.Has(uid))
+                {
+                    return courtship;
+                }
+            }
+            return null;
+        }
+
+        internal ChildRecord FindChild(long uid)
+        {
+            foreach (ChildRecord child in Children)
+            {
+                if (child.Uid == uid)
+                {
+                    return child;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>Children born to this settler (grown-up ones included), in birth order.</summary>
+        internal IEnumerable<ChildRecord> ChildrenOf(long parentUid)
+        {
+            if (parentUid == 0L)
+            {
+                yield break;
+            }
+            foreach (ChildRecord child in Children)
+            {
+                if (child.Mother == parentUid || child.Father == parentUid)
+                {
+                    yield return child;
+                }
+            }
+        }
+
+        /// <summary>Parent and child, or siblings (a parent in common): such two never court.</summary>
+        internal bool AreRelated(long a, long b)
+        {
+            if (a == 0L || b == 0L || a == b)
+            {
+                return false;
+            }
+            ChildRecord childA = FindChild(a);
+            ChildRecord childB = FindChild(b);
+            if (childA != null && (childA.Mother == b || childA.Father == b))
+            {
+                return true;
+            }
+            if (childB != null && (childB.Mother == a || childB.Father == a))
+            {
+                return true;
+            }
+            if (childA == null || childB == null)
+            {
+                return false;
+            }
+            return (childA.Mother != 0L && (childA.Mother == childB.Mother || childA.Mother == childB.Father))
+                || (childA.Father != 0L && (childA.Father == childB.Father || childA.Father == childB.Mother));
+        }
+
+        /// <summary>A settler born here that has not come of age yet; settlers without a child record arrived as adults.</summary>
+        internal bool IsMinor(long uid, double now, double dayLength, FamilyConfig cfg)
+        {
+            ChildRecord child = FindChild(uid);
+            return child != null && FamilyRules.StageAt(child.Born, now, dayLength, cfg) != LifeStage.Adult;
+        }
+
+        /// <summary>Settlers on the roster that are minors (<see cref="IsMinor"/>).</summary>
+        internal int MinorCount(double now, double dayLength, FamilyConfig cfg)
+        {
+            int count = 0;
+            foreach (RosterEntry entry in Settlers)
+            {
+                if (IsMinor(entry.Uid, now, dayLength, cfg))
+                {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        internal int AdultCount(double now, double dayLength, FamilyConfig cfg) => Settlers.Count - MinorCount(now, dayLength, cfg);
+
+        /// <summary>Couples expecting a child.</summary>
+        internal int PregnancyCount()
+        {
+            int count = 0;
+            foreach (Couple couple in Couples)
+            {
+                if (couple.IsExpecting)
+                {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        internal bool HasMood(long uid, MoodKind kind, double now)
+        {
+            foreach (Mood mood in Moods)
+            {
+                if (mood.Uid == uid && mood.Kind == kind && mood.Until > now)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Gives the settler a mood until the given time, replacing one of the same kind; the oldest goes when the list is full.</summary>
+        internal void AddMood(long uid, MoodKind kind, double until)
+        {
+            foreach (Mood existing in Moods)
+            {
+                if (existing.Uid == uid && existing.Kind == kind)
+                {
+                    existing.Until = until;
+                    return;
+                }
+            }
+            while (Moods.Count >= MaxMoods)
+            {
+                int oldest = 0;
+                for (int i = 1; i < Moods.Count; i++)
+                {
+                    if (Moods[i].Until < Moods[oldest].Until)
+                    {
+                        oldest = i;
+                    }
+                }
+                Moods.RemoveAt(oldest);
+            }
+            Moods.Add(new Mood { Uid = uid, Kind = kind, Until = until });
+        }
+
+        /// <summary>Drops the moods that have ended; true when any did.</summary>
+        internal bool PruneMoods(double now) => Moods.RemoveAll(m => m.Until <= now) > 0;
+
+        /// <summary>
+        /// Undoes the family records of a settler that left the roster (died, was dismissed, vanished): its couple is
+        /// dissolved (the partner is widowed), a pregnancy it carried is cancelled (one its partner carries goes on, on
+        /// a couple record with the lost side set to 0), its courtship is dropped, its children retain biological
+        /// ancestry (minors are reported as orphaned), its own child record goes (the parents' couple gets the child
+        /// slot back and the parents are reported as bereaved) and its moods end. The caller (the table) adds the Grief
+        /// moods and the chronicle lines. Pure, so the tests cover it; call it beside <see cref="RemoveSettler"/>.
+        /// </summary>
+        internal FamilyCleanupResult FamilyCleanup(long uid, double now, double dayLength, FamilyConfig cfg)
+        {
+            var result = new FamilyCleanupResult();
+            if (uid == 0L)
+            {
+                return result;
+            }
+            Couple couple = FindCouple(uid);
+            if (couple != null)
+            {
+                long partner = couple.Other(uid);
+                if (partner != 0L)
+                {
+                    result.WidowedUids.Add(partner);
+                }
+                if (couple.IsExpecting && couple.Carrier == uid)
+                {
+                    result.PregnancyCancelled = true;
+                }
+                if (couple.IsExpecting && couple.Carrier != uid && partner != 0L)
+                {
+                    // The widow still gives birth: the record stays until then, with the lost side gone.
+                    if (couple.A == uid)
+                    {
+                        couple.A = 0L;
+                    }
+                    else
+                    {
+                        couple.B = 0L;
+                    }
+                }
+                else
+                {
+                    Couples.Remove(couple);
+                }
+                result.Changed = true;
+            }
+            if (Courtships.RemoveAll(c => c.Has(uid)) > 0)
+            {
+                result.Changed = true;
+            }
+            foreach (ChildRecord child in Children)
+            {
+                if (child.Uid == uid || (child.Mother != uid && child.Father != uid))
+                {
+                    continue;
+                }
+                // Ancestry survives death; live parent availability comes from the roster.
+                if (FamilyRules.StageAt(child.Born, now, dayLength, cfg) != LifeStage.Adult)
+                {
+                    result.OrphanedUids.Add(child.Uid);
+                }
+                result.Changed = true;
+            }
+            ChildRecord own = FindChild(uid);
+            if (own != null)
+            {
+                if (HasSettler(own.Mother))
+                {
+                    result.BereavedUids.Add(own.Mother);
+                }
+                if (HasSettler(own.Father))
+                {
+                    result.BereavedUids.Add(own.Father);
+                }
+                Couple parents = own.Mother != 0L && own.Father != 0L ? FindCouple(own.Mother, own.Father) : null;
+                if (parents != null && parents.ChildrenBorn > 0)
+                {
+                    parents.ChildrenBorn--;
+                }
+                Children.Remove(own);
+                result.Changed = true;
+            }
+            if (Moods.RemoveAll(m => m.Uid == uid) > 0)
+            {
+                result.Changed = true;
+            }
+            return result;
+        }
 
         internal SettlementZone FindZone(long id) => Zones.Find(z => z.Id == id);
 
@@ -160,7 +456,22 @@ namespace AgeOfJarls.Settlement
             return null;
         }
 
-        internal int SettlersWithBed => Settlers.FindAll(s => s.HasBed).Count;
+        /// <summary>Only youths and adults need their own beds; shared beds count both occupants.</summary>
+        internal int SettlersWithBed => CountBedResidents(true, WorldClock.Now, WorldClock.DayLength, FamilyConfig.Live);
+
+        /// <summary>Bed demand excludes infants and children even before the next reconciliation.</summary>
+        internal int SettlersNeedingBed => CountBedResidents(false, WorldClock.Now, WorldClock.DayLength, FamilyConfig.Live);
+
+        /// <summary>Pure bed count for UI demand and coverage, including unloaded residents.</summary>
+        internal int CountBedResidents(bool onlyAssigned, double now, double dayLength, FamilyConfig cfg)
+        {
+            int count = 0;
+            foreach (RosterEntry entry in Settlers)
+            {
+                if ((!onlyAssigned || entry.HasBed) && FamilyRules.NeedsOwnBed(FamilyRules.StageAt(FindChild(entry.Uid)?.Born ?? 0, now, dayLength, cfg))) count++;
+            }
+            return count;
+        }
 
         /// <summary>
         /// Why <paramref name="requester"/> may not give <paramref name="target"/> this rank (a localization token), or
@@ -293,6 +604,41 @@ namespace AgeOfJarls.Settlement
             return true;
         }
 
+        /// <summary>Restores the reproductive limits of this unordered pair from retained children, including adults.</summary>
+        internal Couple NewCouple(long a, long b, double now)
+        {
+            var couple = new Couple { A = a, B = b, Since = now };
+            foreach (ChildRecord child in Children)
+            {
+                if (SameUids(child.Mother, child.Father, a, b))
+                {
+                    couple.ChildrenBorn++;
+                    couple.LastBirth = Math.Max(couple.LastBirth, child.Born);
+                }
+            }
+            return couple;
+        }
+
+        /// <summary>Accepts verified birth facts and counts an incoming minor under the same policy as residents.</summary>
+        internal bool TryAcceptSettler(long uid, string name, double born, long mother, long father, bool female,
+            int capacity, double now, double dayLength, FamilyConfig cfg)
+        {
+            LifeStage stage = FamilyRules.StageAt(born, now, dayLength, cfg);
+            bool minor = stage != LifeStage.Adult;
+            bool import = born > 0 && minor && FindChild(uid) == null;
+            if ((cfg.ChildrenCountTowardLimit ? Settlers.Count >= capacity : !minor && AdultCount(now, dayLength, cfg) >= capacity) ||
+                (import && Children.Count >= MaxChildren) || !TryAddSettler(uid, name, MaxRoster))
+            {
+                return false;
+            }
+            if (import)
+            {
+                Children.Add(new ChildRecord { Uid = uid, Name = FindSettler(uid).Name, Born = born,
+                    Mother = mother, Father = father, Female = female, LastStage = (int)stage });
+            }
+            return true;
+        }
+
         /// <summary>False when the settlement is full or the settler is already listed.</summary>
         internal bool TryAddSettler(long uid, string name, int capacity)
         {
@@ -305,7 +651,15 @@ namespace AgeOfJarls.Settlement
             return true;
         }
 
+        /// <summary>Takes the settler off the roster only; the table also calls <see cref="FamilyCleanup"/>.</summary>
         internal bool RemoveSettler(long uid) => Settlers.RemoveAll(s => s.Uid == uid) > 0;
+
+        /// <summary>Reads the saved settlement blob without requiring a loaded table component.</summary>
+        internal static SettlementData Read(ZDO zdo)
+        {
+            byte[] blob = zdo?.GetByteArray(Keys.ZdoSettlement);
+            return blob != null ? Deserialize(blob) : null;
+        }
 
         internal byte[] Serialize()
         {
@@ -336,6 +690,46 @@ namespace AgeOfJarls.Settlement
                 package.Write(zone.Kind ?? SettlementZone.KindOther);
                 package.Write(zone.Center);
                 package.Write(zone.Radius);
+            }
+            package.Write(FamilyFlags);
+            package.Write(Couples.Count);
+            foreach (Couple couple in Couples)
+            {
+                package.Write(couple.A);
+                package.Write(couple.B);
+                package.Write(couple.Since);
+                package.Write(couple.ChildrenBorn);
+                package.Write(couple.LastBirth);
+                package.Write(couple.DueAt);
+                package.Write(couple.Carrier);
+                package.Write(couple.ConceivedAt);
+                package.Write(couple.ConceptionMother);
+                package.Write(couple.ConceptionFather);
+            }
+            package.Write(Courtships.Count);
+            foreach (Courtship courtship in Courtships)
+            {
+                package.Write(courtship.A);
+                package.Write(courtship.B);
+                package.Write(courtship.StartedAt);
+            }
+            package.Write(Children.Count);
+            foreach (ChildRecord child in Children)
+            {
+                package.Write(child.Uid);
+                package.Write(child.Mother);
+                package.Write(child.Father);
+                package.Write(child.Born);
+                package.Write(child.LastStage);
+                package.Write(child.Female);
+                package.Write(child.Name ?? "");
+            }
+            package.Write(Moods.Count);
+            foreach (Mood mood in Moods)
+            {
+                package.Write(mood.Uid);
+                package.Write((int)mood.Kind);
+                package.Write(mood.Until);
             }
             return package.GetArray();
         }
@@ -415,6 +809,61 @@ namespace AgeOfJarls.Settlement
                             Kind = package.ReadString(),
                             Center = package.ReadVector3(),
                             Radius = package.ReadSingle(),
+                        });
+                    }
+                }
+                if (version >= FirstFamiliesVersion)
+                {
+                    settlement.FamilyFlags = package.ReadByte();
+                    int couples = ReadCount(package, MaxCouples, "couple");
+                    for (int i = 0; i < couples; i++)
+                    {
+                        settlement.Couples.Add(new Couple
+                        {
+                            A = package.ReadLong(),
+                            B = package.ReadLong(),
+                            Since = package.ReadDouble(),
+                            ChildrenBorn = package.ReadInt(),
+                            LastBirth = package.ReadDouble(),
+                            DueAt = package.ReadDouble(),
+                            Carrier = package.ReadLong(),
+                            ConceivedAt = package.ReadDouble(),
+                            ConceptionMother = package.ReadLong(),
+                            ConceptionFather = package.ReadLong(),
+                        });
+                    }
+                    int courtships = ReadCount(package, MaxCourtships, "courtship");
+                    for (int i = 0; i < courtships; i++)
+                    {
+                        settlement.Courtships.Add(new Courtship
+                        {
+                            A = package.ReadLong(),
+                            B = package.ReadLong(),
+                            StartedAt = package.ReadDouble(),
+                        });
+                    }
+                    int children = ReadCount(package, MaxChildren, "child");
+                    for (int i = 0; i < children; i++)
+                    {
+                        settlement.Children.Add(new ChildRecord
+                        {
+                            Uid = package.ReadLong(),
+                            Mother = package.ReadLong(),
+                            Father = package.ReadLong(),
+                            Born = package.ReadDouble(),
+                            LastStage = package.ReadInt(),
+                            Female = package.ReadBool(),
+                            Name = package.ReadString(),
+                        });
+                    }
+                    int moods = ReadCount(package, MaxMoods, "mood");
+                    for (int i = 0; i < moods; i++)
+                    {
+                        settlement.Moods.Add(new Mood
+                        {
+                            Uid = package.ReadLong(),
+                            Kind = (MoodKind)package.ReadInt(),
+                            Until = package.ReadDouble(),
                         });
                     }
                 }

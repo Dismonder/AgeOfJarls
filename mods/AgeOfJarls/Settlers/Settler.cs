@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using AgeOfJarls.Core;
 using AgeOfJarls.Core.Defs;
+using AgeOfJarls.Family;
 using AgeOfJarls.Settlement;
 using UnityEngine;
 
@@ -153,6 +154,134 @@ namespace AgeOfJarls.Settlers
         /// <summary>Knocked out for a moment instead of dead (see SettlerCharacter.KnockOut).</summary>
         internal bool IsDown => _humanoid is SettlerCharacter body && body.Down;
 
+        // ---------------------------------------------------------------- family (read on every machine)
+
+        /// <summary>World time of its birth in a settlement; 0 for a settler that arrived as an adult.</summary>
+        internal double Born => _nview != null && _nview.IsValid() ? WorldClock.Get(_nview.GetZDO(), Keys.ZdoSettlerBorn, 0.0) : 0.0;
+
+        /// <summary>Seconds since its birth; 0 for adults by arrival.</summary>
+        internal double Age
+        {
+            get
+            {
+                double born = Born;
+                return born > 0.0 ? Math.Max(0.0, WorldClock.Now - born) : 0.0;
+            }
+        }
+
+        /// <summary>Derived from the birth time and the config: the same on every machine, nothing is stored.</summary>
+        internal LifeStage Stage => FamilyRules.StageAt(Born, WorldClock.Now, WorldClock.DayLength, FamilyConfig.Live);
+
+        internal bool IsAdult => Stage == LifeStage.Adult;
+
+        /// <summary>"Ragnarsson" for a settler born here; "" for one that arrived.</summary>
+        internal string Patronymic => _nview != null && _nview.IsValid() ? _nview.GetZDO().GetString(Keys.ZdoSettlerPatronymic) : "";
+
+        /// <summary>First name and patronymic, for the windows (the hover shows the first name).</summary>
+        internal string FullName
+        {
+            get
+            {
+                string patronymic = Patronymic;
+                return patronymic.Length > 0 ? DisplayName + " " + patronymic : DisplayName;
+            }
+        }
+
+        /// <summary>Stable ids of its parents; 0 = unknown (arrived as an adult, or never recorded).</summary>
+        internal long MotherUid => _nview != null && _nview.IsValid() ? _nview.GetZDO().GetLong(Keys.ZdoSettlerMother) : 0L;
+
+        internal long FatherUid => _nview != null && _nview.IsValid() ? _nview.GetZDO().GetLong(Keys.ZdoSettlerFather) : 0L;
+
+        private FamilyInfo _family = FamilyInfo.Empty;
+        private uint _familyRevision;
+        private long _familyHomeId;
+        private ZDOID _familyTableId;
+        private float _familyNextRefreshAt;
+        private static readonly List<ZDO> s_familyTables = new List<ZDO>();
+
+        /// <summary>
+        /// Its partner, sweetheart, pregnancy, children and moods, from the settlement blob; rebuilt only when the
+        /// table's data changed (its ZDO revision) or the settler moved home. Retained while its table is unreachable.
+        /// </summary>
+        internal FamilyInfo Family
+        {
+            get
+            {
+                long home = HomeId;
+                if (home != _familyHomeId)
+                {
+                    _family = FamilyInfo.Empty;
+                    _familyHomeId = home;
+                    _familyTableId = ZDOID.None;
+                    _familyRevision = 0;
+                    _familyNextRefreshAt = 0;
+                }
+                if (home == 0) return _family;
+                JarlTable table = JarlTable.FindById(home);
+                ZDO tableZdo = table != null && table.NetView != null && table.NetView.IsValid() ? table.NetView.GetZDO() : null;
+                if (tableZdo == null)
+                {
+                    if (Time.realtimeSinceStartup < _familyNextRefreshAt) return _family;
+                    _familyNextRefreshAt = Time.realtimeSinceStartup + 5f;
+                    if (ZDOMan.instance == null) return _family;
+                    tableZdo = ZDOMan.instance.GetZDO(_familyTableId);
+                    if (tableZdo == null && Zdo != null)
+                    {
+                        // Stable home ids are not ZDOIDs; recover the id from the saved table sector after reload.
+                        s_familyTables.Clear();
+                        ZDOMan.instance.FindSectorObjects(ZoneSystem.GetZone(Zdo.GetVec3(Keys.ZdoSettlerHomePosition, Vector3.zero)),
+                            new SimulationDistance(0, 0), s_familyTables);
+                        foreach (ZDO candidate in s_familyTables)
+                        {
+                            if (candidate.GetLong(Keys.ZdoSettlementId) == home)
+                            {
+                                tableZdo = candidate;
+                                break;
+                            }
+                        }
+                        s_familyTables.Clear();
+                    }
+                }
+                if (tableZdo != null && tableZdo.GetLong(Keys.ZdoSettlementId) == home)
+                {
+                    _familyTableId = tableZdo.m_uid;
+                    if (tableZdo.DataRevision != _familyRevision || _family == FamilyInfo.Empty)
+                    {
+                        SettlementData data = table != null ? table.Data : SettlementData.Read(tableZdo);
+                        // Missing or corrupt blobs keep the last valid snapshot for this home.
+                        if (data != null)
+                        {
+                            _family = FamilyInfo.Build(data, Uid);
+                            _familyRevision = tableZdo.DataRevision;
+                        }
+                    }
+                }
+                return _family;
+            }
+        }
+
+        /// <summary>
+        /// Expecting a child within half a day, or gave birth less than Family/RestDays ago: no work, stays near its
+        /// bed (AI.HomeRoutine). Derived, so every machine agrees.
+        /// </summary>
+        internal bool IsResting
+        {
+            get
+            {
+                FamilyInfo family = Family;
+                double now = WorldClock.Now;
+                double day = WorldClock.DayLength;
+                if (family.IsExpecting && family.DueAt - now <= 0.5 * day)
+                {
+                    return true;
+                }
+                return family.LastBirthAsMother > 0.0 && now - family.LastBirthAsMother <= FamilyConfig.Live.RestDays * day;
+            }
+        }
+
+        /// <summary>Weapons, armour, shields, tools: what a child is not given.</summary>
+        internal static bool IsGear(ItemDrop.ItemData item) => item != null && item.IsEquipable();
+
         /// <summary>
         /// For aoj_debug: what every machine knows from the ZDO and, on the machine that simulates the settler, what
         /// its AI is doing. Localized.
@@ -170,12 +299,16 @@ namespace AgeOfJarls.Settlers
                 .Append($"  HP {Mathf.CeilToInt(_humanoid.GetHealth())}/{Mathf.CeilToInt(_humanoid.GetMaxHealth())}")
                 .Append(IsDown ? "  DOWN" : "").Append(IsCaptive ? "  CAPTIVE" : "").Append('\n');
             string home = !HasHome ? "none" : HomeTable != null ? (IsAtHome ? "at home" : "away") : "not loaded";
-            text.Append($"{(SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)} · follows {zdo.GetLong(Keys.ZdoSettlerFollow)}")
-                .Append(zdo.GetBool(Keys.ZdoSettlerHold) ? " · holds" : "").Append($" · home {home}\n");
+            text.Append($"{(SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)} Ä‚â€šĂ‚Â· follows {zdo.GetLong(Keys.ZdoSettlerFollow)}")
+                .Append(zdo.GetBool(Keys.ZdoSettlerHold) ? " Ä‚â€šĂ‚Â· holds" : "").Append($" Ä‚â€šĂ‚Â· home {home}\n");
             Work.WorkTotem totem = JobTotem;
             string job = totem != null ? totem.Job.ToString() : JobId != 0L ? "far" : "-";
             string problem = JobProblem.Length > 0 ? $" ({JobProblem})" : "";
-            text.Append($"job {job}{problem} · role {Role} · food {Needs.Satiety(zdo):0} · morale {Needs.Morale(zdo):0}");
+            text.Append($"job {job}{problem} Ä‚â€šĂ‚Â· role {Role} Ä‚â€šĂ‚Â· food {Needs.Satiety(zdo):0} Ä‚â€šĂ‚Â· morale {Needs.Morale(zdo):0}");
+            FamilyInfo family = Family;
+            string partner = family.PartnerUid != 0L ? $" Ä‚â€šĂ‚Â· partner {family.PartnerName}" : family.CourtingUid != 0L ? $" Ä‚â€šĂ‚Â· courting {family.CourtingName}" : "";
+            string expecting = family.IsExpecting ? " Ä‚â€šĂ‚Â· expecting" : IsResting ? " Ä‚â€šĂ‚Â· resting" : "";
+            text.Append($"\nstage {Stage} Ä‚â€šĂ‚Â· age {Age / WorldClock.DayLength:0.0}d Ä‚â€šĂ‚Â· scale {_appliedScale:0.00}{partner}{expecting}");
             if (owner && _ai is AI.SettlerAI ai)
             {
                 text.Append('\n').Append(ai.DebugState());
@@ -192,13 +325,19 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_SetRole(long sender, int role)
         {
-            if (!OwnerHandles(Keys.RpcSettlerRole, role))
+            if (!OwnerHandlesWithoutForward(Keys.RpcSettlerRole))
             {
                 return;
             }
             if (IsCaptive)
             {
                 // A captive takes no orders until a player frees it.
+                return;
+            }
+            if (role != (int)Army.CombatRole.None && !IsAdult)
+            {
+                // Children never fight.
+                Notify(sender, "$aoj_msg_too_young", DisplayName);
                 return;
             }
             // A role the settlement has not unlocked yet is refused when its table is loaded here to tell.
@@ -321,7 +460,7 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_SetJob(long sender, long totemId)
         {
-            if (!OwnerHandles(Keys.RpcSettlerSetJob, totemId))
+            if (!OwnerHandlesWithoutForward(Keys.RpcSettlerSetJob))
             {
                 return;
             }
@@ -335,10 +474,20 @@ namespace AgeOfJarls.Settlers
                 Log.Warning(Module, $"Job change for {DisplayName} from peer {sender} refused");
                 return;
             }
+            Work.WorkTotem totem = Work.WorkTotem.FindById(totemId);
+            if (totemId != 0L && !IsAdult)
+            {
+                // Infants and children never work; youths only the light jobs (a totem not loaded here cannot be judged: refused too).
+                LifeStage stage = Stage;
+                if (totem == null || !FamilyRules.CanWorkAt(stage, totem.Job))
+                {
+                    Notify(sender, "$aoj_msg_too_young", DisplayName);
+                    return;
+                }
+            }
             ZDO zdo = _nview.GetZDO();
             zdo.Set(Keys.ZdoSettlerJob, totemId);
             zdo.Set(Keys.ZdoSettlerProblem, "");
-            Work.WorkTotem totem = Work.WorkTotem.FindById(totemId);
             Log.Info(Module, totemId == 0L ? $"{DisplayName} has no job now" : $"{DisplayName} now works as {totem?.Job.ToString() ?? "a worker"}");
         }
 
@@ -392,6 +541,27 @@ namespace AgeOfJarls.Settlers
                 _nview.Register<int>(Keys.RpcSettlerRole, RPC_SetRole);
                 _nview.Register<long>(Keys.RpcSettlerFree, RPC_Free);
                 _nview.Register<string>(Keys.RpcSettlerFeed, RPC_Feed);
+                _nview.Register<string>(Keys.RpcSettlerEmote, RPC_Emote);
+            }
+        }
+
+        // From the owner to everybody (SettlerCharacter.PlayEmote): the one-shot emote plays here too.
+        private void RPC_Emote(long sender, string name)
+        {
+            if (_nview == null || !_nview.IsValid() || sender != _nview.GetZDO().GetOwner())
+            {
+                return;
+            }
+            try
+            {
+                if (_humanoid is SettlerCharacter body)
+                {
+                    body.OnEmote(name);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Warning(Module, $"Emote '{name}' failed: {e.Message}");
             }
         }
 
@@ -508,21 +678,15 @@ namespace AgeOfJarls.Settlers
             _humanoid.m_beardItem = Identity.Beard;
             // Vanilla BaseAI regeneration (it also catches up on world time spent unloaded) at the configured pace.
             _humanoid.m_regenAllHPTime = AoJConfig.SettlerFullHealSeconds.Value;
-            if (_ai != null)
-            {
-                // AI only runs on the owner, but ownership moves between players, so every client sets the same value.
-                _ai.m_fleeIfLowHealth = Mathf.Clamp(AoJConfig.SettlerFleeThreshold.Value + TraitSum(TraitStat.FleeThreshold), 0f, MaxFleeThreshold);
-            }
             // Movement runs on the owner too, and ownership moves: every client sets the same speeds (from the speeds
-            // left after UndoEnemyScaling, so a second Apply never stacks them).
+            // left after UndoEnemyScaling, so a second Apply never stacks them). Speeds, flee threshold, beard, scale
+            // and (on the owner) max health follow the life stage: ApplyStage.
             if (_baseWalkSpeed < 0f)
             {
                 _baseWalkSpeed = _humanoid.m_walkSpeed;
                 _baseRunSpeed = _humanoid.m_runSpeed;
             }
-            float speed = Mathf.Max(0.5f, 1f + TraitSum(TraitStat.MoveSpeed));
-            _humanoid.m_walkSpeed = _baseWalkSpeed * speed;
-            _humanoid.m_runSpeed = _baseRunSpeed * speed;
+            ApplyStage();
 
             if (!_nview.IsOwner())
             {
@@ -555,14 +719,13 @@ namespace AgeOfJarls.Settlers
                 _visEquipment.SetHairColor(Identity.HairColor);
                 // Humanoid only forwards hair and beard to VisEquipment for players, so NPCs set them directly.
                 _visEquipment.SetHairItem(ItemHash(Identity.Hair));
-                _visEquipment.SetBeardItem(ItemHash(Identity.Beard));
+                _visEquipment.SetBeardItem(ItemHash(_humanoid.m_beardItem));
             }
 
-            float maxHealth = AoJConfig.SettlerBaseHealth.Value * (1f + TraitSum(TraitStat.MaxHealth));
-            _humanoid.SetMaxHealth(maxHealth);
+            // ApplyStage set the max health for this stage; a brand-new settler starts at full health.
             if (firstTime)
             {
-                _humanoid.SetHealth(maxHealth);
+                _humanoid.SetHealth(_humanoid.GetMaxHealth());
             }
         }
 
@@ -570,6 +733,101 @@ namespace AgeOfJarls.Settlers
 
         private float _baseWalkSpeed = -1f;
         private float _baseRunSpeed = -1f;
+
+        // ---------------------------------------------------------------- life stage
+
+        /// <summary>Growth is continuous: the model is rescaled once the derived scale drifts this far from the applied one.</summary>
+        private const float ScaleDrift = 0.005f;
+        private float _appliedScale = -1f;
+        private LifeStage? _appliedStage;
+        private float _appliedHealthFactor = -1f;
+
+        /// <summary>Stage effects must refresh even when growth stays within the scale tolerance.</summary>
+        internal static bool NeedsStageRefresh(LifeStage stage, LifeStage? appliedStage, float scale, float appliedScale) =>
+            stage != appliedStage || Mathf.Abs(scale - appliedScale) > ScaleDrift;
+
+        /// <summary>The scale the settler should have now, and its stage; 1 for adults.</summary>
+        private float StageScale(out LifeStage stage)
+        {
+            double born = Born;
+            double now = WorldClock.Now;
+            double day = WorldClock.DayLength;
+            FamilyConfig cfg = FamilyConfig.Live;
+            stage = FamilyRules.StageAt(born, now, day, cfg);
+            if (stage == LifeStage.Adult)
+            {
+                return 1f;
+            }
+            return FamilyRules.ScaleFor(stage, FamilyRules.StageProgress(now - born, day, cfg));
+        }
+
+        /// <summary>Max health for a model of this scale: the config base, the traits, and the stage factor.</summary>
+        private float MaxHealthFor(float scale) =>
+            AoJConfig.SettlerBaseHealth.Value * (1f + TraitSum(TraitStat.MaxHealth)) * FamilyRules.HealthFactor(scale);
+
+        /// <summary>
+        /// Every machine: the model scale, speeds, flee threshold and beard of the settler's life stage (derived from
+        /// its birth time, so every machine computes the same); the owner alone writes the max health (vanilla stores
+        /// it in the ZDO), and only when the stage factor changed. Runs at the end of the every-machine part of Apply
+        /// (after UndoEnemyScaling, which Start ran before: the stage scale wins) and when the stage or scale changes.
+        /// </summary>
+        private void ApplyStage()
+        {
+            if (Identity == null || _humanoid == null || _nview == null || !_nview.IsValid())
+            {
+                return;
+            }
+            float scale = StageScale(out LifeStage stage);
+            bool adult = stage == LifeStage.Adult;
+            if (Mathf.Abs(transform.localScale.x - scale) > 0.0005f)
+            {
+                transform.localScale = Vector3.one * scale;
+            }
+            // Never stacked: always from the cached base speeds.
+            float speed = Mathf.Max(0.5f, 1f + TraitSum(TraitStat.MoveSpeed)) * FamilyRules.SpeedFactor(scale);
+            _humanoid.m_walkSpeed = _baseWalkSpeed * speed;
+            _humanoid.m_runSpeed = _baseRunSpeed * speed;
+            if (_ai != null)
+            {
+                // AI only runs on the owner, but ownership moves between players, so every client sets the same value.
+                // A child runs from everything.
+                _ai.m_fleeIfLowHealth = adult
+                    ? Mathf.Clamp(AoJConfig.SettlerFleeThreshold.Value + TraitSum(TraitStat.FleeThreshold), 0f, MaxFleeThreshold)
+                    : 1f;
+            }
+
+            // No beard before adulthood; the identity keeps it for later.
+            _humanoid.m_beardItem = adult ? Identity.Beard : "";
+
+            if (!_nview.IsOwner())
+            {
+                _appliedScale = scale;
+                _appliedStage = stage;
+                return;
+            }
+            ZDO zdo = _nview.GetZDO();
+            bool noBeard = !adult || Identity.Female;
+            if (zdo.GetBool(ZDOVars.s_noBeard) != noBeard)
+            {
+                zdo.Set(ZDOVars.s_noBeard, noBeard);
+            }
+            if (_visEquipment != null)
+            {
+                int beard = ItemHash(_humanoid.m_beardItem);
+                if (zdo.GetInt(ZDOVars.s_beardItem) != beard)
+                {
+                    _visEquipment.SetBeardItem(beard);
+                }
+            }
+            float healthFactor = FamilyRules.HealthFactor(scale);
+            if (!Mathf.Approximately(healthFactor, _appliedHealthFactor))
+            {
+                _appliedHealthFactor = healthFactor;
+                _humanoid.SetMaxHealth(MaxHealthFor(scale));
+            }
+            _appliedScale = scale;
+            _appliedStage = stage;
+        }
 
         /// <summary>The sum of the settler's traits for one stat (<see cref="TraitStat"/>); 0 before its identity is known.</summary>
         internal float TraitSum(string stat)
@@ -608,10 +866,23 @@ namespace AgeOfJarls.Settlers
                 return;
             }
 
-            // AI runs on the owner, but ownership moves, so every client keeps the same wander range.
+            // Growing up: the model follows the derived scale (every machine, the game does not sync scale).
+            LifeStage stage = LifeStage.Adult;
+            if (Identity != null)
+            {
+                float scale = StageScale(out stage);
+                if (NeedsStageRefresh(stage, _appliedStage, scale, _appliedScale))
+                {
+                    ApplyStage();
+                }
+            }
+            // AI runs on the owner, but ownership moves, so every client keeps the same wander range (small children
+            // stay close to their anchor).
             if (_ai != null)
             {
-                _ai.m_randomMoveRange = _nview.GetZDO().GetBool(Keys.ZdoSettlerHold) ? HoldRange : AoJConfig.SettlerWanderRange.Value;
+                _ai.m_randomMoveRange = _nview.GetZDO().GetBool(Keys.ZdoSettlerHold)
+                    ? HoldRange
+                    : FamilyRules.WanderRangeFor(stage, AoJConfig.SettlerWanderRange.Value);
             }
             UpdatePose();
 
@@ -806,6 +1077,10 @@ namespace AgeOfJarls.Settlers
         /// </summary>
         internal Vector3 HomeAnchor(JarlTable table)
         {
+            if (!FamilyRules.NeedsOwnBed(Stage))
+            {
+                return ChildRoutine.Anchor(this, table);
+            }
             bool night = EnvMan.IsNight();
             // Soldiers stand at their post by day, and at any hour during an alarm.
             Army.WarBanner post = Role != Army.CombatRole.None ? Army.WarBanner.FindById(PostId) : null;
@@ -819,9 +1094,11 @@ namespace AgeOfJarls.Settlers
         /// <summary>Civilians idle in a ring around the table, each at a spot of its own: not all on top of it, and of the player using it.</summary>
         private const float IdleRingRadius = 3.5f;
 
-        private Vector3 IdleSpot()
+        private Vector3 IdleSpot() => IdleSpot(Uid);
+
+        /// <summary>The ring spot of a settler with this uid, relative to its table (also for a newborn before it is loaded, and for meeting points).</summary>
+        internal static Vector3 IdleSpot(long uid)
         {
-            long uid = Uid;
             if (uid == 0L)
             {
                 return Vector3.zero;
@@ -859,6 +1136,8 @@ namespace AgeOfJarls.Settlers
             if (Identity != null)
             {
                 EnsureUid();
+                // The owner writes the max health of the stage; the previous owner may have left it behind.
+                ApplyStage();
             }
             // Its leader at once, not at the next tick: a follower that changed hands (or was just told to follow)
             // sets off within the frame instead of standing for up to a second.
@@ -1056,9 +1335,8 @@ namespace AgeOfJarls.Settlers
         // ---------------------------------------------------------------- requests that answer the asking peer
 
         /// <summary>
-        /// A request whose answer (items, a message) goes back to the one who asked: its peer id in front of the body.
-        /// The owner takes the asker's identity from the network, not from this field (<see cref="Requester"/>); the
-        /// field matters when the request is passed on, because the one passing it on becomes the network sender.
+        /// A request whose answer (items, a message) goes back to the network sender. The legacy peer field remains
+        /// in the wire format but is never used for authorization; these handlers do not forward requests.
         /// </summary>
         private static ZPackage Request(long requester, ZPackage body)
         {
@@ -1066,18 +1344,6 @@ namespace AgeOfJarls.Settlers
             package.Write(requester);
             package.Write(body);
             return package;
-        }
-
-        /// <summary>
-        /// Who asked: the network sender, unless the request names the server or came through it. The server relays
-        /// a request when the machine it was aimed at lost ownership meanwhile, and it writes the asker it got the
-        /// request from; nobody else is believed about somebody else asking. Naming the server gains nothing either
-        /// way: the answer goes to the host's player, who could have asked.
-        /// </summary>
-        private static long Requester(long sender, long claimed)
-        {
-            long server = Net.Peers.ServerPeerId();
-            return claimed != 0L && server != 0L && (sender == server || claimed == server) ? claimed : sender;
         }
 
         /// <summary>
@@ -1114,6 +1380,14 @@ namespace AgeOfJarls.Settlers
             }
             _nview.InvokeRPC(method, args);
             return false;
+        }
+
+        /// <summary>Preserves sender authority while retaining the settler's immediate ownership initialization.</summary>
+        private bool OwnerHandlesWithoutForward(string method)
+        {
+            if (_nview == null || !_nview.IsValid()) return false;
+            if (!_nview.HasOwner()) Claim();
+            return Net.OwnerRpc.HandlesWithoutForward(_nview, method);
         }
 
         private const int MaxForwardsPerSecond = 10;
@@ -1244,12 +1518,11 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_Teleport(long sender, ZPackage package)
         {
-            long claimed;
             ZPackage body;
             Vector3 arrival;
             try
             {
-                claimed = package.ReadLong();
+                package.ReadLong();
                 body = package.ReadPackage();
                 arrival = body.ReadVector3();
                 body.SetPos(0);
@@ -1259,8 +1532,8 @@ namespace AgeOfJarls.Settlers
                 Log.Warning(Module, $"Malformed portal request from peer {sender}: {e.Message}");
                 return;
             }
-            long requester = Requester(sender, claimed);
-            if (!OwnerHandles(Keys.RpcSettlerTeleport, Request(requester, body)))
+            long requester = sender;
+            if (!OwnerHandlesWithoutForward(Keys.RpcSettlerTeleport))
             {
                 return;
             }
@@ -1335,11 +1608,10 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_TakeItem(long sender, ZPackage package)
         {
-            long claimed;
             ZPackage body;
             try
             {
-                claimed = package.ReadLong();
+                package.ReadLong();
                 body = package.ReadPackage();
             }
             catch (Exception e) when (e is IOException || e is ArgumentException)
@@ -1347,8 +1619,8 @@ namespace AgeOfJarls.Settlers
                 Log.Warning(Module, $"Malformed take-item request from peer {sender}: {e.Message}");
                 return;
             }
-            long requester = Requester(sender, claimed);
-            if (!OwnerHandles(Keys.RpcSettlerTakeItem, Request(requester, body)))
+            long requester = sender;
+            if (!OwnerHandlesWithoutForward(Keys.RpcSettlerTakeItem))
             {
                 return;
             }
@@ -1438,13 +1710,13 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_Attack(long sender, ZDOID targetId)
         {
-            if (!OwnerHandles(Keys.RpcSettlerAttack, targetId))
+            if (!OwnerHandlesWithoutForward(Keys.RpcSettlerAttack))
             {
                 return;
             }
-            if (IsCaptive)
+            if (IsCaptive || !IsAdult)
             {
-                // A captive takes no orders until a player frees it.
+                // A captive takes no orders until a player frees it; a child never fights.
                 return;
             }
             // Only its leader, or an officer of its settlement, sends a settler into a fight.
@@ -1513,7 +1785,7 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_GoHome(long sender)
         {
-            if (!OwnerHandles(Keys.RpcSettlerGoHome))
+            if (!OwnerHandlesWithoutForward(Keys.RpcSettlerGoHome))
             {
                 return;
             }
@@ -1547,7 +1819,7 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_Rename(long sender, string name)
         {
-            if (!OwnerHandles(Keys.RpcSettlerRename, name))
+            if (!OwnerHandlesWithoutForward(Keys.RpcSettlerRename))
             {
                 return;
             }
@@ -1646,6 +1918,12 @@ namespace AgeOfJarls.Settlers
                 player.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_refuse", Identity.Name, itemName));
                 return true;
             }
+            if (IsGear(item) && !IsAdult)
+            {
+                // No weapons, armour or tools for a child (food and other things are fine). The owner checks again.
+                player.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_too_young_gear", Identity.Name));
+                return true;
+            }
             // Food given by hand is eaten on the spot (followers far from any cauldron need this).
             if (Needs.IsFood(item) && item.m_dropPrefab != null)
             {
@@ -1676,7 +1954,7 @@ namespace AgeOfJarls.Settlers
         internal bool Give(ItemDrop.ItemData item)
         {
             var parcel = new Inventory("aoj_give", null, 1, 1);
-            if (_nview == null || !_nview.IsValid() || !parcel.AddItem(item))
+            if (_nview == null || !_nview.IsValid() || (IsGear(item) && !IsAdult) || !parcel.AddItem(item))
             {
                 return false;
             }
@@ -1705,9 +1983,15 @@ namespace AgeOfJarls.Settlers
             }
 
             Inventory inventory = _humanoid.GetInventory();
+            bool adult = IsAdult;
             foreach (ItemDrop.ItemData item in parcel.GetAllItems().ToList())
             {
-                if (inventory.AddItem(item))
+                if (!adult && IsGear(item))
+                {
+                    // A child takes no gear (the giver's machine already said so): it lands at its feet, never lost.
+                    ItemDrop.DropItem(item, item.m_stack, DropPoint(), transform.rotation);
+                }
+                else if (inventory.AddItem(item))
                 {
                     // Weapons, shields and armour go on; tools (hammer, hoe, cultivator) stay in the bag for work.
                     if (item.IsEquipable() && item.m_shared.m_itemType != ItemDrop.ItemData.ItemType.Tool && inventory.ContainsItem(item))
@@ -1740,11 +2024,10 @@ namespace AgeOfJarls.Settlers
 
         private void RPC_TakeBack(long sender, ZPackage package)
         {
-            long claimed;
             ZPackage body;
             try
             {
-                claimed = package.ReadLong();
+                package.ReadLong();
                 body = package.ReadPackage();
             }
             catch (Exception e) when (e is IOException || e is ArgumentException)
@@ -1752,8 +2035,8 @@ namespace AgeOfJarls.Settlers
                 Log.Warning(Module, $"Malformed take-back request from peer {sender}: {e.Message}");
                 return;
             }
-            long requester = Requester(sender, claimed);
-            if (!OwnerHandles(Keys.RpcSettlerTakeBack, Request(requester, body)))
+            long requester = sender;
+            if (!OwnerHandlesWithoutForward(Keys.RpcSettlerTakeBack))
             {
                 return;
             }
@@ -1855,7 +2138,7 @@ namespace AgeOfJarls.Settlers
 
             if (IsCaptive)
             {
-                return Localize($"{DisplayName}\n<color=#b0b0b0>$aoj_captive · {_traitsText}\n$aoj_captive_how</color>\n" +
+                return Localize($"{DisplayName}\n<color=#b0b0b0>$aoj_captive Ä‚â€šĂ‚Â· {_traitsText}\n$aoj_captive_how</color>\n" +
                                 "[<color=yellow><b>$KEY_Use</b></color>] $aoj_free_captive");
             }
 
@@ -1866,12 +2149,89 @@ namespace AgeOfJarls.Settlers
                 : IsAtHome ? "$aoj_activity_" + ((SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)).ToString().ToLowerInvariant()
                 : OrderText(zdo);
             Work.WorkTotem totem = JobTotem;
-            string work = totem != null ? Work.JobInfo.Token(totem.Job) + " · " : Role != Army.CombatRole.None ? Army.CombatRoles.Token(Role) + " · " : "";
-            return Localize($"{DisplayName}\n<color=#b0b0b0>{_traitsText}\n{HomeText()} · {work}{doing}</color>\n" +
+            string work = totem != null ? Work.JobInfo.Token(totem.Job) + " Ä‚â€šĂ‚Â· " : Role != Army.CombatRole.None ? Army.CombatRoles.Token(Role) + " Ä‚â€šĂ‚Â· " : "";
+            // Growing up and family: the stage before the traits, the partner or sweetheart after what it does.
+            LifeStage stage = Stage;
+            string stageText = stage == LifeStage.Adult ? "" : FamilyRules.StageToken(stage, Identity.Female) + " Ä‚â€šĂ‚Â· ";
+            return Localize($"{DisplayName}\n<color=#b0b0b0>{stageText}{_traitsText}\n{HomeText()} Ä‚â€šĂ‚Â· {work}{doing}{RelationText()}</color>\n" +
                             "[<color=yellow><b>$KEY_Use</b></color>] $aoj_orders\n" +
                             $"[<color=yellow><b>$KEY_AltPlace + $KEY_Use</b></color>] {(following ? "$aoj_stay" : "$aoj_follow")}\n" +
                             UI.CommandWheel.HoverHint +
                             "$aoj_give_hint");
+        }
+
+        // " Ä‚â€šĂ‚Â· partner X" / " Ä‚â€šĂ‚Â· courting X" and " Ä‚â€šĂ‚Â· expecting", for the hover and the roster line; "" for a single adult.
+        private string RelationText()
+        {
+            FamilyInfo family = Family;
+            string text = family.PartnerUid != 0L ? " Ä‚â€šĂ‚Â· " + Localize("$aoj_hover_partner", family.PartnerName)
+                : family.CourtingUid != 0L ? " Ä‚â€šĂ‚Â· " + Localize("$aoj_hover_courting", family.CourtingName)
+                : "";
+            return family.IsExpecting ? text + " Ä‚â€šĂ‚Â· $aoj_hover_expecting" : text;
+        }
+
+        /// <summary>Whole game days, for the windows.</summary>
+        private static string Days(double seconds) => Math.Max(0.0, Math.Floor(seconds / WorldClock.DayLength)).ToString("0");
+
+        /// <summary>
+        /// The family block of the order window: stage and age for a child, partner or sweetheart, a child on the
+        /// way, the children and the parents, as tokens. Names come from the roster (the blob), so they show while
+        /// those settlers are not loaded.
+        /// </summary>
+        internal string FamilyDetails()
+        {
+            if (Identity == null || _nview == null || !_nview.IsValid())
+            {
+                return "";
+            }
+            var text = new StringBuilder();
+            double now = WorldClock.Now;
+            FamilyConfig cfg = FamilyConfig.Live;
+            LifeStage stage = Stage;
+            if (stage != LifeStage.Adult)
+            {
+                double age = Age;
+                LifeStage next = (LifeStage)((int)stage + 1);
+                text.Append(FamilyRules.StageToken(stage, Identity.Female)).Append(", ").Append(Localize("$aoj_family_age", Days(age)))
+                    .Append("; ").Append(Localize("$aoj_family_next_stage", FamilyRules.StageToken(next, Identity.Female),
+                        Days(FamilyRules.SecondsToNextStage(age, WorldClock.DayLength, cfg)))).Append('\n');
+            }
+            FamilyInfo family = Family;
+            if (family.PartnerUid != 0L)
+            {
+                text.Append("$aoj_family_partner: ").Append(family.PartnerName);
+            }
+            else if (family.CourtingUid != 0L)
+            {
+                text.Append("$aoj_family_courting: ").Append(family.CourtingName);
+            }
+            else if (stage == LifeStage.Adult)
+            {
+                text.Append("$aoj_family_single");
+            }
+            if (family.IsExpecting || family.PartnerExpecting)
+            {
+                text.Append(text.Length > 0 ? "  Ä‚â€šĂ‚Â·  " : "").Append(Localize("$aoj_family_expecting", Days(family.DueAt - now)));
+            }
+            if (text.Length > 0 && text[text.Length - 1] != '\n')
+            {
+                text.Append('\n');
+            }
+            if (family.Children.Count > 0)
+            {
+                text.Append("$aoj_family_children: ").Append(family.Children.Count).Append('\n');
+            }
+            long mother = MotherUid;
+            long father = FatherUid;
+            if (mother != 0L || father != 0L || Born > 0.0)
+            {
+                SettlementData data = HomeTable?.Data;
+                string motherName = data != null ? FamilyInfo.NameOf(data, mother) : "";
+                string fatherName = data != null ? FamilyInfo.NameOf(data, father) : "";
+                text.Append("$aoj_family_parents: ").Append(motherName.Length > 0 ? motherName : "$aoj_family_none")
+                    .Append(", ").Append(fatherName.Length > 0 ? fatherName : "$aoj_family_none").Append('\n');
+            }
+            return text.ToString().TrimEnd('\n');
         }
 
         /// <summary>
@@ -1886,9 +2246,14 @@ namespace AgeOfJarls.Settlers
             text.Append("$aoj_health: ").Append(Mathf.CeilToInt(_humanoid.GetHealth())).Append('/').Append(Mathf.CeilToInt(_humanoid.GetMaxHealth()));
             if (Identity != null)
             {
-                text.Append("  ·  $aoj_origin: $biome_").Append(Identity.Origin.ToString().ToLowerInvariant());
+                text.Append("  Ä‚â€šĂ‚Â·  $aoj_origin: $biome_").Append(Identity.Origin.ToString().ToLowerInvariant());
             }
             text.Append('\n');
+            string family = FamilyDetails();
+            if (family.Length > 0)
+            {
+                text.Append("$aoj_family: ").Append(family.Replace("\n", "\n    ")).Append('\n');
+            }
             text.Append("$aoj_settlement: ").Append(HomeText()).Append('\n');
             text.Append("$aoj_order: ").Append(OrderText(zdo)).Append('\n');
             Work.WorkTotem totem = JobTotem;
@@ -1896,7 +2261,7 @@ namespace AgeOfJarls.Settlers
             text.Append("$aoj_job: ").Append(job);
             if (Role != Army.CombatRole.None)
             {
-                text.Append("  ·  $aoj_role: ").Append(Army.CombatRoles.Token(Role));
+                text.Append("  Ä‚â€šĂ‚Â·  $aoj_role: ").Append(Army.CombatRoles.Token(Role));
             }
             string problem = JobProblem;
             if (problem.Length > 0)
@@ -1912,12 +2277,12 @@ namespace AgeOfJarls.Settlers
                 if (IsAtHome)
                 {
                     var activity = (SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity);
-                    text.Append("  ·  ").Append("$aoj_activity_").Append(activity.ToString().ToLowerInvariant());
+                    text.Append("  Ä‚â€šĂ‚Â·  ").Append("$aoj_activity_").Append(activity.ToString().ToLowerInvariant());
                 }
                 text.Append('\n');
             }
             text.Append("$aoj_weapon: ").Append(ItemName(zdo.GetInt(ZDOVars.s_rightItem)));
-            text.Append("  ·  $aoj_shield: ").Append(ItemName(zdo.GetInt(ZDOVars.s_leftItem))).Append('\n');
+            text.Append("  Ä‚â€šĂ‚Â·  $aoj_shield: ").Append(ItemName(zdo.GetInt(ZDOVars.s_leftItem))).Append('\n');
             text.Append("$aoj_items: ").Append(InventoryCount(zdo));
             return text.ToString();
         }
@@ -1934,8 +2299,14 @@ namespace AgeOfJarls.Settlers
                 : IsAtHome ? "$aoj_activity_" + ((SettlerActivity)zdo.GetInt(Keys.ZdoSettlerActivity)).ToString().ToLowerInvariant()
                 : OrderText(zdo);
             Work.WorkTotem totem = JobTotem;
-            string job = totem != null ? " · " + Work.JobInfo.Token(totem.Job) : Role != Army.CombatRole.None ? " · " + Army.CombatRoles.Token(Role) : "";
-            return $"$aoj_health {Mathf.CeilToInt(_humanoid.GetHealth())}/{Mathf.CeilToInt(_humanoid.GetMaxHealth())} · {doing}{job}";
+            string job = totem != null ? " Ä‚â€šĂ‚Â· " + Work.JobInfo.Token(totem.Job) : Role != Army.CombatRole.None ? " Ä‚â€šĂ‚Â· " + Army.CombatRoles.Token(Role) : "";
+            // A child: its stage and age in place of a job.
+            LifeStage stage = Identity != null ? Stage : LifeStage.Adult;
+            if (stage != LifeStage.Adult)
+            {
+                job = $" Ä‚â€šĂ‚Â· {FamilyRules.StageToken(stage, Identity.Female)} ({Localize("$aoj_family_age", Days(Age))})";
+            }
+            return $"$aoj_health {Mathf.CeilToInt(_humanoid.GetHealth())}/{Mathf.CeilToInt(_humanoid.GetMaxHealth())} Ä‚â€šĂ‚Â· {doing}{job}";
         }
 
         /// <summary>Experience at each job it has done and in combat (0-100), as tokens; "-" when none yet.</summary>
@@ -2017,7 +2388,7 @@ namespace AgeOfJarls.Settlers
             var lines = new List<string>();
             foreach (ItemDrop.ItemData item in CarriedItemData())
             {
-                string line = item.m_stack > 1 ? $"{item.m_shared.m_name} ×{item.m_stack}" : item.m_shared.m_name;
+                string line = item.m_stack > 1 ? $"{item.m_shared.m_name} Ă„â€šĂ˘â‚¬â€ť{item.m_stack}" : item.m_shared.m_name;
                 lines.Add(item.m_equipped ? line + " <color=#b0b0b0>($aoj_equipped)</color>" : line);
             }
             return lines;
@@ -2101,6 +2472,6 @@ namespace AgeOfJarls.Settlers
         }
 
         private static string Localize(string text, params string[] words) =>
-            Localization.instance != null ? Localization.instance.Localize(text, words) : text;
+            AgeOfJarls.Core.TextUtil.Localize(text, words);
     }
 }

@@ -37,7 +37,7 @@ namespace AgeOfJarls.Settlement
             {
                 return;
             }
-            if (!OwnerRpc.Handles(view, Keys.RpcChestKind, kind))
+            if (!OwnerRpc.HandlesWithoutForward(view, Keys.RpcChestKind))
             {
                 return;
             }

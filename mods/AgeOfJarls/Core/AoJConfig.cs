@@ -88,6 +88,25 @@ namespace AgeOfJarls.Core
         internal static ConfigEntry<float> RescueMinutes;
         internal static ConfigEntry<int> RealisticCarryLimit;
 
+        internal static ConfigEntry<bool> FamilyEnabled;
+        internal static ConfigEntry<Family.FamilyPairing> FamilyPairing;
+        internal static ConfigEntry<float> FamilyCourtshipDays;
+        internal static ConfigEntry<float> FamilyCourtshipChancePerDay;
+        internal static ConfigEntry<int> FamilyMinMorale;
+        internal static ConfigEntry<float> FamilyPregnancyChancePerDay;
+        internal static ConfigEntry<float> FamilyPregnancyDays;
+        internal static ConfigEntry<float> FamilyMinDaysBetweenBirths;
+        internal static ConfigEntry<int> FamilyMaxChildrenPerCouple;
+        internal static ConfigEntry<float> FamilyMaxChildrenRatio;
+        internal static ConfigEntry<bool> FamilyChildrenCountTowardLimit;
+        internal static ConfigEntry<float> FamilyInfantDays;
+        internal static ConfigEntry<float> FamilyChildDays;
+        internal static ConfigEntry<float> FamilyYouthDays;
+        internal static ConfigEntry<float> FamilyRestDays;
+        internal static ConfigEntry<float> FamilyWeddingFeastDays;
+        internal static ConfigEntry<float> FamilyWidowDays;
+        internal static ConfigEntry<float> FamilyYouthWorkPace;
+
         /// <summary>Realistic mode: knocked-out settlers need help or die, workers carry a limited load.</summary>
         internal static bool Realistic => Mode != null && Mode.Value == GameMode.Realistic;
 
@@ -297,6 +316,62 @@ namespace AgeOfJarls.Core
                 "How fast soldiers wear out their weapons, as a share of a player's rate (0 = never). A worn-out weapon goes " +
                 "back to the Armory for a player to repair, and the soldier takes a working one.", synced: true,
                 acceptableValues: new AcceptableValueRange<float>(0f, 2f));
+
+            FamilyEnabled = config.BindConfig("Family", "Enabled", true,
+                "Adult settlers of a settlement court each other, wed and have children, who grow up through the stages " +
+                "infant, child, youth and adult. Off: no courtship and no births; children already born still grow.", synced: true);
+            FamilyPairing = config.BindConfig("Family", "Pairing", Family.FamilyPairing.OppositeSex,
+                "Which pairs may court. OppositeSex (default): a man and a woman. Any: any two adults; a couple of two women " +
+                "can have children (one of them carries, chosen per pregnancy), two men cannot.", synced: true);
+            FamilyCourtshipDays = config.BindConfig("Family", "CourtshipDays", 2f,
+                "Game days from the start of a courtship to the wedding.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0.1f, 30f));
+            FamilyCourtshipChancePerDay = config.BindConfig("Family", "CourtshipChancePerDay", 0.5f,
+                "Per single adult per game day: chance to start courting when a suitable settler is around.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0f, 1f));
+            FamilyMinMorale = config.BindConfig("Family", "MinMorale", 40,
+                "Morale both settlers need to start courting, and both partners to conceive.", synced: true,
+                acceptableValues: new AcceptableValueRange<int>(0, 100));
+            FamilyPregnancyChancePerDay = config.BindConfig("Family", "PregnancyChancePerDay", 0.3f,
+                "Per couple per game day: chance to conceive while the other limits allow it.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0f, 1f));
+            FamilyPregnancyDays = config.BindConfig("Family", "PregnancyDays", 3f,
+                "Game days from conception to the birth.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0.1f, 30f));
+            FamilyMinDaysBetweenBirths = config.BindConfig("Family", "MinDaysBetweenBirths", 3f,
+                "Game days a couple waits after a birth before it can conceive again.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0f, 30f));
+            FamilyMaxChildrenPerCouple = config.BindConfig("Family", "MaxChildrenPerCouple", 3,
+                "Children a couple can have (dead ones no longer count).", synced: true,
+                acceptableValues: new AcceptableValueRange<int>(0, 10));
+            FamilyMaxChildrenRatio = config.BindConfig("Family", "MaxChildrenRatio", 0.5f,
+                "Children (not yet adult) in a settlement at most this share of its adults, at least one. Blocks conception, " +
+                "never a birth already under way.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0f, 2f));
+            FamilyChildrenCountTowardLimit = config.BindConfig("Family", "ChildrenCountTowardLimit", false,
+                "Settlers under adult age count toward the tier's settler limit. Off (default): they count only from the day " +
+                "they come of age; the roster may then exceed the limit, which only blocks accepting new settlers.", synced: true);
+            FamilyInfantDays = config.BindConfig("Family", "InfantDays", 2f,
+                "Game days a newborn stays an infant (stays by a parent, no work). A game day is 1200 seconds by default.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0.1f, 60f));
+            FamilyChildDays = config.BindConfig("Family", "ChildDays", 4f,
+                "Game days of childhood (plays around the Jarl's Table, no work).", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0.1f, 60f));
+            FamilyYouthDays = config.BindConfig("Family", "YouthDays", 4f,
+                "Game days of youth (light jobs at Family/YouthWorkPace, no fighting); adult after InfantDays + ChildDays + YouthDays.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0.1f, 60f));
+            FamilyRestDays = config.BindConfig("Family", "RestDays", 1f,
+                "Game days the mother rests (no work) after a birth; it also rests the last half day of the pregnancy.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0f, 10f));
+            FamilyWeddingFeastDays = config.BindConfig("Family", "WeddingFeastDays", 1f,
+                "A wedding extends the settlement's feast by this many game days.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0f, 10f));
+            FamilyWidowDays = config.BindConfig("Family", "WidowDays", 4f,
+                "Game days of grief after losing a partner, a parent or a child: lower morale, no new courtship.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0f, 60f));
+            FamilyYouthWorkPace = config.BindConfig("Family", "YouthWorkPace", 0.7f,
+                "Work pace of youths as a share of an adult's.", synced: true,
+                acceptableValues: new AcceptableValueRange<float>(0.1f, 1f));
         }
     }
 }

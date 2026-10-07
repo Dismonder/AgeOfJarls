@@ -3,7 +3,9 @@
 > Stan na 2026-09-27. Historia etapów M0–M10 i szczegóły tego, co już zrobione: [roadmap.md](roadmap.md).
 > Rozmiary S < M < L to względna wielkość pracy, nie czas.
 
-## Postęp (0.4.0, 2026-09-27)
+## Postęp (0.9.0, 2026-10-07)
+- **0.9.0 (2026-10-07, kod bez testu w grze):** Zaimplementowano moduł rodzin (A7) z 4 etapami życia, dobieraniem w pary, ślubami, dziećmi, zachowaniami etapów i snem pary w podwójnym łóżku (moduł `Family` i konfiguracja). W całym interfejsie moda wymieniono widoki ze stronicowanych na przewijane listy, w tym zakładkę Rodziny (i parowanie Ręczne/Rozłączenie). Dodano zmianę imienia przez Enter i nawigację padem. Zaimplementowano polecenia `aoj_family`.
+- **Do sprawdzenia w grze (0.9.0):** `aoj_family child` pojawia się małe dziecko i powiększa z czasem (`aoj_family age <imię> <dni>`), hover pokazuje etap, dzieci bawią się w okolicy stołu a nocą siedzą na łóżku rodzica, `aoj_family court a b` skutkuje wizytą pod oknem (emotki, serduszka), komunikatem o ślubie i ucztą, `aoj_family conceive`/`birth` rodzi się noworodek u boku matki, para dzieli łóżko dwuosobowe (przesunięcie w boki), zakładka Rodziny wyświetla listy oraz pozwala na dobieranie i rozłączanie, przewijane listy w każdym oknie, Enter zmienia imię, pad przełącza zakładki, co-op: drugi gracz widzi ten sam etap (rozmiar) i emotki.
 - **Etap 0 — zrobiony:** repozytorium z historią (tag `v0.3.0`), `tools/backup-world.ps1`, kopia świata `testo`.
 - **Etap 1, mój tor — zrobiony:** `aoj_debug`, testy jednostkowe (`tests/AgeOfJarls.Tests`, 31 testów),
   `tools/check-loc.ps1`. Sesje testowe w grze — do zrobienia.

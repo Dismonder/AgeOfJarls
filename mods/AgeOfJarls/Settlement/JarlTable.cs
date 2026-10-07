@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
 using AgeOfJarls.Core;
 using AgeOfJarls.Core.Defs;
+using AgeOfJarls.Family;
 using AgeOfJarls.Net;
 using AgeOfJarls.Settlers;
 using UnityEngine;
@@ -29,6 +29,12 @@ namespace AgeOfJarls.Settlement
         /// <summary>An area marked on the map added or changed (Hersir and up).</summary>
         SetZone = 13,
         RemoveZone = 14,
+        /// <summary>Settlement policy for new courtships and conceptions.</summary>
+        SetFamilyFlags = 15,
+        /// <summary>An arranged marriage of two eligible singles.</summary>
+        ArrangeCouple = 16,
+        /// <summary>Separation, preserving a pregnancy already underway.</summary>
+        Separate = 17,
     }
 
     /// <summary>
@@ -50,14 +56,20 @@ namespace AgeOfJarls.Settlement
         /// <summary>Radius circle cloned from the ward; assigned when the prefab is built.</summary>
         public CircleProjector m_areaMarker;
 
+        /// <summary>World time this component became active; overdue births wait for server pruning.</summary>
+        internal double ActivatedAt { get; private set; }
+
         private ZNetView _nview;
         private Piece _piece;
         private SettlementData _data;
         private uint _dataRevision = uint.MaxValue;
         private string _hoverText;
         private uint _hoverRevision = uint.MaxValue;
+        private float _nextErrorAt;
         private readonly List<Piece> _pieces = new List<Piece>();
         private readonly List<Vector3> _freeBeds = new List<Vector3>();
+        private readonly HashSet<Vector3> _doubleBeds = new HashSet<Vector3>();
+        private const string RpcFamilyNotify = "AoJ_FamilyNotify";
         private static readonly List<Piece> s_bedSearch = new List<Piece>();
 
         /// <summary>Beds are matched by position (they never move); saved floats come back exactly, this is slack.</summary>
@@ -76,8 +88,7 @@ namespace AgeOfJarls.Settlement
                 if (zdo.DataRevision != _dataRevision)
                 {
                     _dataRevision = zdo.DataRevision;
-                    byte[] blob = zdo.GetByteArray(Keys.ZdoSettlement);
-                    _data = blob != null ? SettlementData.Deserialize(blob) : null;
+                    _data = SettlementData.Read(zdo);
                 }
                 return _data;
             }
@@ -301,9 +312,11 @@ namespace AgeOfJarls.Settlement
                 return;
             }
 
+            ActivatedAt = WorldClock.Now;
             Loaded.Add(this);
             HideMarker();
             _nview.Register<ZPackage>(Keys.RpcSettlementAction, RPC_Action);
+            _nview.Register<string, string, string>(RpcFamilyNotify, RPC_FamilyNotify);
         }
 
         private void Start()
@@ -383,8 +396,26 @@ namespace AgeOfJarls.Settlement
                 return;
             }
             long perf = Perf.Start();
-            OwnerTickInner();
-            Perf.Stop(Perf.Section.TableTick, perf);
+            try
+            {
+                OwnerTickInner();
+            }
+            catch (Exception e)
+            {
+                LogLoopError("Table tick failed", e);
+            }
+            finally
+            {
+                Perf.Stop(Perf.Section.TableTick, perf);
+            }
+        }
+
+        /// <summary>Game callbacks log at most once in thirty seconds for this table.</summary>
+        private void LogLoopError(string context, Exception e)
+        {
+            if (Time.realtimeSinceStartup < _nextErrorAt) return;
+            _nextErrorAt = Time.realtimeSinceStartup + 30f;
+            Log.Error(Module, $"{context}: {e}");
         }
 
         private void OwnerTickInner()
@@ -400,6 +431,10 @@ namespace AgeOfJarls.Settlement
             {
                 // Work done while nobody was here, then the live clock; sieges only while a member is at home.
                 SettlementSim.Tick(this, data);
+                if (FamilySim.Tick(this, data, WorldClock.Now))
+                {
+                    Write(data);
+                }
                 Sieges.SiegeDirector.Tick(this, data);
             }
         }
@@ -411,6 +446,7 @@ namespace AgeOfJarls.Settlement
         {
             _pieces.Clear();
             _freeBeds.Clear();
+            _doubleBeds.Clear();
             Piece.GetAllPiecesInRadius(transform.position, RadiusOf(data), _pieces);
             foreach (Piece piece in _pieces)
             {
@@ -418,14 +454,42 @@ namespace AgeOfJarls.Settlement
                 if (view != null && view.IsValid() && view.GetZDO().GetLong(ZDOVars.s_owner) == 0L)
                 {
                     _freeBeds.Add(piece.transform.position);
+                    // Collider length and world-axis bounds do not establish sleeping width.
+                    if (Utils.GetPrefabName(piece.gameObject) == "piece_bed02")
+                    {
+                        _doubleBeds.Add(piece.transform.position);
+                    }
                 }
             }
 
             bool changed = false;
+            double now = WorldClock.Now;
+            double day = WorldClock.DayLength;
+            FamilyConfig cfg = FamilyConfig.Live;
+            changed |= ConsolidateBeds(data, _freeBeds, _doubleBeds, now, day, cfg);
+            var keptBeds = new HashSet<Vector3>();
             foreach (RosterEntry settler in data.Settlers)
             {
-                if (!settler.HasBed || TakeFreeBed(settler.BedPosition) || !IsBedLost(settler.BedPosition))
+                if (!NeedsBed(data, settler.Uid, now, day, cfg))
                 {
+                    if (settler.HasBed)
+                    {
+                        settler.HasBed = false;
+                        changed = true;
+                    }
+                    continue;
+                }
+                if (!settler.HasBed)
+                {
+                    continue;
+                }
+                RosterEntry partner = data.FindSettler(data.PartnerOf(settler.Uid));
+                bool shared = partner != null && partner.HasBed &&
+                    (partner.BedPosition - settler.BedPosition).sqrMagnitude <= SameSpotSqr &&
+                    DoubleBedAt(settler.BedPosition) && keptBeds.Contains(partner.BedPosition);
+                if (shared || TakeFreeBed(settler.BedPosition) || !IsBedLost(settler.BedPosition))
+                {
+                    keptBeds.Add(settler.BedPosition);
                     continue;
                 }
                 settler.HasBed = false;
@@ -433,18 +497,111 @@ namespace AgeOfJarls.Settlement
             }
             foreach (RosterEntry settler in data.Settlers)
             {
-                if (settler.HasBed || _freeBeds.Count == 0)
+                if (settler.HasBed || !NeedsBed(data, settler.Uid, now, day, cfg))
                 {
                     continue;
                 }
+                RosterEntry partner = data.FindSettler(data.PartnerOf(settler.Uid));
+                if (partner != null && partner.HasBed && DoubleBedAt(partner.BedPosition))
+                {
+                    settler.HasBed = true;
+                    settler.BedPosition = partner.BedPosition;
+                    changed = true;
+                    continue;
+                }
+                if (_freeBeds.Count == 0) continue;
+                int bedIndex = _freeBeds.Count - 1;
+                if (partner != null && !partner.HasBed)
+                {
+                    for (int i = _freeBeds.Count - 1; i >= 0; i--)
+                    {
+                        if (_doubleBeds.Contains(_freeBeds[i]))
+                        {
+                            bedIndex = i;
+                            break;
+                        }
+                    }
+                }
                 settler.HasBed = true;
-                settler.BedPosition = _freeBeds[_freeBeds.Count - 1];
-                _freeBeds.RemoveAt(_freeBeds.Count - 1);
+                settler.BedPosition = _freeBeds[bedIndex];
+                _freeBeds.RemoveAt(bedIndex);
                 changed = true;
             }
             _pieces.Clear();
             return changed;
         }
+
+        /// <summary>Shares an eligible double bed before retaining independent assignments, freeing vacated singles.</summary>
+        internal static bool ConsolidateBeds(SettlementData data, List<Vector3> beds, HashSet<Vector3> doubleBeds,
+            double now, double day, FamilyConfig cfg)
+        {
+            bool changed = false;
+            foreach (Couple couple in data.Couples)
+            {
+                RosterEntry a = data.FindSettler(couple.A);
+                RosterEntry b = data.FindSettler(couple.B);
+                if (a == null || b == null || !NeedsBed(data, a.Uid, now, day, cfg) || !NeedsBed(data, b.Uid, now, day, cfg)) continue;
+                Vector3 spot = Vector3.zero;
+                bool found = false;
+                if (a.HasBed && CanShareBed(data, a.BedPosition, doubleBeds, couple, now, day, cfg))
+                {
+                    spot = a.BedPosition;
+                    found = true;
+                }
+                else if (b.HasBed && CanShareBed(data, b.BedPosition, doubleBeds, couple, now, day, cfg))
+                {
+                    spot = b.BedPosition;
+                    found = true;
+                }
+                else
+                {
+                    foreach (Vector3 bed in beds)
+                    {
+                        if (!CanShareBed(data, bed, doubleBeds, couple, now, day, cfg)) continue;
+                        spot = bed;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) continue;
+                if (!a.HasBed || !b.HasBed || (a.BedPosition - spot).sqrMagnitude > SameSpotSqr || (b.BedPosition - spot).sqrMagnitude > SameSpotSqr)
+                {
+                    a.HasBed = b.HasBed = true;
+                    a.BedPosition = b.BedPosition = spot;
+                    changed = true;
+                }
+            }
+            return changed;
+        }
+
+        private static bool CanShareBed(SettlementData data, Vector3 position, HashSet<Vector3> doubleBeds,
+            Couple couple, double now, double day, FamilyConfig cfg)
+        {
+            bool isDouble = false;
+            foreach (Vector3 bed in doubleBeds)
+            {
+                if ((bed - position).sqrMagnitude <= SameSpotSqr) { isDouble = true; break; }
+            }
+            if (!isDouble) return false;
+            foreach (RosterEntry resident in data.Settlers)
+            {
+                if (!couple.Has(resident.Uid) && resident.HasBed && NeedsBed(data, resident.Uid, now, day, cfg) &&
+                    (resident.BedPosition - position).sqrMagnitude <= SameSpotSqr) return false;
+            }
+            return true;
+        }
+
+        private bool DoubleBedAt(Vector3 position)
+        {
+            foreach (Vector3 bed in _doubleBeds)
+            {
+                if ((bed - position).sqrMagnitude <= SameSpotSqr) return true;
+            }
+            return false;
+        }
+
+        private static bool NeedsBed(SettlementData data, long uid, double now, double day, FamilyConfig cfg) =>
+            FamilyRules.NeedsOwnBed(FamilyRules.StageAt(data.FindChild(uid)?.Born ?? 0, now, day, cfg));
 
         private bool TakeFreeBed(Vector3 position)
         {
@@ -511,9 +668,13 @@ namespace AgeOfJarls.Settlement
             Recruitment.Castaways.OnSettlementFounded(this);
         }
 
-        private void Write(SettlementData data)
+        /// <summary>Save the owner's complete blob, including family event marks and roster changes.</summary>
+        internal void Write(SettlementData data)
         {
-            _nview.GetZDO().Set(Keys.ZdoSettlement, data.Serialize());
+            if (_nview != null && _nview.IsValid() && _nview.IsOwner() && data != null)
+            {
+                _nview.GetZDO().Set(Keys.ZdoSettlement, data.Serialize());
+            }
         }
 
         /// <summary>
@@ -620,15 +781,25 @@ namespace AgeOfJarls.Settlement
                 return;
             }
 
-            int free = Capacity - data.Settlers.Count;
-            if (free <= 0)
+            FamilyConfig cfg = FamilyConfig.Live;
+            double now = WorldClock.Now;
+            int free = Capacity - (cfg.ChildrenCountTowardLimit ? data.Settlers.Count : data.AdultCount(now, WorldClock.DayLength, cfg));
+            var joining = new List<Settler>();
+            foreach (Settler follower in followers)
             {
-                player.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_settlement_full", data.Settlers.Count.ToString(), Capacity.ToString()));
+                bool counts = cfg.ChildrenCountTowardLimit || FamilyRules.StageAt(follower.Born, now, WorldClock.DayLength, cfg) == LifeStage.Adult;
+                if ((counts && free <= 0) || data.Settlers.Count + joining.Count >= SettlementData.MaxRoster || joining.Count >= MaxBatch) continue;
+                joining.Add(follower);
+                if (counts) free--;
+            }
+            if (joining.Count == 0)
+            {
+                int count = FamilyConfig.Live.ChildrenCountTowardLimit ? data.Settlers.Count : data.AdultCount(WorldClock.Now, WorldClock.DayLength, FamilyConfig.Live);
+                player.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_settlement_full", count.ToString(), Capacity.ToString()));
                 return;
             }
 
             // The owner decides; this prediction only fills the message.
-            List<Settler> joining = followers.Take(Math.Min(free, MaxBatch)).ToList();
             RequestAddSettlers(joining);
             player.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_settlers_joined", string.Join(", ", joining.Select(s => s.DisplayName))));
         }
@@ -776,6 +947,40 @@ namespace AgeOfJarls.Settlement
 
         internal void RequestAlarm(bool on) => Send(SettlementAction.SetAlarm, p => p.Write(on));
 
+        /// <summary>Manage request: change one policy bit in the owner's current flags.</summary>
+        internal void RequestSetFamilyFlags(byte bit, bool enabled) =>
+            Send(SettlementAction.SetFamilyFlags, p => { p.Write(bit); p.Write(enabled); });
+
+        /// <summary>Manage request: marry eligible residents immediately.</summary>
+        internal void RequestArrangeCouple(long a, long b) => Send(SettlementAction.ArrangeCouple, p => { p.Write(a); p.Write(b); });
+
+        /// <summary>Manage request: separate partners while keeping their children.</summary>
+        internal void RequestSeparate(long uid) => Send(SettlementAction.Separate, p => p.Write(uid));
+
+        /// <summary>A family notification to one peer, translated on that peer like settler refusal messages.</summary>
+        internal void NotifyFamily(long peer, string token, string first = "", string second = "")
+        {
+            if (!_nview.IsValid() || !_nview.IsOwner()) return;
+            if (peer == ZDOMan.GetSessionID()) RPC_FamilyNotify(peer, token, first, second);
+            else _nview.InvokeRPC(peer, RpcFamilyNotify, token, first, second);
+        }
+
+        private void RPC_FamilyNotify(long sender, string token, string first, string second)
+        {
+            try
+            {
+                if (!_nview.IsValid() || sender != _nview.GetZDO().GetOwner() || Player.m_localPlayer == null) return;
+                if (token != "$aoj_msg_match_bad" && token != "$aoj_msg_wedding" && token != "$aoj_msg_expecting" &&
+                    token != "$aoj_msg_born" && token != "$aoj_msg_came_of_age") return;
+                string word = token == "$aoj_msg_match_bad" ? Localize(first) : TextUtil.SanitizeName(first, 32);
+                Player.m_localPlayer.Message(MessageHud.MessageType.Center, Localize(token, word, TextUtil.SanitizeName(second, 32)));
+            }
+            catch (Exception e)
+            {
+                Log.Warning(Module, $"Family notification ignored: {e.Message}");
+            }
+        }
+
         /// <summary>Days a feast lifts morale.</summary>
         internal const float FeastDays = 2f;
         internal const int FeastFood = 5;
@@ -871,8 +1076,8 @@ namespace AgeOfJarls.Settlement
 
         private void RPC_Action(long sender, ZPackage package)
         {
-            // Ownership moved while the RPC travelled: passed on to the current owner (Net.OwnerRpc).
-            if (!Net.OwnerRpc.Handles(_nview, Keys.RpcSettlementAction, package))
+            // Forwarding would replace the authenticated sender with this peer.
+            if (!Net.OwnerRpc.HandlesWithoutForward(_nview, Keys.RpcSettlementAction))
             {
                 return;
             }
@@ -897,9 +1102,12 @@ namespace AgeOfJarls.Settlement
                     Write(data);
                 }
             }
-            catch (Exception e) when (e is IOException || e is ArgumentException)
+            catch (Exception e)
             {
-                Log.Error(Module, $"Malformed settlement action from peer {sender}: {e.Message}");
+                LogLoopError("Settlement action failed", e);
+                // A wedding may already have marked its record before a network notification failed.
+                try { Write(data); }
+                catch (Exception saveError) { LogLoopError("Settlement action save failed", saveError); }
             }
         }
 
@@ -945,12 +1153,19 @@ namespace AgeOfJarls.Settlement
                         return false;
                     }
                     int capacity = CapacityOf(data);
+                    double now = WorldClock.Now;
+                    FamilyConfig cfg = FamilyConfig.Live;
                     bool changed = false;
                     for (int i = 0; i < count; i++)
                     {
                         long uid = package.ReadLong();
                         string name = package.ReadString();
-                        if (data.TryAddSettler(uid, name, capacity))
+                        Settler incoming = Settler.FindByUid(uid);
+                        // Birth facts come from the led settler's ZDO, never the action payload.
+                        if (incoming == null || incoming.Zdo == null || incoming.Identity == null ||
+                            incoming.FollowedPlayerId != requesterId || Utils.DistanceXZ(incoming.transform.position, transform.position) > RadiusOf(data)) continue;
+                        if (data.TryAcceptSettler(uid, name, incoming.Born, incoming.MotherUid, incoming.FatherUid,
+                            incoming.Identity.Female, capacity, now, WorldClock.DayLength, cfg))
                         {
                             changed = true;
                             Log.Info(Module, $"{name} joined {DisplayName(data)} ({data.Settlers.Count}/{capacity})");
@@ -962,22 +1177,38 @@ namespace AgeOfJarls.Settlement
                 case SettlementAction.RemoveSettler:
                 {
                     long uid = package.ReadLong();
-                    // A settler's owner reports its death (or the server one that no longer exists); a settler that
-                    // is not loaded here usually means it is already gone.
+                    // Only the server can verify an absent settler against persisted ZDOs.
                     Settler settler = Settler.FindByUid(uid);
                     ZDO settlerZdo = settler != null ? settler.GetComponent<ZNetView>().GetZDO() : null;
-                    bool ownerReport = settlerZdo == null || settlerZdo.GetOwner() == sender;
+                    bool ownerReport = settlerZdo != null ? settlerZdo.GetOwner() == sender :
+                        sender != 0L && sender == Peers.ServerPeerId();
                     if (!ownerReport && !role.Allows(SettlementRight.Manage))
                     {
                         Log.Warning(Module, $"Peer {sender} tried to remove a settler it does not own");
                         return false;
                     }
                     RosterEntry entry = data.FindSettler(uid);
+                    // Retained ancestry must not trigger fresh grief on duplicate removal reports.
+                    if (entry == null) return false;
                     bool removed = data.RemoveSettler(uid);
+                    double now = WorldClock.Now;
+                    FamilyConfig cfg = FamilyConfig.Live;
+                    bool alive = settler != null && !settler.GetComponent<Character>().IsDead();
+                    FamilyCleanupResult cleanup = data.FamilyCleanup(uid, now, WorldClock.DayLength, cfg);
+                    double until = now + cfg.WidowDays * WorldClock.DayLength;
+                    if (!alive)
+                    {
+                        foreach (long affected in cleanup.WidowedUids)
+                        {
+                            data.AddMood(affected, MoodKind.Grief, until);
+                            Chronicle.Add(_nview, now, "$aoj_chr_widowed", data.FindSettler(affected)?.Name ?? "", entry?.Name ?? "");
+                        }
+                        foreach (long affected in cleanup.OrphanedUids) data.AddMood(affected, MoodKind.Grief, until);
+                        foreach (long affected in cleanup.BereavedUids) data.AddMood(affected, MoodKind.Grief, until);
+                    }
                     if (removed)
                     {
                         Log.Info(Module, $"{entry.Name} left {DisplayName(data)}");
-                        bool alive = settler != null && !settler.GetComponent<Character>().IsDead();
                         bool dismissed = alive && role.Allows(SettlementRight.Manage);
                         if (dismissed)
                         {
@@ -995,7 +1226,60 @@ namespace AgeOfJarls.Settlement
                             Mourn();
                         }
                     }
-                    return removed;
+                    return removed || cleanup.Changed;
+                }
+                case SettlementAction.SetFamilyFlags:
+                {
+                    byte bit = package.ReadByte();
+                    bool enabled = package.ReadBool();
+                    if (!role.Allows(SettlementRight.Manage))
+                    {
+                        NotifyFamily(sender, "$aoj_msg_match_bad", "$aoj_match_rank");
+                        return false;
+                    }
+                    return data.SetFamilyFlag(bit, enabled);
+                }
+                case SettlementAction.ArrangeCouple:
+                {
+                    long a = package.ReadLong();
+                    long b = package.ReadLong();
+                    if (!role.Allows(SettlementRight.Manage))
+                    {
+                        NotifyFamily(sender, "$aoj_msg_match_bad", "$aoj_match_rank");
+                        return false;
+                    }
+                    string problem = FamilySim.PairProblem(data, a, b, WorldClock.Now);
+                    Settler residentA = Settler.FindByUid(a);
+                    Settler residentB = Settler.FindByUid(b);
+                    if (residentA == null || residentB == null || residentA.HomeId != SettlementId || residentB.HomeId != SettlementId) problem = "$aoj_match_not_here";
+                    if (problem == null && data.Couples.Count >= SettlementData.MaxCouples) problem = "$aoj_match_full";
+                    if (problem != null)
+                    {
+                        NotifyFamily(sender, "$aoj_msg_match_bad", problem);
+                        return false;
+                    }
+                    return FamilySim.Wed(this, data, a, b, WorldClock.Now, actor);
+                }
+                case SettlementAction.Separate:
+                {
+                    long uid = package.ReadLong();
+                    if (!role.Allows(SettlementRight.Manage))
+                    {
+                        NotifyFamily(sender, "$aoj_msg_match_bad", "$aoj_match_rank");
+                        return false;
+                    }
+                    if (!data.HasSettler(uid))
+                    {
+                        NotifyFamily(sender, "$aoj_msg_match_bad", "$aoj_match_not_here");
+                        return false;
+                    }
+                    Couple couple = data.FindCouple(uid);
+                    if (couple == null || couple.A == 0 || couple.B == 0)
+                    {
+                        NotifyFamily(sender, "$aoj_msg_match_bad", "$aoj_match_not_couple");
+                        return false;
+                    }
+                    return FamilySim.Separate(this, data, uid, WorldClock.Now, actor);
                 }
                 case SettlementAction.HandOver:
                 {
@@ -1111,7 +1395,7 @@ namespace AgeOfJarls.Settlement
                         return false;
                     }
                     // The requester already paid the mead and the food from its own inventory.
-                    WorldClock.Set(_nview.GetZDO(), Keys.ZdoSettlementFeastUntil, WorldClock.Now + FeastDays * WorldClock.DayLength);
+                    WorldClock.Set(_nview.GetZDO(), Keys.ZdoSettlementFeastUntil, Math.Max(FeastUntil, WorldClock.Now + FeastDays * WorldClock.DayLength));
                     Chronicle.Add(_nview, "$aoj_chr_feast_by", actor);
                     Log.Info(Module, $"A feast in {DisplayName(data)}");
                     return false;
@@ -1220,11 +1504,11 @@ namespace AgeOfJarls.Settlement
             List<string> karls = data.NamesWith(SettlementRole.Karl);
             if (huskarls.Count > 0 || karls.Count > 0)
             {
-                text.Append("$aoj_huskarls: ").Append(NameList(huskarls)).Append(" · $aoj_karls: ").Append(NameList(karls)).Append('\n');
+                text.Append("$aoj_huskarls: ").Append(NameList(huskarls)).Append(" Ă‚Â· $aoj_karls: ").Append(NameList(karls)).Append('\n');
             }
-            text.Append("$aoj_settlers: ").Append(data.Settlers.Count).Append('/').Append(CapacityOf(data));
-            text.Append(" · $aoj_beds: ").Append(data.SettlersWithBed).Append('/').Append(data.Settlers.Count).Append('\n');
-            text.Append("$aoj_tier_").Append(data.Tier).Append(" · $aoj_radius ").Append(Mathf.RoundToInt(RadiusOf(data))).Append(" m\n");
+            text.Append("$aoj_settlers: ").Append(PopulationText(data));
+            text.Append(" Ă‚Â· $aoj_beds: ").Append(data.SettlersWithBed).Append('/').Append(data.SettlersNeedingBed).Append('\n');
+            text.Append("$aoj_tier_").Append(data.Tier).Append(" Ă‚Â· $aoj_radius ").Append(Mathf.RoundToInt(RadiusOf(data))).Append(" m\n");
             int extra = ExtraMembers(data);
             if (extra > 0)
             {
@@ -1275,15 +1559,61 @@ namespace AgeOfJarls.Settlement
                 {
                     continue;
                 }
+                string names = null;
                 foreach (RosterEntry entry in data.Settlers)
                 {
                     if (entry.HasBed && (entry.BedPosition - bedPosition).sqrMagnitude <= SameSpotSqr)
                     {
-                        return SettlerName(entry);
+                        names = names == null ? SettlerName(entry) : names + " & " + SettlerName(entry);
                     }
                 }
+                if (names != null) return names;
             }
             return null;
+        }
+
+        /// <summary>Acceptance limit includes minors only as extra roster space, leaving adult places available.</summary>
+        internal static int AcceptanceCapacity(SettlementData data)
+        {
+            FamilyConfig cfg = FamilyConfig.Live;
+            return CapacityOf(data) + (cfg.ChildrenCountTowardLimit ? 0 : data.MinorCount(WorldClock.Now, WorldClock.DayLength, cfg));
+        }
+
+        /// <summary>Roster and overview population, with children outside the limit when configured.</summary>
+        internal static string PopulationText(SettlementData data)
+        {
+            FamilyConfig cfg = FamilyConfig.Live;
+            int minors = data.MinorCount(WorldClock.Now, WorldClock.DayLength, cfg);
+            int count = data.Settlers.Count - (cfg.ChildrenCountTowardLimit ? 0 : minors);
+            return count + "/" + CapacityOf(data) + (cfg.ChildrenCountTowardLimit ? "" : " " + Localize("$aoj_summary_children", minors.ToString()));
+        }
+
+        /// <summary>Shared bed offset along its right axis; single occupants stay centred.</summary>
+        internal static float BedSideOffset(SettlementData data, long uid)
+        {
+            RosterEntry own = data?.FindSettler(uid);
+            if (own == null || !own.HasBed) return 0f;
+            foreach (RosterEntry other in data.Settlers)
+            {
+                if (other.Uid != uid && other.HasBed && (other.BedPosition - own.BedPosition).sqrMagnitude <= SameSpotSqr)
+                {
+                    return uid < other.Uid ? -0.45f : 0.45f;
+                }
+            }
+            return 0f;
+        }
+
+        /// <summary>A child's mother's bed, else father's; or false for an orphan without either bed.</summary>
+        internal static bool TryGetParentBed(SettlementData data, long childUid, out Vector3 position)
+        {
+            position = Vector3.zero;
+            ChildRecord child = data?.FindChild(childUid);
+            if (child == null) return false;
+            RosterEntry parent = data.FindSettler(child.Mother);
+            if (parent == null || !parent.HasBed) parent = data.FindSettler(child.Father);
+            if (parent == null || !parent.HasBed) return false;
+            position = parent.BedPosition;
+            return true;
         }
 
         internal static string DisplayName(SettlementData data) =>
@@ -1318,6 +1648,6 @@ namespace AgeOfJarls.Settlement
         }
 
         private static string Localize(string text, params string[] words) =>
-            Localization.instance != null ? Localization.instance.Localize(text, words) : text;
+            AgeOfJarls.Core.TextUtil.Localize(text, words);
     }
 }

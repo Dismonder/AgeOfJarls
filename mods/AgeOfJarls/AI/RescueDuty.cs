@@ -35,9 +35,13 @@ namespace AgeOfJarls.AI
         /// <summary>True while on the way to a knocked-out settler (the frame's movement is taken).</summary>
         internal bool Update(float dt)
         {
-            if (!AoJConfig.Realistic || _settler.IsDown || _settler.IsCaptive)
+            if (!AoJConfig.Realistic || _settler.IsDown || _settler.IsCaptive || !_settler.IsAdult || _settler.IsResting)
             {
-                _patient = null;
+                if (_patient != null)
+                {
+                    _patient = null;
+                    _mover.Reset();
+                }
                 return false;
             }
             if (_patient == null)

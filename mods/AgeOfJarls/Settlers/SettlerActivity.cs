@@ -19,5 +19,11 @@ namespace AgeOfJarls.Settlers
         Arming = 11,
         /// <summary>Wounded, healing in bed.</summary>
         Recovering = 12,
+        /// <summary>An infant or child at play (Family.ChildRoutine).</summary>
+        Playing = 13,
+        /// <summary>Meeting its sweetheart or partner (Family.CourtshipRoutine).</summary>
+        Courting = 14,
+        /// <summary>Expecting a child soon, or just gave birth: no work, stays near its bed.</summary>
+        Resting = 15,
     }
 }

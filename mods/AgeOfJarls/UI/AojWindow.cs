@@ -19,6 +19,7 @@ namespace AgeOfJarls.UI
 
         private bool _blockingInput;
         private float _refreshTimer;
+        private float _windowWidth;
 
         /// <summary>While this field is being typed in, the Use key does not close the window.</summary>
         protected InputField TextEntry;
@@ -37,6 +38,7 @@ namespace AgeOfJarls.UI
             }
             panel.GetComponent<RectTransform>().localScale = Vector3.one * Mathf.Max(0.5f, scale);
             T window = panel.AddComponent<T>();
+            window._windowWidth = width;
             window.Build(panel.transform);
             panel.SetActive(false);
             return window;
@@ -90,6 +92,12 @@ namespace AgeOfJarls.UI
                 return;
             }
             bool typing = TextEntry != null && TextEntry.isFocused;
+            if (_tabs.Count > 0 && !typing)
+            {
+                bool mouse = ZInput.IsGamepadMouseActive();
+                if (ZInput.GetButtonDown(mouse ? "JoyLBumper" : "JoyTabLeft")) ShowTab((ActiveTab + _tabs.Count - 1) % _tabs.Count);
+                if (ZInput.GetButtonDown(mouse ? "JoyRBumper" : "JoyTabRight")) ShowTab((ActiveTab + 1) % _tabs.Count);
+            }
             if (ZInput.GetKeyDown(KeyCode.Escape) || ZInput.GetButtonDown("JoyButtonB") || (!typing && ZInput.GetButtonDown("Use")))
             {
                 Hide();
@@ -152,11 +160,13 @@ namespace AgeOfJarls.UI
         /// <summary>A row of tab buttons along the top; each shows its own page and hides the others.</summary>
         protected void Tabs(Transform root, float y, float tabWidth, params (string token, Transform page)[] tabs)
         {
+            if (tabWidth == 0f) tabWidth = (_windowWidth - 40f - 8f * (tabs.Length - 1)) / tabs.Length;
             float left = -(tabs.Length - 1) * (tabWidth + 8f) / 2f;
             for (int i = 0; i < tabs.Length; i++)
             {
                 int index = i;
                 Text label = Button(root, tabs[i].token, new Vector2(left + i * (tabWidth + 8f), y), tabWidth, () => ShowTab(index), TabHeight);
+                if (tabs.Length >= 8) label.fontSize = 14;
                 _tabs.Add((label, tabs[i].page.gameObject));
             }
             ShowTab(0);
@@ -187,6 +197,23 @@ namespace AgeOfJarls.UI
         }
 
         protected static string Localize(string text, params string[] words) =>
-            Localization.instance != null ? Localization.instance.Localize(text, words) : text;
+            Core.TextUtil.Localize(text, words);
+
+        /// <summary>Enter submits; losing focus alone must not rename anything.</summary>
+        protected static InputField TextInput(Transform parent, string placeholderToken, Vector2 position, float width, Action onSubmit)
+        {
+            InputField input = TextInput(parent, placeholderToken, position, width);
+            input.onEndEdit.AddListener(_ =>
+            {
+                if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)) onSubmit();
+            });
+            return input;
+        }
+
+        /// <summary>Avoid rebuilding Unity's text mesh when a periodic refresh has no changes.</summary>
+        internal static void SetText(Text text, string value)
+        {
+            if (text != null && text.text != (value ?? "")) text.text = value ?? "";
+        }
     }
 }

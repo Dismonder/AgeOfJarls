@@ -45,6 +45,8 @@ namespace AgeOfJarls.Core
         internal const string RpcSettlerRescue = "AoJ_SettlerRescue";
         /// <summary>Routed to everybody: a saved map pin where settlers can be found - castaways, a captive - or its removal (Recruitment.RecruitPins).</summary>
         internal const string RpcRecruitPin = "AoJ_RecruitPin";
+        /// <summary>On a settler, from its owner to everybody: play this emote (and hearts for the loving ones) on every machine (Settlers.SettlerCharacter.PlayEmote).</summary>
+        internal const string RpcSettlerEmote = "AoJ_SettlerEmote";
 
         /// <summary>Chest: the kind of things settlers put in it (a storage.json kind or a built-in one); "" = anything.</summary>
         internal static readonly int ZdoChestKind = "aoj_chest_kind".GetStableHashCode();
@@ -131,6 +133,14 @@ namespace AgeOfJarls.Core
         internal static readonly int ZdoSettlerDownUntil = "aoj_settler_down_until".GetStableHashCode();
         /// <summary>Realistic mode: down until helped up; when the time runs out it dies instead of getting up.</summary>
         internal static readonly int ZdoSettlerNeedsRescue = "aoj_settler_needs_rescue".GetStableHashCode();
+
+        /// <summary>Settler born in a settlement: world time of its birth (WorldClock); 0 or absent = arrived as an adult. Written once by the spawner, read by everyone (its life stage is derived from it).</summary>
+        internal static readonly int ZdoSettlerBorn = "aoj_settler_born".GetStableHashCode();
+        /// <summary>Settler born in a settlement: stable ids of its mother and father (<see cref="ZdoSettlerUid"/>); 0 = unknown. Written once by the spawner.</summary>
+        internal static readonly int ZdoSettlerMother = "aoj_settler_mother".GetStableHashCode();
+        internal static readonly int ZdoSettlerFather = "aoj_settler_father".GetStableHashCode();
+        /// <summary>Settler born in a settlement: its patronymic ("Ragnarsson"); "" for settlers that arrived as adults. Written once by the spawner.</summary>
+        internal static readonly int ZdoSettlerPatronymic = "aoj_settler_patronymic".GetStableHashCode();
 
         /// <summary>ZDO blob with the whole settlement (see Settlement.SettlementData), stored on the Jarl's Table.</summary>
         internal static readonly int ZdoSettlement = "aoj_settlement".GetStableHashCode();

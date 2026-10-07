@@ -124,7 +124,7 @@ namespace AgeOfJarls.Army
 
         private void RPC_SetKind(long sender, int kind)
         {
-            if (!Net.OwnerRpc.Handles(_nview, Keys.RpcBannerConfig, kind))
+            if (!Net.OwnerRpc.HandlesWithoutForward(_nview, Keys.RpcBannerConfig))
             {
                 return;
             }

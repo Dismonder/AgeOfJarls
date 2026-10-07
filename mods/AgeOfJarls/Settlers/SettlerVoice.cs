@@ -111,7 +111,8 @@ namespace AgeOfJarls.Settlers
             }
             string need = NeedLine(zdo, activity);
             // Two things wrong (no trees, and nowhere to put its load): they take turns, the one said last waits.
-            return problemLine != null && need != null && problemLine == _lastLine ? need : problemLine ?? need;
+            string line = problemLine != null && need != null && problemLine == _lastLine ? need : problemLine ?? need;
+            return line ?? FamilyLine(activity);
         }
 
         private static string NeedLine(ZDO zdo, SettlerActivity activity)
@@ -127,6 +128,19 @@ namespace AgeOfJarls.Settlers
                 default:
                     return null;
             }
+        }
+
+        // Flavour, after anything that is wrong: sweethearts meeting, children at play, a newborn at home.
+        private string FamilyLine(SettlerActivity activity)
+        {
+            switch (activity)
+            {
+                case SettlerActivity.Courting:
+                    return Localize("$aoj_bark_courting");
+                case SettlerActivity.Playing:
+                    return Localize("$aoj_bark_playing");
+            }
+            return _settler.Family.HasMood(Family.MoodKind.NewParent, WorldClock.Now) ? Localize("$aoj_bark_newborn") : null;
         }
 
         private static string Localize(string text, params string[] words) =>

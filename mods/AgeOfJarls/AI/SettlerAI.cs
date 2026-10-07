@@ -31,6 +31,9 @@ namespace AgeOfJarls.AI
         private float _orderedUntil;
         private float _ceaseFireUntil;
         private CombatSense _sense;
+        private Character _minorThreat;
+        private float _minorThreatUntil;
+        private bool _minorFleeing;
 
         /// <summary>Blocks and the striker as target (owner only; null before the first AI frame).</summary>
         internal CombatSense Sense => _sense;
@@ -107,27 +110,51 @@ namespace AgeOfJarls.AI
             }
             // Before vanilla, guarded like the behaviours after it: an exception here would take the game's own AI
             // down with it every frame (BaseAI.FixedUpdate does not catch), and the settler would stand frozen.
+            long targeting = Perf.Start();
             try
             {
-                // Its targeting then sees the ordered target (or none) and keeps it, since the retarget timer is
-                // held back while an order stands.
-                ApplyOrders();
-                // A guard fights for the player it follows: its target comes from the escort, not from vanilla's
-                // search. A soldier at home fights with the troop: the enemy its comrades are on (SquadTactics).
-                if (_escort != null && _orderedTarget == null && Time.time >= _ceaseFireUntil)
+                // The first owner frame precedes Init: newborns must be safe even then.
+                if (_settler == null)
                 {
-                    Player leader = Leader;
-                    if (leader != null)
-                    {
-                        _escort.UpdateTargeting(dt, leader);
-                    }
-                    else if (_settler.HasHome)
-                    {
-                        _squad.UpdateTargeting(dt);
-                    }
+                    _settler = GetComponent<Settler>();
                 }
-                // Blocks and the striker as target before vanilla swings: a swing of its own would cancel the block.
-                _sense?.Update(dt);
+                if (_settler != null && !_settler.IsAdult)
+                {
+                    // Damage assigns a combat target; keep the threat separately so minors can flee without fighting.
+                    if (m_targetCreature != null)
+                    {
+                        _minorThreat = m_targetCreature;
+                        _minorThreatUntil = Time.time + m_fleeTimeSinceHurt;
+                    }
+                    m_targetCreature = null;
+                    m_targetStatic = null;
+                    m_updateTargetTimer = 1f;
+                    _orderedTarget = null;
+                    _sense?.Release();
+                }
+                else
+                {
+                    _minorThreat = null;
+                    // Its targeting then sees the ordered target (or none) and keeps it, since the retarget timer is
+                    // held back while an order stands.
+                    ApplyOrders();
+                    // A guard fights for the player it follows: its target comes from the escort, not from vanilla's
+                    // search. A soldier at home fights with the troop: the enemy its comrades are on (SquadTactics).
+                    if (_escort != null && _orderedTarget == null && Time.time >= _ceaseFireUntil)
+                    {
+                        Player leader = Leader;
+                        if (leader != null)
+                        {
+                            _escort.UpdateTargeting(dt, leader);
+                        }
+                        else if (_settler.HasHome)
+                        {
+                            _squad.UpdateTargeting(dt);
+                        }
+                    }
+                    // Blocks and the striker as target before vanilla swings: a swing of its own would cancel the block.
+                    _sense?.Update(dt);
+                }
             }
             catch (Exception e)
             {
@@ -136,6 +163,10 @@ namespace AgeOfJarls.AI
                     _nextErrorLogTime = Time.time + ErrorLogSeconds;
                     Log.Error(Module, $"{name}: settler targeting failed, vanilla AI carries on: {e}");
                 }
+            }
+            finally
+            {
+                Perf.Stop(Perf.Section.SettlerAi, targeting);
             }
             long perf = Perf.Start();
             bool running = base.UpdateAI(dt);
@@ -147,7 +178,7 @@ namespace AgeOfJarls.AI
             perf = Perf.Start();
             try
             {
-                if (!IsCalm())
+                if (_settler != null && _settler.IsAdult && !IsCalm())
                 {
                     _sense?.AfterVanilla(dt);
                     _squad?.AfterVanilla(dt);
@@ -209,6 +240,25 @@ namespace AgeOfJarls.AI
                 return;
             }
 
+            if (!_settler.IsAdult && _minorThreat != null && !_minorThreat.IsDead() &&
+                Time.time < _minorThreatUntil && m_character.GetHealthPercentage() < m_fleeIfLowHealth)
+            {
+                if (!_minorFleeing)
+                {
+                    _home.Stop();
+                    _mover.Reset();
+                    _minorFleeing = true;
+                }
+                _travelling = false;
+                SetAlerted(true);
+                Flee(dt, _minorThreat.transform.position);
+                _settler.SetActivity(SettlerActivity.Sheltering);
+                _mover.Update();
+                _settler.FlushInventory();
+                return;
+            }
+            _minorFleeing = false;
+
             // Talked to (its window open on this machine): it stops and faces the player, and takes up its chores
             // where it left them once the window closes. A swing under way finishes where it was aimed.
             Player talker = Player.m_localPlayer;
@@ -233,7 +283,7 @@ namespace AgeOfJarls.AI
                 bool travelling = _rescue.Update(dt) || _portals.Update(dt);
                 if (travelling && !_travelling)
                 {
-                    _home.Stop();
+                    _home.Stop(preserveActivity: true);
                 }
                 _travelling = travelling;
                 if (!travelling)
@@ -244,10 +294,11 @@ namespace AgeOfJarls.AI
             else
             {
                 _travelling = false;
-                _home.Stop();
                 Player leader = calm ? Leader : null;
+                bool rescuing = leader != null && _rescue.Update(dt);
+                _home.Stop(preserveActivity: rescuing);
                 // Out of a player's way first (a guard in a doorway); otherwise the loot around the leader.
-                if (leader != null && !_rescue.Update(dt) && !_courtesy.Update(dt))
+                if (leader != null && !rescuing && !_courtesy.Update(dt))
                 {
                     // A settler with a home keeps its loot for the chests there.
                     _loot.Follow(dt, leader, handOver: !_settler.HasHome);

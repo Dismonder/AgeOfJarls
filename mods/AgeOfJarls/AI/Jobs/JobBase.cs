@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using AgeOfJarls.Core;
+using AgeOfJarls.Family;
 using AgeOfJarls.Settlers;
 using AgeOfJarls.Work;
 using UnityEngine;
@@ -94,7 +95,8 @@ namespace AgeOfJarls.AI.Jobs
             get
             {
                 ZDO zdo = Settler.Zdo;
-                float traits = Mathf.Max(0.1f, 1f + Settler.TraitSum(Core.Defs.TraitStat.WorkSpeed)) * TotemPace;
+                float traits = Mathf.Max(0.1f, 1f + Settler.TraitSum(Core.Defs.TraitStat.WorkSpeed)) * TotemPace *
+                               FamilyRules.PaceFor(Ctx.Settler.Stage, FamilyConfig.Live.YouthWorkPace);
                 return zdo == null ? traits : Needs.WorkPace(zdo) * (1f + Skill / 200f) * traits;
             }
         }

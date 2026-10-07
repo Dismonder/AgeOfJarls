@@ -63,7 +63,7 @@ namespace AgeOfJarls.AI
 
         internal void Update(float dt)
         {
-            if (!AoJConfig.SettlerBlocking.Value || _body.Down || _body.IsDead() || _body.IsLyingDown || _settler.IsCaptive)
+            if (!_settler.IsAdult || !AoJConfig.SettlerBlocking.Value || _body.Down || _body.IsDead() || _body.IsLyingDown || _settler.IsCaptive)
             {
                 Release();
                 _swingStarts.Clear();
@@ -121,6 +121,10 @@ namespace AgeOfJarls.AI
         /// </summary>
         internal void AfterVanilla(float dt)
         {
+            if (!_settler.IsAdult)
+            {
+                return;
+            }
             float range = _settler.Role == Army.CombatRole.Archer ? ArcherKiteRange : KiteRange;
             if (_nearest == null || _nearest.IsDead() || _nearestDistance > range || _body.InAttack() || _body.Down ||
                 !AoJConfig.SettlerBlocking.Value)
@@ -179,6 +183,11 @@ namespace AgeOfJarls.AI
 
         private void Scan()
         {
+            if (!_settler.IsAdult)
+            {
+                Release();
+                return;
+            }
             Vector3 position = _body.transform.position;
             Character threat = null;
             float soonest = float.MaxValue;
@@ -268,7 +277,7 @@ namespace AgeOfJarls.AI
         /// <summary>A hit from this attacker landed (blocked or not): how long its swing took is learned for its kind.</summary>
         internal void OnHit(Character attacker)
         {
-            if (attacker == null || !_swingStarts.TryGetValue(attacker, out float start))
+            if (!_settler.IsAdult || attacker == null || !_swingStarts.TryGetValue(attacker, out float start))
             {
                 return;
             }

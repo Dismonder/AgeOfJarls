@@ -49,6 +49,11 @@ namespace AgeOfJarls.AI
         /// <summary>Before vanilla, for a soldier at home (no leader, no order): the troop's target, if there is one to join.</summary>
         internal void UpdateTargeting(float dt)
         {
+            if (!_settler.IsAdult)
+            {
+                _squadFight = false;
+                return;
+            }
             // While the troop fights, vanilla's own search is held back: it would pick the nearest enemy every second
             // and the soldier would run back and forth between its choice and the troop's.
             if (_squadFight)
@@ -78,7 +83,7 @@ namespace AgeOfJarls.AI
             _onTarget.Clear();
             foreach (Settler other in Settler.Loaded)
             {
-                if (other == null || other == _settler || !other.IsLoaded || other.HomeId != home || other.Role == CombatRole.None || other.IsDown)
+                if (other == null || other == _settler || !other.IsLoaded || !other.IsAdult || other.HomeId != home || other.Role == CombatRole.None || other.IsDown)
                 {
                     continue;
                 }
@@ -133,6 +138,10 @@ namespace AgeOfJarls.AI
         /// <summary>After vanilla moved it, in a fight: an archer about to shoot past a comrade steps aside first.</summary>
         internal void AfterVanilla(float dt)
         {
+            if (!_settler.IsAdult)
+            {
+                return;
+            }
             if (Time.time < _sidestepUntil)
             {
                 if (!_body.InAttack())

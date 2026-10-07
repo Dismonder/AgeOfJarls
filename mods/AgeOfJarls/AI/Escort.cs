@@ -168,6 +168,11 @@ namespace AgeOfJarls.AI
         /// </summary>
         internal void UpdateTargeting(float dt, Player leader)
         {
+            if (!_settler.IsAdult)
+            {
+                _ai.RetargetTo(null);
+                return;
+            }
             _scanTimer -= dt;
             _ai.HoldVanillaTargeting(ScanSeconds + 0.1f);
             if (_scanTimer > 0f)

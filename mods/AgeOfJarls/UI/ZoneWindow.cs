@@ -71,10 +71,10 @@ namespace AgeOfJarls.UI
         protected override void Refresh()
         {
             SettlementData data = _table.Data;
-            _title.text = Localize(_existing ? "$aoj_zone_title_edit" : "$aoj_zone_title_new");
-            _where.text = Localize("$aoj_zone_where", JarlTable.DisplayName(data), Utils.DistanceXZ(_zone.Center, _table.transform.position).ToString("0"));
-            _kindLabel.text = Localize(_zone.Kind == SettlementZone.KindWarehouse ? "$aoj_zone_kind_warehouse" : "$aoj_zone_kind_other");
-            _radiusLabel.text = $"{_zone.Radius:0} m";
+            SetText(_title, Localize(_existing ? "$aoj_zone_title_edit" : "$aoj_zone_title_new"));
+            SetText(_where, Localize("$aoj_zone_where", JarlTable.DisplayName(data), Utils.DistanceXZ(_zone.Center, _table.transform.position).ToString("0")));
+            SetText(_kindLabel, Localize(_zone.Kind == SettlementZone.KindWarehouse ? "$aoj_zone_kind_warehouse" : "$aoj_zone_kind_other"));
+            SetText(_radiusLabel, $"{_zone.Radius:0} m");
             _deleteButton.SetActive(_existing);
         }
 

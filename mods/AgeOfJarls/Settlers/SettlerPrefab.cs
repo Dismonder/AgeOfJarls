@@ -28,6 +28,7 @@ namespace AgeOfJarls.Settlers
             // Fires on every main-menu load; the prefab is built once per game session.
             PrefabManager.OnVanillaPrefabsAvailable -= OnVanillaPrefabsAvailable;
             AppearancePalette.Capture();
+            Family.LoveEffects.Capture();
             try
             {
                 GameObject prefab = Build();

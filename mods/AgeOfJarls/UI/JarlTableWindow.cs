@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using AgeOfJarls.Core;
+using AgeOfJarls.Family;
 using AgeOfJarls.Settlement;
 using AgeOfJarls.Settlers;
 using Jotunn.Managers;
@@ -14,7 +15,7 @@ namespace AgeOfJarls.UI
     /// <summary>
     /// The settlement window ([E] on the Jarl's Table), in tabs: the settlement (summary, tier, name, feast), its
     /// members (ranks, admitting players at the table), its settlers (one row each, with orders), work, storage,
-    /// defence and the chronicle. Everyone may look; each control shows for the ranks that may use it
+    /// defence, the chronicle and families. Everyone may look; each control shows for the ranks that may use it
     /// (<see cref="Permissions"/>). Every change is an RPC that the table's or the settler's owner checks again.
     /// </summary>
     internal sealed class JarlTableWindow : AojWindow
@@ -23,85 +24,84 @@ namespace AgeOfJarls.UI
         private const float Height = 680f;
         private const float MaxDistance = 12f;
         private const float CandidateRange = 20f;
-        private const int RowsPerPage = 8;
-        private const float RowHeight = 46f;
-        private const float FirstRowY = 160f;
-        private const float ConfirmSeconds = 3f;
-        private const int MaxChestLines = 12;
-        private const int MaxTotals = 24;
-
         private static JarlTableWindow s_instance;
-
         private readonly List<Container> _chests = new List<Container>();
-        private readonly Row[] _rows = new Row[RowsPerPage];
+        private readonly List<Row> _rows = new List<Row>();
+        private readonly List<MemberRow> _memberRows = new List<MemberRow>();
+        private readonly List<CandidateRow> _candidateRows = new List<CandidateRow>();
         private JarlTable _table;
         private Text _title;
-
-        // Settlement tab
-        private Text _summary;
+        private TextArea _summary;
         private Text _hint;
         private GameObject _liveControls;
         private GameObject _manageControls;
-
-        // Members tab
-        private const int MemberRows = 6;
-        private const float MemberRowHeight = 40f;
-        private const float FirstMemberY = 135f;
-        private const int MaxCandidates = 2;
-        private readonly MemberRow[] _memberRows = new MemberRow[MemberRows];
-        private readonly CandidateRow[] _candidateRows = new CandidateRow[MaxCandidates];
         private Text _membersHeader;
         private Text _membersBonus;
         private Text _candidatesLabel;
-        private GameObject _memberPager;
-        private Text _memberPageLabel;
-        private int _memberPage;
-        private long _confirmMember;
-        private string _confirmAction = "";
-        private float _confirmMemberUntil;
+        private Text _rosterHeader;
+        private ScrollList _members;
+        private ScrollList _candidates;
+        private ScrollList _settlers;
+        private TextArea _storage;
+        private float _storageAt;
+        private uint _storageRevision;
+
+        private GameObject _familyControls;
+        private Text _noCouples;
+        private Text _noBirths;
+        private Text _matchHint;
+        private ScrollList _couples;
+        private ScrollList _courtships;
+        private ScrollList _children;
+        private ScrollList _singles;
+        private SettlementData _familySource;
+        private uint _familyRevision;
+        private double _familyNextStage;
+        private long _matchUid;
+        private readonly Dictionary<long, string> _familyNames = new Dictionary<long, string>();
+        private readonly List<Couple> _coupleModels = new List<Couple>();
+        private readonly List<Courtship> _courtshipModels = new List<Courtship>();
+        private readonly List<ChildRecord> _childModels = new List<ChildRecord>();
+        private readonly List<RosterEntry> _singleModels = new List<RosterEntry>();
+        private readonly List<FamilyRow> _coupleRows = new List<FamilyRow>();
+        private readonly List<FamilyRow> _courtshipRows = new List<FamilyRow>();
+        private readonly List<FamilyRow> _familyChildRows = new List<FamilyRow>();
+        private readonly List<FamilyRow> _singleRows = new List<FamilyRow>();
+
+        private sealed class FamilyRow
+        {
+            internal Text Description;
+            internal Text Match;
+            internal ConfirmButton Separate;
+            internal long Uid;
+        }
 
         private sealed class MemberRow
         {
-            internal GameObject Root;
             internal Text Name;
             internal Text Rank;
             internal GameObject Up;
             internal GameObject Down;
-            internal GameObject Jarl;
-            internal Text JarlLabel;
-            internal GameObject Remove;
-            internal Text RemoveLabel;
+            internal ConfirmButton Jarl;
+            internal ConfirmButton Remove;
             internal long PlayerId;
         }
 
         private sealed class CandidateRow
         {
-            internal GameObject Root;
             internal Text Name;
             internal GameObject Admit;
             internal GameObject CoJarl;
             internal Player Player;
         }
 
-        // Settlers tab
-        private Text _rosterHeader;
-        private Text _pageLabel;
-        private int _page;
-        private long _confirmUid;
-        private float _confirmUntil;
-
-        // Storage tab
-        private Text _totals;
-        private Text _chestList;
-
         private sealed class Row
         {
-            internal GameObject Root;
             internal Text Name;
             internal Text Status;
-            internal GameObject Buttons;
-            internal GameObject Dismiss;
-            internal Text DismissLabel;
+            internal GameObject Follow;
+            internal GameObject Home;
+            internal ConfirmButton Dismiss;
             internal long Uid;
         }
 
@@ -116,8 +116,9 @@ namespace AgeOfJarls.UI
                 s_instance = CreateWindow<JarlTableWindow>("AoJ_JarlTableWindow", Width, Height);
             }
             s_instance._table = table;
-            s_instance._page = 0;
-            s_instance._memberPage = 0;
+            s_instance._storageAt = 0f;
+            s_instance._familySource = null;
+            s_instance._matchUid = 0L;
             s_instance.TextEntry.text = "";
             s_instance.ShowWindow();
         }
@@ -132,31 +133,33 @@ namespace AgeOfJarls.UI
             Transform storage = Page(root, "Storage");
             Transform defense = Page(root, "Defense");
             Transform chronicle = Page(root, "Chronicle");
+            Transform families = Page(root, "Families");
             BuildOverview(overview);
             BuildMembers(members);
             BuildSettlers(settlers);
             BuildStorage(storage);
-            _work = Label(work, new Vector2(0f, 0f), 15, GUIManager.Instance.ValheimBeige, Width - 60f, 430f, TextAnchor.UpperLeft);
+            _work = UiKit.TextArea(work, new Vector2(0f, 0f), 780f, 430f);
             _workControls = Page(work, "WorkControls").gameObject;
             _manualWorkLabel = Button(_workControls.transform, "", new Vector2(0f, -245f), 420f, ToggleManualWork, RowButtonHeight);
             BuildDefense(defense);
-            _chronicle = Label(chronicle, new Vector2(0f, -20f), 15, GUIManager.Instance.ValheimBeige, Width - 60f, 470f, TextAnchor.UpperLeft);
+            _chronicle = UiKit.TextArea(chronicle, new Vector2(0f, -20f), 780f, 470f);
+            BuildFamilies(families);
             Button(root, "$aoj_close", new Vector2(0f, -300f), 200f, Hide);
-            Tabs(root, 252f, 106f, ("$aoj_tab_overview", overview), ("$aoj_tab_members", members), ("$aoj_tab_settlers", settlers),
-                ("$aoj_tab_work", work), ("$aoj_tab_storage", storage), ("$aoj_tab_defense", defense), ("$aoj_tab_chronicle", chronicle));
+            Tabs(root, 252f, 0f, ("$aoj_tab_overview", overview), ("$aoj_tab_members", members), ("$aoj_tab_settlers", settlers),
+                ("$aoj_tab_work", work), ("$aoj_tab_storage", storage), ("$aoj_tab_defense", defense), ("$aoj_tab_chronicle", chronicle), ("$aoj_tab_families", families));
         }
 
-        private Text _work;
+        private TextArea _work;
         private GameObject _workControls;
         private Text _manualWorkLabel;
-        private Text _defense;
+        private TextArea _defense;
         private Text _alarmLabel;
         private GameObject _defenseControls;
-        private Text _chronicle;
+        private TextArea _chronicle;
 
         private void BuildDefense(Transform page)
         {
-            _defense = Label(page, new Vector2(0f, -10f), 15, GUIManager.Instance.ValheimBeige, Width - 60f, 420f, TextAnchor.UpperLeft);
+            _defense = UiKit.TextArea(page, new Vector2(0f, 0f), 780f, 420f);
             _defenseControls = Page(page, "DefenseControls").gameObject;
             _alarmLabel = Button(_defenseControls.transform, "", new Vector2(0f, -240f), 300f, ToggleAlarm);
         }
@@ -172,7 +175,7 @@ namespace AgeOfJarls.UI
         private void BuildOverview(Transform page)
         {
             Color beige = GUIManager.Instance.ValheimBeige;
-            _summary = Label(page, new Vector2(-170f, 20f), 17, beige, 440f, 360f, TextAnchor.UpperLeft);
+            _summary = UiKit.TextArea(page, new Vector2(-170f, 5f), 440f, 410f);
             _hint = Label(page, new Vector2(0f, -240f), 15, beige, Width - 60f, 30f, TextAnchor.MiddleCenter);
 
             // Members (Karl and up) bring their followers in and hold feasts; Hersirs and Jarls also expand and rename.
@@ -184,84 +187,32 @@ namespace AgeOfJarls.UI
             const float width = 300f;
             Button(live, "$aoj_accept_followers_short", new Vector2(x, 170f), width, () => Act(t => t.AcceptFollowers(Player.m_localPlayer)));
             Button(manage, "$aoj_upgrade", new Vector2(x, 120f), width, () => Act(t => t.TryUpgrade(Player.m_localPlayer)));
-            TextEntry = TextInput(manage, "$aoj_settlement_name", new Vector2(x, 50f), width);
+            TextEntry = TextInput(manage, "$aoj_settlement_name", new Vector2(x, 50f), width, Rename);
             Button(manage, "$aoj_rename_settlement", new Vector2(x, 2f), width, Rename);
             Button(live, "$aoj_feast", new Vector2(x, -48f), width, () => Act(t => t.TryFeast(Player.m_localPlayer)));
         }
 
         private void BuildMembers(Transform page)
         {
-            Color beige = GUIManager.Instance.ValheimBeige;
-            Color orange = GUIManager.Instance.ValheimOrange;
-            _membersHeader = Label(page, new Vector2(0f, 205f), 16, orange, Width - 60f, 30f, TextAnchor.MiddleLeft);
-            _membersBonus = Label(page, new Vector2(0f, 176f), 14, beige, Width - 60f, 28f, TextAnchor.MiddleLeft);
-            for (int i = 0; i < MemberRows; i++)
-            {
-                int index = i;
-                float y = FirstMemberY - i * MemberRowHeight;
-                var row = new MemberRow { Root = Page(page, "Member" + i).gameObject };
-                Transform parent = row.Root.transform;
-                row.Name = Label(parent, new Vector2(-290f, y), 17, orange, 220f, MemberRowHeight, TextAnchor.MiddleLeft);
-                row.Rank = Label(parent, new Vector2(-115f, y), 15, beige, 120f, MemberRowHeight, TextAnchor.MiddleLeft);
-                row.Up = ButtonObject(Button(parent, "$aoj_btn_promote", new Vector2(20f, y), 84f, () => ChangeRank(index, 1), RowButtonHeight));
-                row.Down = ButtonObject(Button(parent, "$aoj_btn_demote", new Vector2(110f, y), 84f, () => ChangeRank(index, -1), RowButtonHeight));
-                row.JarlLabel = Button(parent, "$aoj_btn_cojarl", new Vector2(200f, y), 84f, () => MemberJarl(index), RowButtonHeight);
-                row.Jarl = ButtonObject(row.JarlLabel);
-                row.RemoveLabel = Button(parent, "$aoj_btn_remove", new Vector2(290f, y), 84f, () => MemberRemove(index), RowButtonHeight);
-                row.Remove = ButtonObject(row.RemoveLabel);
-                _memberRows[i] = row;
-            }
-
-            _candidatesLabel = Label(page, new Vector2(-190f, -100f), 15, orange, 400f, 28f, TextAnchor.MiddleLeft);
-            _memberPager = Page(page, "Pager").gameObject;
-            Button(_memberPager.transform, "<", new Vector2(250f, -100f), 50f, () => TurnMemberPage(-1), RowButtonHeight);
-            _memberPageLabel = Label(_memberPager.transform, new Vector2(315f, -100f), 16, beige, 70f, 28f, TextAnchor.MiddleCenter);
-            Button(_memberPager.transform, ">", new Vector2(380f, -100f), 50f, () => TurnMemberPage(1), RowButtonHeight);
-            for (int i = 0; i < MaxCandidates; i++)
-            {
-                int index = i;
-                float y = -135f - i * MemberRowHeight;
-                var row = new CandidateRow { Root = Page(page, "Candidate" + i).gameObject };
-                Transform parent = row.Root.transform;
-                row.Name = Label(parent, new Vector2(-290f, y), 16, beige, 220f, MemberRowHeight, TextAnchor.MiddleLeft);
-                row.Admit = ButtonObject(Button(parent, "$aoj_btn_admit", new Vector2(65f, y), 174f, () => Admit(index, SettlementRole.Karl), RowButtonHeight));
-                row.CoJarl = ButtonObject(Button(parent, "$aoj_btn_admit_jarl", new Vector2(245f, y), 174f, () => Admit(index, SettlementRole.Jarl), RowButtonHeight));
-                _candidateRows[i] = row;
-            }
-            Label(page, new Vector2(0f, -228f), 13, beige, Width - 60f, 56f, TextAnchor.UpperLeft).text = Localize("$aoj_ranks_help");
+            _membersHeader = Label(page, new Vector2(0f, 205f), 16, GUIManager.Instance.ValheimOrange, 780f, 30f, TextAnchor.MiddleLeft);
+            _membersBonus = Label(page, new Vector2(0f, 176f), 14, GUIManager.Instance.ValheimBeige, 780f, 28f, TextAnchor.MiddleLeft);
+            _members = UiKit.List(page, new Vector2(0f, 45f), 780f, 230f, 40f);
+            _candidatesLabel = Label(page, new Vector2(0f, -88f), 15, GUIManager.Instance.ValheimOrange, 780f, 28f, TextAnchor.MiddleLeft);
+            _candidates = UiKit.List(page, new Vector2(0f, -150f), 780f, 90f, 36f);
+            UiKit.TextArea(page, new Vector2(0f, -232f), 780f, 56f).SetText(Localize("$aoj_ranks_help"));
         }
 
         private static GameObject ButtonObject(Text label) => label.GetComponentInParent<Button>().gameObject;
 
         private void BuildSettlers(Transform page)
         {
-            Color beige = GUIManager.Instance.ValheimBeige;
-            _rosterHeader = Label(page, new Vector2(0f, 205f), 16, GUIManager.Instance.ValheimOrange, Width - 60f, 30f, TextAnchor.MiddleLeft);
-            for (int i = 0; i < RowsPerPage; i++)
-            {
-                int index = i;
-                float y = FirstRowY - i * RowHeight;
-                var row = new Row { Root = Page(page, "Row" + i).gameObject };
-                row.Name = Label(row.Root.transform, new Vector2(-265f, y), 17, GUIManager.Instance.ValheimOrange, 250f, RowHeight, TextAnchor.MiddleLeft);
-                row.Status = Label(row.Root.transform, new Vector2(-15f, y), 14, beige, 250f, RowHeight, TextAnchor.MiddleLeft);
-                row.Buttons = Page(row.Root.transform, "Buttons").gameObject;
-                Button(row.Buttons.transform, "$aoj_btn_follow", new Vector2(175f, y), 84f, () => RowFollow(index), RowButtonHeight);
-                Button(row.Buttons.transform, "$aoj_btn_home", new Vector2(265f, y), 84f, () => RowGoHome(index), RowButtonHeight);
-                row.DismissLabel = Button(row.Buttons.transform, "$aoj_btn_dismiss", new Vector2(355f, y), 84f, () => RowDismiss(index), RowButtonHeight);
-                row.Dismiss = ButtonObject(row.DismissLabel);
-                _rows[i] = row;
-            }
-            Button(page, "<", new Vector2(-90f, -230f), 60f, () => TurnPage(-1), RowButtonHeight);
-            _pageLabel = Label(page, new Vector2(0f, -230f), 16, beige, 120f, 30f, TextAnchor.MiddleCenter);
-            Button(page, ">", new Vector2(90f, -230f), 60f, () => TurnPage(1), RowButtonHeight);
+            _rosterHeader = Label(page, new Vector2(0f, 205f), 16, GUIManager.Instance.ValheimOrange, 780f, 30f, TextAnchor.MiddleLeft);
+            _settlers = UiKit.List(page, new Vector2(0f, -30f), 800f, 430f, 46f);
         }
 
         private void BuildStorage(Transform page)
         {
-            Color beige = GUIManager.Instance.ValheimBeige;
-            // The totals take two or three lines; the chest list starts right under them.
-            _totals = Label(page, new Vector2(0f, 175f), 16, beige, Width - 60f, 70f, TextAnchor.UpperLeft);
-            _chestList = Label(page, new Vector2(0f, -40f), 14, beige, Width - 60f, 340f, TextAnchor.UpperLeft);
+            _storage = UiKit.TextArea(page, new Vector2(0f, -20f), 780f, 470f);
         }
 
         protected override bool IsTargetValid()
@@ -273,8 +224,9 @@ namespace AgeOfJarls.UI
 
         protected override void Refresh()
         {
+            if (ActiveTab != 7) _matchUid = 0L;
             SettlementData data = _table.Data;
-            _title.text = JarlTable.DisplayName(data);
+            SetText(_title, JarlTable.DisplayName(data));
             switch (ActiveTab)
             {
                 case 0:
@@ -287,9 +239,9 @@ namespace AgeOfJarls.UI
                     RefreshSettlers(data);
                     break;
                 case 3:
-                    _work.text = Localize(WorkText(data));
+                    _work.SetText(Localize(WorkText(data)));
                     _workControls.SetActive(May(SettlementRight.Manage));
-                    _manualWorkLabel.text = Localize(_table.ManualWork ? "$aoj_work_manual" : "$aoj_work_auto");
+                    SetText(_manualWorkLabel, Localize(_table.ManualWork ? "$aoj_work_manual" : "$aoj_work_auto"));
                     break;
                 case 4:
                     RefreshStorage(data);
@@ -297,8 +249,11 @@ namespace AgeOfJarls.UI
                 case 5:
                     RefreshDefense(data);
                     break;
+                case 6:
+                    _chronicle.SetText(Settlement.Chronicle.Describe(_table.NetView.GetZDO(), int.MaxValue));
+                    break;
                 default:
-                    _chronicle.text = Settlement.Chronicle.Describe(_table.NetView.GetZDO(), 22);
+                    RefreshFamilies(data);
                     break;
             }
         }
@@ -329,7 +284,7 @@ namespace AgeOfJarls.UI
                 .Sum(c => c.Servings());
             float foodDays = data.Settlers.Count > 0 ? servings / (data.Settlers.Count * 2f) : 0f;
             var alerts = new List<string>();
-            int noBed = data.Settlers.Count - data.SettlersWithBed;
+            int noBed = data.SettlersNeedingBed - data.SettlersWithBed;
             if (noBed > 0)
             {
                 alerts.Add(Localize("$aoj_alert_beds", noBed.ToString()));
@@ -342,18 +297,20 @@ namespace AgeOfJarls.UI
             {
                 alerts.Add(Localize("$aoj_alert_work"));
             }
+            if (data.PregnancyCount() > 0) alerts.Add(Localize("$aoj_alert_expecting", data.PregnancyCount().ToString()));
             string feast = _table.FeastUntil > Core.WorldClock.Now ? "  ·  $aoj_feast_on" : "";
-            _summary.text = Localize(_table.BuildSummary(data) + "\n\n$aoj_settlers: " + JarlTable.BuildRosterText(data) +
+            _summary.SetText(Localize(_table.BuildSummary(data) + "\n\n$aoj_settlers: " + JarlTable.PopulationText(data) +
                                      $"\n$aoj_at_home: {atHome}/{data.Settlers.Count}  ·  $aoj_morale: {Mathf.RoundToInt(morale)}{feast}" +
                                      $"\n$aoj_food: {servings} ($aoj_food_days {foodDays:0.0})" +
-                                     (alerts.Count > 0 ? "\n<color=#ff9060>" + string.Join("\n", alerts) + "</color>" : ""));
+                                     "\n$aoj_families: " + Localize("$aoj_family_summary", data.Couples.Count(c => c.A != 0L && c.B != 0L).ToString(), data.MinorCount(WorldClock.Now, WorldClock.DayLength, FamilyConfig.Live).ToString()) +
+                                     (alerts.Count > 0 ? "\n<color=" + Palette.Warn + ">" + string.Join("\n", alerts) + "</color>" : "")));
             bool live = role.Allows(SettlementRight.Live);
             bool manage = role.Allows(SettlementRight.Manage);
             _liveControls.SetActive(live);
             _manageControls.SetActive(manage);
-            _hint.text = !live ? Localize("$aoj_read_only")
+            SetText(_hint, !live ? Localize("$aoj_read_only")
                 : !manage ? Localize("$aoj_rank_hint", Localize(Permissions.Token(role)))
-                : "";
+                : "");
         }
 
         // ---------------------------------------------------------------- members tab
@@ -363,65 +320,73 @@ namespace AgeOfJarls.UI
             Player me = Player.m_localPlayer;
             long myId = me != null ? me.GetPlayerID() : 0L;
             int extra = JarlTable.ExtraMembers(data);
-            _membersHeader.text = Localize("$aoj_members_header", data.Members.Count.ToString(), data.JarlCount.ToString(),
-                AoJConfig.MaxJarls.Value.ToString());
-            _membersBonus.text = Localize("$aoj_members_bonus", JarlTable.CapacityOf(data).ToString(), JarlTable.CapacityFor(data.Tier).ToString(),
+            SetText(_membersHeader, Localize("$aoj_members_header", data.Members.Count.ToString(), data.JarlCount.ToString(),
+                AoJConfig.MaxJarls.Value.ToString()));
+            SetText(_membersBonus, Localize("$aoj_members_bonus", JarlTable.CapacityOf(data).ToString(), JarlTable.CapacityFor(data.Tier).ToString(),
                 Mathf.RoundToInt(JarlTable.RadiusOf(data)).ToString(), Mathf.RoundToInt(JarlTable.RadiusFor(data.Tier)).ToString(),
-                (AoJConfig.TotemSlotsPerMember.Value * extra).ToString());
+                (AoJConfig.TotemSlotsPerMember.Value * extra).ToString()));
 
-            int pages = Mathf.Max(1, Mathf.CeilToInt(data.Members.Count / (float)MemberRows));
-            _memberPage = Mathf.Clamp(_memberPage, 0, pages - 1);
-            _memberPager.SetActive(pages > 1);
-            _memberPageLabel.text = $"{_memberPage + 1}/{pages}";
             SettlementMember senior = data.Jarl;
-            for (int i = 0; i < MemberRows; i++)
+            for (int i = 0; i < data.Members.Count; i++)
             {
-                int index = _memberPage * MemberRows + i;
-                MemberRow row = _memberRows[i];
-                SettlementMember member = index < data.Members.Count ? data.Members[index] : null;
-                row.Root.SetActive(member != null);
-                row.PlayerId = member?.PlayerId ?? 0L;
-                if (member == null)
+                if (i == _memberRows.Count)
                 {
-                    continue;
+                    int index = i;
+                    RectTransform root = _members.Row(i);
+                    var cells = new MemberRow { Name = _members.Text(root, 216f), Rank = _members.Text(root, 120f, 15) };
+                    cells.Up = ButtonObject(_members.Button(root, "$aoj_btn_promote", 94f, () => ChangeRank(index, 1)));
+                    cells.Down = ButtonObject(_members.Button(root, "$aoj_btn_demote", 94f, () => ChangeRank(index, -1)));
+                    cells.Jarl = _members.Confirm(root, "$aoj_btn_cojarl", 94f, () => MemberJarl(index));
+                    cells.Remove = _members.Confirm(root, "$aoj_btn_remove", 94f, () => MemberRemove(index));
+                    _memberRows.Add(cells);
                 }
+                MemberRow row = _memberRows[i];
+                SettlementMember member = data.Members[i];
+                row.PlayerId = member.PlayerId;
                 bool self = member.PlayerId == myId;
-                row.Name.text = self ? member.Name + Localize(" ($aoj_you)") : member.Name;
-                row.Rank.text = Localize(Permissions.Token(member.Role)) + (member == senior && data.JarlCount > 1 ? " *" : "");
-
-                // Karl -> Huskarl -> Hersir step by step; Jarl has its own button (co-Jarl, or handing the title over).
+                SetText(row.Name, self ? member.Name + Localize(" ($aoj_you)") : member.Name);
+                SetText(row.Rank, Localize(Permissions.Token(member.Role)) + (member == senior && data.JarlCount > 1 ? " *" : ""));
                 row.Up.SetActive(member.Role < SettlementRole.Hersir && _table.RankProblem(me, member.PlayerId, member.Role + 1) == null);
                 row.Down.SetActive(member.Role > SettlementRole.Karl && _table.RankProblem(me, member.PlayerId, member.Role - 1) == null);
                 bool coJarl = _table.RankProblem(me, member.PlayerId, SettlementRole.Jarl) == null;
                 bool handOver = !coJarl && !self && member.Role != SettlementRole.Jarl && data.RoleOf(myId) == SettlementRole.Jarl;
-                row.Jarl.SetActive(coJarl || handOver);
-                row.JarlLabel.text = Localize(handOver ? (Confirming(member.PlayerId, "handover") ? "$aoj_btn_confirm" : "$aoj_btn_handover") : "$aoj_btn_cojarl");
-                row.Remove.SetActive(_table.RankProblem(me, member.PlayerId, SettlementRole.Guest) == null);
-                row.RemoveLabel.text = Localize(Confirming(member.PlayerId, "remove") ? "$aoj_btn_confirm" : self ? "$aoj_btn_leave" : "$aoj_btn_remove");
+                row.Jarl.Bind(handOver ? "$aoj_btn_handover" : "$aoj_btn_cojarl", member.PlayerId, handOver);
+                row.Jarl.gameObject.SetActive(coJarl || handOver);
+                row.Remove.Bind(self ? "$aoj_btn_leave" : "$aoj_btn_remove", member.PlayerId);
+                row.Remove.gameObject.SetActive(_table.RankProblem(me, member.PlayerId, SettlementRole.Guest) == null);
             }
+            _members.SetCount(data.Members.Count);
 
             // Players standing at the table who are not members yet: a Hersir admits them as Karls, a Jarl as co-Jarls.
             List<Player> candidates = me == null ? new List<Player>() : Player.GetAllPlayers()
                 .Where(p => p != null && p != me && data.RoleOf(p.GetPlayerID()) == SettlementRole.Guest &&
                             Vector3.Distance(p.transform.position, _table.transform.position) <= CandidateRange)
                 .OrderBy(p => Vector3.Distance(p.transform.position, _table.transform.position))
-                .Take(MaxCandidates)
                 .ToList();
-            _candidatesLabel.text = Localize(candidates.Count > 0 ? "$aoj_members_candidates" : "$aoj_members_no_candidates");
-            for (int i = 0; i < MaxCandidates; i++)
+            SetText(_candidatesLabel, Localize(candidates.Count > 0 ? "$aoj_members_candidates" : "$aoj_members_no_candidates"));
+            for (int i = 0; i < candidates.Count; i++)
             {
+                if (i == _candidateRows.Count)
+                {
+                    int index = i;
+                    RectTransform root = _candidates.Row(i);
+                    var cells = new CandidateRow { Name = _candidates.Text(root, 360f) };
+                    cells.Admit = ButtonObject(_candidates.Button(root, "$aoj_btn_admit", 174f, () => Admit(index, SettlementRole.Karl)));
+                    cells.CoJarl = ButtonObject(_candidates.Button(root, "$aoj_btn_admit_jarl", 174f, () => Admit(index, SettlementRole.Jarl)));
+                    _candidateRows.Add(cells);
+                }
                 CandidateRow row = _candidateRows[i];
-                row.Player = i < candidates.Count ? candidates[i] : null;
-                row.Root.SetActive(row.Player != null);
+                row.Player = candidates[i];
                 if (row.Player == null)
                 {
                     continue;
                 }
                 long id = row.Player.GetPlayerID();
-                row.Name.text = row.Player.GetPlayerName();
+                SetText(row.Name, row.Player.GetPlayerName());
                 row.Admit.SetActive(_table.RankProblem(me, id, SettlementRole.Karl) == null);
                 row.CoJarl.SetActive(_table.RankProblem(me, id, SettlementRole.Jarl) == null);
             }
+            _candidates.SetCount(candidates.Count);
         }
 
         private SettlementMember RowMember(int index)
@@ -454,10 +419,6 @@ namespace AgeOfJarls.UI
                 RequestRank(member.PlayerId, member.Name, SettlementRole.Jarl);
                 return;
             }
-            if (!Confirm(member.PlayerId, "handover"))
-            {
-                return;
-            }
             _table.RequestHandOver(member.PlayerId, member.Name);
             me.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_new_jarl", member.Name));
             RefreshNow();
@@ -467,7 +428,7 @@ namespace AgeOfJarls.UI
         private void MemberRemove(int index)
         {
             SettlementMember member = RowMember(index);
-            if (member != null && Confirm(member.PlayerId, "remove"))
+            if (member != null)
             {
                 RequestRank(member.PlayerId, member.Name, SettlementRole.Guest);
             }
@@ -503,29 +464,6 @@ namespace AgeOfJarls.UI
             RefreshNow();
         }
 
-        private bool Confirming(long playerId, string action) =>
-            _confirmMember == playerId && _confirmAction == action && Time.time < _confirmMemberUntil;
-
-        private bool Confirm(long playerId, string action)
-        {
-            if (Confirming(playerId, action))
-            {
-                _confirmMember = 0L;
-                return true;
-            }
-            _confirmMember = playerId;
-            _confirmAction = action;
-            _confirmMemberUntil = Time.time + ConfirmSeconds;
-            RefreshNow();
-            return false;
-        }
-
-        private void TurnMemberPage(int step)
-        {
-            _memberPage += step;
-            RefreshNow();
-        }
-
         private void Rename()
         {
             if (_table != null)
@@ -548,42 +486,41 @@ namespace AgeOfJarls.UI
 
         private void RefreshSettlers(SettlementData data)
         {
-            int pages = Mathf.Max(1, Mathf.CeilToInt(data.Settlers.Count / (float)RowsPerPage));
-            _page = Mathf.Clamp(_page, 0, pages - 1);
-            _pageLabel.text = $"{_page + 1}/{pages}";
-            _rosterHeader.text = Localize($"$aoj_settlers: {data.Settlers.Count}/{JarlTable.CapacityOf(data)} · $aoj_beds: {data.SettlersWithBed}" +
-                                          (data.Settlers.Count == 0 ? "   ($aoj_no_settlers)" : ""));
+            SetText(_rosterHeader, Localize($"$aoj_settlers: {JarlTable.PopulationText(data)} · $aoj_beds: {data.SettlersWithBed}/{data.SettlersNeedingBed}" +
+                (data.Settlers.Count == 0 ? "   ($aoj_no_settlers)" : "")));
             bool member = May(SettlementRight.Live);
             bool manager = May(SettlementRight.Manage);
-            for (int i = 0; i < RowsPerPage; i++)
+            for (int i = 0; i < data.Settlers.Count; i++)
             {
-                int index = _page * RowsPerPage + i;
-                Row row = _rows[i];
-                RosterEntry entry = index < data.Settlers.Count ? data.Settlers[index] : null;
-                row.Root.SetActive(entry != null);
-                if (entry == null)
+                if (i == _rows.Count)
                 {
-                    row.Uid = 0L;
-                    continue;
+                    int index = i;
+                    RectTransform root = _settlers.Row(i);
+                    var cells = new Row { Name = _settlers.Text(root, 224f, 17), Status = _settlers.Text(root, 238f, 14) };
+                    cells.Follow = ButtonObject(_settlers.Button(root, "$aoj_btn_follow", 94f, () => RowFollow(index)));
+                    cells.Home = ButtonObject(_settlers.Button(root, "$aoj_btn_home", 94f, () => RowGoHome(index)));
+                    cells.Dismiss = _settlers.Confirm(root, "$aoj_btn_dismiss", 94f, () => RowDismiss(index));
+                    _rows.Add(cells);
                 }
-
+                Row row = _rows[i];
+                RosterEntry entry = data.Settlers[i];
                 Settler settler = Settler.FindByUid(entry.Uid);
                 row.Uid = entry.Uid;
-                row.Name.text = JarlTable.SettlerName(entry);
-                string bed = entry.HasBed ? "$aoj_bed_short_yes" : "$aoj_bed_short_no";
-                row.Status.text = Localize(settler != null ? settler.ShortStatus() + "\n" + bed : "$aoj_far_away\n" + bed);
-                // Orders need the settler loaded here; sending one away needs only the roster (and a Hersir).
-                row.Buttons.SetActive(member);
-                row.Dismiss.SetActive(manager);
-                bool confirming = _confirmUid == entry.Uid && Time.time < _confirmUntil;
-                row.DismissLabel.text = Localize(confirming ? "$aoj_btn_confirm" : "$aoj_btn_dismiss");
+                SetText(row.Name, settler != null ? settler.FullName : JarlTable.SettlerName(entry));
+                ChildRecord child = data.FindChild(entry.Uid);
+                LifeStage stage = settler != null ? settler.Stage : child != null ? FamilyRules.StageAt(child.Born, WorldClock.Now, WorldClock.DayLength, FamilyConfig.Live) : LifeStage.Adult;
+                string status = stage != LifeStage.Adult ? FamilyRules.StageToken(stage, settler?.Identity?.Female ?? child?.Female ?? false) + " · " + Localize("$aoj_family_age", Days(settler != null ? settler.Age : WorldClock.Now - child.Born))
+                    : settler != null ? settler.ShortStatus() : "$aoj_far_away";
+                string bed = !FamilyRules.NeedsOwnBed(stage) ? "" : entry.HasBed ? "$aoj_bed_short_yes" : "$aoj_bed_short_no";
+                SetText(row.Status, Localize(status + (bed.Length > 0 ? "\n" + bed : "")));
+                row.Follow.SetActive(member && stage >= LifeStage.Youth);
+                row.Follow.GetComponent<Button>().interactable = settler != null;
+                row.Home.SetActive(member);
+                row.Home.GetComponent<Button>().interactable = settler != null;
+                row.Dismiss.Bind("$aoj_btn_dismiss", entry.Uid);
+                row.Dismiss.gameObject.SetActive(manager);
             }
-        }
-
-        private void TurnPage(int step)
-        {
-            _page += step;
-            RefreshNow();
+            _settlers.SetCount(data.Settlers.Count);
         }
 
         private Settler RowSettler(int index)
@@ -623,14 +560,6 @@ namespace AgeOfJarls.UI
             {
                 return;
             }
-            if (_confirmUid != uid || Time.time > _confirmUntil)
-            {
-                _confirmUid = uid;
-                _confirmUntil = Time.time + ConfirmSeconds;
-                RefreshNow();
-                return;
-            }
-            _confirmUid = 0L;
             _table.RequestDismiss(uid);
             Player.m_localPlayer.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_dismissed", _rows[index].Name.text));
             RefreshNow();
@@ -650,18 +579,18 @@ namespace AgeOfJarls.UI
             {
                 List<Settler> workers = totem.Workers();
                 int distance = Mathf.RoundToInt(Vector3.Distance(totem.transform.position, _table.transform.position));
-                text.Append($"<color=#e0c080>{Work.JobInfo.Token(totem.Job)}</color> ({distance} m, {workers.Count}/{totem.Capacity}, {Work.WorkTotem.PriorityToken(totem.Priority)}): ");
-                text.Append(workers.Count == 0 ? "-" : string.Join(", ", workers.Select(w => w.JobProblem.Length > 0 ? $"{w.DisplayName} <color=#ff9060>({w.JobProblem})</color>" : w.DisplayName)));
+                text.Append($"<color={Palette.Accent}>{Work.JobInfo.Token(totem.Job)}</color> ({distance} m, {workers.Count}/{totem.Capacity}, {Work.WorkTotem.PriorityToken(totem.Priority)}): ");
+                text.Append(workers.Count == 0 ? "-" : string.Join(", ", workers.Select(w => w.JobProblem.Length > 0 ? $"{w.DisplayName} <color={Palette.Warn}>({w.JobProblem})</color>" : w.DisplayName)));
                 if (!Work.JobInfo.IsUnlocked(totem.Job, data.Tier))
                 {
-                    text.Append(" <color=#ff9060>($aoj_job_locked)</color>");
+                    text.Append(" <color=" + Palette.Warn + ">($aoj_job_locked)</color>");
                 }
                 text.Append('\n');
             }
             List<Settler> idle = data.Settlers.Select(s => Settler.FindByUid(s.Uid)).Where(s => s != null && s.JobId == 0L && s.Role == Army.CombatRole.None).ToList();
-            text.Append("\n<color=#e0c080>$aoj_unemployed</color>: ").Append(idle.Count == 0 ? "-" : string.Join(", ", idle.Select(s => s.DisplayName)));
-            text.Append("\n\n<color=#b0b0b0>$aoj_work_hint</color>");
-            text.Append("\n<color=#b0b0b0>").Append(_table.ManualWork ? "$aoj_work_manual_hint" : "$aoj_work_auto_hint").Append("</color>");
+            text.Append("\n<color=" + Palette.Accent + ">$aoj_unemployed</color>: ").Append(idle.Count == 0 ? "-" : string.Join(", ", idle.Select(s => s.DisplayName)));
+            text.Append("\n\n<color=" + Palette.Muted + ">$aoj_work_hint</color>");
+            text.Append("\n<color=" + Palette.Muted + ">").Append(_table.ManualWork ? "$aoj_work_manual_hint" : "$aoj_work_auto_hint").Append("</color>");
             return text.ToString();
         }
 
@@ -679,16 +608,16 @@ namespace AgeOfJarls.UI
         {
             var text = new StringBuilder();
             bool besieged = _table.UnderSiege;
-            text.Append("$aoj_alarm: ").Append(_table.AlarmOn ? "<color=#ff6040>$aoj_alarm_on</color>" : "$aoj_alarm_off");
+            text.Append("$aoj_alarm: ").Append(_table.AlarmOn ? "<color=" + Palette.Danger + ">$aoj_alarm_on</color>" : "$aoj_alarm_off");
             text.Append("  ·  $aoj_fame: ").Append(_table.Fame);
             if (besieged)
             {
-                text.Append("  ·  <color=#ff6040>$aoj_besieged</color>");
+                text.Append("  ·  <color=" + Palette.Danger + ">$aoj_besieged</color>");
             }
             text.Append('\n');
 
             List<Settler> soldiers = data.Settlers.Select(s => Settler.FindByUid(s.Uid)).Where(s => s != null && s.Role != Army.CombatRole.None).ToList();
-            text.Append("\n<color=#e0c080>$aoj_troop</color> (").Append(soldiers.Count).Append("):\n");
+            text.Append("\n<color=" + Palette.Accent + ">$aoj_troop</color> (").Append(soldiers.Count).Append("):\n");
             foreach (Settler soldier in soldiers)
             {
                 Army.WarBanner post = Army.WarBanner.FindById(soldier.PostId);
@@ -696,7 +625,7 @@ namespace AgeOfJarls.UI
                     .Append(post != null ? $" @ {Army.WarBanner.KindToken(post.Kind)}" : " ($aoj_no_post)").Append('\n');
             }
             List<Army.WarBanner> banners = Army.WarBanner.Loaded.Where(b => b != null && b.Settlement == _table).ToList();
-            text.Append("\n<color=#e0c080>$aoj_banners</color> (").Append(banners.Count).Append("): ");
+            text.Append("\n<color=" + Palette.Accent + ">$aoj_banners</color> (").Append(banners.Count).Append("): ");
             text.Append(banners.Count == 0 ? "$aoj_banners_none" :
                 string.Join(", ", banners.Select(b => $"{Army.WarBanner.KindToken(b.Kind)} {b.Posted().Count}/{b.Places}")));
             int armories = Army.Armory.Loaded.Count(a => a != null && Vector3.Distance(a.transform.position, _table.transform.position) <= JarlTable.RadiusOf(data));
@@ -704,30 +633,193 @@ namespace AgeOfJarls.UI
             int breaches = _table.BreachList.Count;
             if (breaches > 0)
             {
-                text.Append("\n<color=#ff9060>").Append(Localize("$aoj_breaches_waiting", breaches.ToString())).Append("</color>");
+                text.Append("\n<color=" + Palette.Warn + ">").Append(Localize("$aoj_breaches_waiting", breaches.ToString())).Append("</color>");
             }
-            text.Append("\n\n<color=#b0b0b0>$aoj_defense_hint</color>");
-            _defense.text = Localize(text.ToString());
+            text.Append("\n\n<color=" + Palette.Muted + ">$aoj_defense_hint</color>");
+            _defense.SetText(Localize(text.ToString()));
             _defenseControls.SetActive(May(SettlementRight.Military));
-            _alarmLabel.text = Localize(_table.AlarmOn ? "$aoj_alarm_end" : "$aoj_alarm_sound");
+            SetText(_alarmLabel, Localize(_table.AlarmOn ? "$aoj_alarm_end" : "$aoj_alarm_sound"));
         }
 
         // ---------------------------------------------------------------- storage tab
 
+        private void BuildFamilies(Transform page)
+        {
+            _familyControls = Page(page, "FamilyControls").gameObject;
+            _noCouples = Button(_familyControls.transform, "", new Vector2(-200f, 202f), 380f, () => ToggleFamilyFlag(FamilyFlags.NoNewCouples), 30f);
+            _noBirths = Button(_familyControls.transform, "", new Vector2(200f, 202f), 380f, () => ToggleFamilyFlag(FamilyFlags.NoBirths), 30f);
+            _matchHint = Label(page, new Vector2(0f, 173f), 14, GUIManager.Instance.ValheimBeige, 780f, 24f, TextAnchor.MiddleLeft);
+            FamilyHeading(page, "$aoj_family_couples", -200f, 145f);
+            FamilyHeading(page, "$aoj_family_courtships", 200f, 145f);
+            _couples = UiKit.List(page, new Vector2(-200f, 48f), 380f, 166f, 40f);
+            _courtships = UiKit.List(page, new Vector2(200f, 48f), 380f, 166f, 40f);
+            FamilyHeading(page, "$aoj_children", -200f, -54f);
+            FamilyHeading(page, "$aoj_family_singles", 200f, -54f);
+            _children = UiKit.List(page, new Vector2(-200f, -160f), 380f, 178f, 40f);
+            _singles = UiKit.List(page, new Vector2(200f, -160f), 380f, 178f, 36f);
+        }
+
+        private static void FamilyHeading(Transform page, string token, float x, float y) =>
+            SetText(Label(page, new Vector2(x, y), 16, GUIManager.Instance.ValheimOrange, 380f, 24f, TextAnchor.MiddleLeft), Localize(token));
+
+        private void ToggleFamilyFlag(byte bit)
+        {
+            if (_table != null && May(SettlementRight.Manage))
+                _table.RequestSetFamilyFlags(bit, !_table.Data.HasFamilyFlag(bit));
+        }
+
+        // Cache membership and names alongside the table's cached blob, including time-derived promotions.
+        private void CacheFamilies(SettlementData data, double now)
+        {
+            uint revision = _table.NetView.GetZDO().DataRevision;
+            if (_familySource == data && revision == _familyRevision && now < _familyNextStage) return;
+            _familySource = data;
+            _familyRevision = revision;
+            _familyNextStage = double.MaxValue;
+            _familyNames.Clear();
+            _coupleModels.Clear();
+            _coupleModels.AddRange(data.Couples);
+            _courtshipModels.Clear();
+            _courtshipModels.AddRange(data.Courtships);
+            _childModels.Clear();
+            _childModels.AddRange(data.Children);
+            _singleModels.Clear();
+            FamilyConfig cfg = FamilyConfig.Live;
+            foreach (RosterEntry entry in data.Settlers)
+            {
+                _familyNames[entry.Uid] = entry.Name;
+                ChildRecord child = data.FindChild(entry.Uid);
+                bool minor = child != null && FamilyRules.StageAt(child.Born, now, WorldClock.DayLength, cfg) != LifeStage.Adult;
+                if (minor)
+                    _familyNextStage = Math.Min(_familyNextStage, now + FamilyRules.SecondsToNextStage(now - child.Born, WorldClock.DayLength, cfg));
+                if (!minor && data.FindCouple(entry.Uid) == null && data.FindCourtship(entry.Uid) == null)
+                    _singleModels.Add(entry);
+            }
+            if (!_singleModels.Exists(s => s.Uid == _matchUid)) _matchUid = 0L;
+        }
+
+        private string FamilyName(long uid)
+        {
+            Settler live = uid != 0L ? Settler.FindByUid(uid) : null;
+            return live != null ? live.FullName : _familyNames.TryGetValue(uid, out string name) ? name : "—";
+        }
+
+        private static string Days(double seconds) => (Math.Max(0.0, seconds) / WorldClock.DayLength).ToString("0.0");
+
+        private void RefreshFamilies(SettlementData data)
+        {
+            double now = WorldClock.Now;
+            CacheFamilies(data, now);
+            bool manage = May(SettlementRight.Manage);
+            _familyControls.SetActive(manage);
+            if (!manage) _matchUid = 0L;
+            SetText(_noCouples, Localize(data.HasFamilyFlag(FamilyFlags.NoNewCouples) ? "$aoj_btn_no_couples_on" : "$aoj_btn_no_couples_off"));
+            SetText(_noBirths, Localize(data.HasFamilyFlag(FamilyFlags.NoBirths) ? "$aoj_btn_no_births_on" : "$aoj_btn_no_births_off"));
+            SetText(_matchHint, Localize(manage ? "$aoj_hint_match" : "$aoj_read_only"));
+            for (int i = 0; i < _coupleModels.Count; i++)
+            {
+                if (i == _coupleRows.Count)
+                {
+                    int index = i;
+                    RectTransform root = _couples.Row(i);
+                    var row = new FamilyRow { Description = _couples.Text(root, 248f, 15) };
+                    row.Separate = _couples.Confirm(root, "$aoj_btn_separate", 96f, () => Separate(index));
+                    _coupleRows.Add(row);
+                }
+                Couple couple = _coupleModels[i];
+                FamilyRow cells = _coupleRows[i];
+                cells.Uid = couple.A != 0L ? couple.A : couple.B;
+                bool paired = couple.A != 0L && couple.B != 0L;
+                string line = paired
+                    ? FamilyName(couple.A) + Palette.Colored(" ♥ ", Palette.Love) + FamilyName(couple.B) + "\n" +
+                        Localize("$aoj_family_since", ((int)(couple.Since / WorldClock.DayLength) + 1).ToString())
+                    : FamilyName(cells.Uid);
+                line += " · $aoj_family_children: " + couple.ChildrenBorn;
+                if (couple.IsExpecting) line += "\n" + Localize("$aoj_family_expecting", Days(couple.DueAt - now));
+                SetText(cells.Description, Localize(line));
+                cells.Separate.Bind("$aoj_btn_separate", unchecked(couple.A * 397L ^ couple.B));
+                cells.Separate.gameObject.SetActive(manage && paired);
+            }
+            _couples.SetCount(_coupleModels.Count);
+            for (int i = 0; i < _courtshipModels.Count; i++)
+            {
+                if (i == _courtshipRows.Count)
+                    _courtshipRows.Add(new FamilyRow { Description = _courtships.Text(_courtships.Row(i), 348f, 15) });
+                Courtship courtship = _courtshipModels[i];
+                SetText(_courtshipRows[i].Description, Localize(FamilyName(courtship.A) + Palette.Colored(" ♥? ", Palette.Love) + FamilyName(courtship.B) + "\n" +
+                    Localize("$aoj_family_courtship_left", Days(courtship.StartedAt + FamilyConfig.Live.CourtshipDays * WorldClock.DayLength - now))));
+            }
+            _courtships.SetCount(_courtshipModels.Count);
+            for (int i = 0; i < _childModels.Count; i++)
+            {
+                if (i == _familyChildRows.Count)
+                    _familyChildRows.Add(new FamilyRow { Description = _children.Text(_children.Row(i), 348f, 15) });
+                ChildRecord child = _childModels[i];
+                LifeStage stage = FamilyRules.StageAt(child.Born, now, WorldClock.DayLength, FamilyConfig.Live);
+                SetText(_familyChildRows[i].Description, Localize(FamilyName(child.Uid) + " · " + FamilyRules.StageToken(stage, child.Female) + " · " +
+                    Localize("$aoj_family_age", Days(now - child.Born)) + "\n$aoj_family_parents: " + FamilyName(child.Mother) + " / " + FamilyName(child.Father)));
+            }
+            _children.SetCount(_childModels.Count);
+            for (int i = 0; i < _singleModels.Count; i++)
+            {
+                if (i == _singleRows.Count)
+                {
+                    int index = i;
+                    RectTransform root = _singles.Row(i);
+                    var row = new FamilyRow { Description = _singles.Text(root, 248f, 15) };
+                    row.Match = _singles.Button(root, "$aoj_btn_match", 96f, () => Match(index));
+                    _singleRows.Add(row);
+                }
+                FamilyRow cells = _singleRows[i];
+                cells.Uid = _singleModels[i].Uid;
+                SetText(cells.Description, FamilyName(cells.Uid));
+                cells.Description.color = cells.Uid == _matchUid ? GUIManager.Instance.ValheimOrange : GUIManager.Instance.ValheimBeige;
+                ButtonObject(cells.Match).SetActive(manage);
+            }
+            _singles.SetCount(_singleModels.Count);
+        }
+
+        private void Separate(int index)
+        {
+            if (_table != null && May(SettlementRight.Manage)) _table.RequestSeparate(_coupleRows[index].Uid);
+        }
+
+        private void Match(int index)
+        {
+            if (_table == null || !May(SettlementRight.Manage)) return;
+            long uid = _singleRows[index].Uid;
+            if (_matchUid == 0L || _matchUid == uid)
+            {
+                _matchUid = _matchUid == uid ? 0L : uid;
+                RefreshNow();
+                return;
+            }
+            string problem = FamilySim.PairProblem(_table.Data, _matchUid, uid, WorldClock.Now);
+            if (problem != null)
+                Player.m_localPlayer.Message(MessageHud.MessageType.Center, Localize("$aoj_msg_match_bad", Localize(problem)));
+            else
+            {
+                _table.RequestArrangeCouple(_matchUid, uid);
+                _matchUid = 0L;
+            }
+            RefreshNow();
+        }
+
         // Read-only: every machine has the chests of a loaded settlement with their current contents.
         private void RefreshStorage(SettlementData data)
         {
+            uint revision = _table.NetView.GetZDO().DataRevision;
+            if (Time.unscaledTime < _storageAt && revision == _storageRevision) return;
+            _storageAt = Time.unscaledTime + 2f;
+            _storageRevision = revision;
             SettlementStorage.CollectChests(_table, _chests);
             if (_chests.Count == 0)
             {
-                _totals.text = Localize("$aoj_storage_none");
-                _chestList.text = "";
+                _storage.SetText(Localize("$aoj_storage_none"));
                 return;
             }
-
             var totals = new Dictionary<string, int>();
             var lines = new StringBuilder();
-            int shown = 0;
             foreach (Container chest in _chests.OrderBy(c => Vector3.Distance(c.transform.position, _table.transform.position)))
             {
                 Inventory inventory = chest.GetInventory();
@@ -738,35 +830,19 @@ namespace AgeOfJarls.UI
                     contents[name] = (contents.TryGetValue(name, out int count) ? count : 0) + item.m_stack;
                     totals[name] = (totals.TryGetValue(name, out int total) ? total : 0) + item.m_stack;
                 }
-                if (shown++ >= MaxChestLines)
-                {
-                    continue;
-                }
                 int distance = Mathf.RoundToInt(Vector3.Distance(chest.transform.position, _table.transform.position));
-                string held = contents.Count == 0
-                    ? "$aoj_storage_empty_chest"
-                    : string.Join(", ", contents.OrderByDescending(c => c.Value).Take(4).Select(c => $"{c.Key} {c.Value}")) +
-                      (contents.Count > 4 ? $" (+{contents.Count - 4})" : "");
+                string held = contents.Count == 0 ? "$aoj_storage_empty_chest" : string.Join(", ", contents.OrderByDescending(c => c.Value).Select(c => $"{c.Key} {c.Value}"));
                 int used = inventory.NrOfItems();
                 int size = used + inventory.GetEmptySlots();
                 string assigned = SettlementStorage.AssignedKind(chest);
-                // A chest's kind: the one a member gave it, or what the settlers take it for from what it holds.
                 List<string> autoKinds = assigned.Length > 0 ? null : ChestIndex.KindTokens(chest);
                 string kind = assigned.Length > 0 ? $" [{SettlementStorage.KindToken(assigned)}]"
-                    : autoKinds.Count > 0 ? $" [{string.Join(", ", autoKinds.Take(2))}]" : "";
-                lines.Append($"<color=#e0c080>{chest.m_name}{kind}</color> ({distance} m, {used}/{size}): {held}\n");
+                    : autoKinds.Count > 0 ? $" [{string.Join(", ", autoKinds)}]" : "";
+                lines.Append(Palette.Colored(chest.m_name + kind, Palette.Accent)).Append($" ({distance} m, {used}/{size}): {held}\n");
             }
-            if (_chests.Count > MaxChestLines)
-            {
-                lines.Append($"... (+{_chests.Count - MaxChestLines})\n");
-            }
-            lines.Append("\n<color=#b0b0b0>$aoj_storage_hint</color>");
-
-            string sums = totals.Count == 0
-                ? "-"
-                : string.Join(" · ", totals.OrderByDescending(t => t.Value).Take(MaxTotals).Select(t => $"{t.Key} {t.Value}"));
-            _totals.text = Localize($"<color=#e0c080>$aoj_storage_total</color> ({_chests.Count}): {sums}");
-            _chestList.text = Localize(lines.ToString());
+            lines.Append("\n").Append(Palette.Colored("$aoj_storage_hint", Palette.Muted));
+            string sums = totals.Count == 0 ? "—" : string.Join(" · ", totals.OrderByDescending(t => t.Value).Select(t => $"{t.Key} {t.Value}"));
+            _storage.SetText(Localize(Palette.Colored("$aoj_storage_total", Palette.Accent) + $" ({_chests.Count}): {sums}\n\n" + lines));
         }
     }
 }

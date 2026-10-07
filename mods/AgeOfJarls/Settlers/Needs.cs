@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AgeOfJarls.Core;
 using AgeOfJarls.Core.Defs;
+using AgeOfJarls.Family;
 using AgeOfJarls.Settlement;
 using UnityEngine;
 
@@ -62,7 +63,8 @@ namespace AgeOfJarls.Settlers
             // Hunger is written in steps of half a point (with the clock), so a settler's ZDO does not change every
             // second; the time in between keeps adding up until the next step.
             float satiety = Satiety(zdo);
-            float appetite = Mathf.Max(0.1f, 1f + TraitSum(settler, TraitStat.FoodConsumption));
+            // Children eat less than adults (an infant a third); the traits still apply on top.
+            float appetite = Mathf.Max(0.1f, 1f + TraitSum(settler, TraitStat.FoodConsumption)) * FamilyRules.AppetiteFor(settler.Stage);
             float hunger = days * AoJConfig.SatietyPerDay.Value * appetite;
             if (hunger >= SatietyStep || (satiety <= 0f && days > 0f))
             {
@@ -107,7 +109,7 @@ namespace AgeOfJarls.Settlers
         {
             float satiety = Satiety(zdo);
             string hunger = satiety < 10f ? "$aoj_satiety_starving" : satiety < AoJConfig.HungryBelow.Value ? "$aoj_satiety_hungry" : "$aoj_satiety_fed";
-            return $"$aoj_satiety: {Mathf.RoundToInt(satiety)} ({hunger})  ·  $aoj_morale: {Mathf.RoundToInt(Morale(zdo))}  ·  $aoj_pace x{WorkPace(zdo):0.00}";
+            return $"$aoj_satiety: {Mathf.RoundToInt(satiety)} ({hunger})  Ă‚Â·  $aoj_morale: {Mathf.RoundToInt(Morale(zdo))}  Ă‚Â·  $aoj_pace x{WorkPace(zdo):0.00}";
         }
 
         private static List<string> Meals(ZDO zdo)
@@ -136,8 +138,15 @@ namespace AgeOfJarls.Settlers
             return comfort;
         }
 
+        /// <summary>Family terms of the morale: just wed, a newborn at home, a loss, and each child under age (capped).</summary>
+        private const float InLoveMorale = 8f;
+        private const float NewParentMorale = 10f;
+        private const float GriefMorale = -15f;
+        private const float PerMinorChildMorale = 2f;
+        private const float MaxChildrenMorale = 6f;
+
         // 50 + satiety (-30..+15) + bed (-20..+5) + comfort (0..+10) + variety (0..+10) + safety (-10..0) + traits
-        // + feast (+20).
+        // + feast (+20) + family (in love +8, new parent +10, grief -15, +2 per child under age up to +6).
         private static float ComputeMorale(ZDO zdo, Settler settler, JarlTable home, float satiety)
         {
             float morale = StartMorale;
@@ -149,16 +158,21 @@ namespace AgeOfJarls.Settlers
                 {
                     morale += 5f + Mathf.Min(10f, Mathf.Max(0, BedComfort(settler, bed) - 1) * 0.75f);
                 }
+                else if (!FamilyRules.NeedsOwnBed(settler.Stage))
+                {
+                    // Infants and children sleep at a parent's bed: no bed of their own is no hardship.
+                    morale += 5f;
+                }
                 else
                 {
                     morale -= 20f;
                 }
-                double now = WorldClock.Now;
-                if (home.FeastUntil > now)
+                double homeNow = WorldClock.Now;
+                if (home.FeastUntil > homeNow)
                 {
                     morale += 20f;
                 }
-                if (home.GriefUntil > now)
+                if (home.GriefUntil > homeNow)
                 {
                     morale -= 10f;
                 }
@@ -171,6 +185,22 @@ namespace AgeOfJarls.Settlers
             {
                 morale -= 10f;
             }
+
+            double now = WorldClock.Now;
+            FamilyInfo family = settler.Family;
+            if (family.HasMood(MoodKind.InLove, now))
+            {
+                morale += InLoveMorale;
+            }
+            if (family.HasMood(MoodKind.NewParent, now))
+            {
+                morale += NewParentMorale;
+            }
+            if (family.HasMood(MoodKind.Grief, now))
+            {
+                morale += GriefMorale;
+            }
+            morale += Mathf.Min(MaxChildrenMorale, family.MinorChildren(now, WorldClock.DayLength, FamilyConfig.Live) * PerMinorChildMorale);
 
             int variety = Meals(zdo).Distinct().Count();
             morale += variety >= 3 ? 10f : variety == 2 ? 5f : 0f;

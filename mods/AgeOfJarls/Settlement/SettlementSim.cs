@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using AgeOfJarls.Core;
+using AgeOfJarls.Family;
 using AgeOfJarls.Settlers;
 using AgeOfJarls.Work;
 using UnityEngine;
@@ -67,6 +68,9 @@ namespace AgeOfJarls.Settlement
                 return;
             }
             double window = Math.Min(awaySeconds, maxSeconds);
+            double until = WorldClock.Now;
+            double fromTime = until - window;
+            FamilyConfig cfg = FamilyConfig.Live;
             float days = (float)(window / WorldClock.DayLength);
             float radius = JarlTable.RadiusOf(data);
             SettlementStorage.CollectChests(table, s_chests);
@@ -82,24 +86,30 @@ namespace AgeOfJarls.Settlement
             foreach (WorkTotem totem in WorkTotem.Loaded.Where(t => t != null && t.Settlement == table))
             {
                 List<Settler> workers = residents.Where(r => r.JobId == totem.Id).ToList();
+                workers.RemoveAll(w => WorkerSeconds(w, fromTime, until, totem.Job, cfg, false) <= 0);
                 if (workers.Count == 0)
                 {
                     continue;
                 }
+                double stationSeconds = 0;
+                foreach (Settler worker in workers)
+                {
+                    stationSeconds = Math.Max(stationSeconds, WorkerSeconds(worker, fromTime, until, totem.Job, cfg, true));
+                }
                 switch (totem.Job)
                 {
                     case JobType.Woodcutter:
-                        Gather("Wood", WorkScanner.Find<TreeBase>(totem).Count * WoodPerTree, workers, window * totem.PaceBonus, fedShare, from, credited);
+                        Gather("Wood", WorkScanner.Find<TreeBase>(totem).Count * WoodPerTree, workers, fromTime, until, totem, cfg, fedShare, from, credited);
                         break;
                     case JobType.Miner:
                         Gather("Stone", (WorkScanner.Find<MineRock5>(totem).Count + WorkScanner.Find<MineRock>(totem).Count) * StonePerRock,
-                            workers, window * totem.PaceBonus, fedShare, from, credited);
+                            workers, fromTime, until, totem, cfg, fedShare, from, credited);
                         break;
                     case JobType.Smelter:
-                        Smelt(totem, window * fedShare, from, credited);
+                        Smelt(totem, stationSeconds * fedShare, from, credited);
                         break;
                     case JobType.Cook:
-                        Cook(totem, window * fedShare, from, credited);
+                        Cook(totem, stationSeconds * fedShare, from, credited);
                         break;
                     case JobType.Farmer:
                         Harvest(totem, workers.Average(w => w.TraitSum(Core.Defs.TraitStat.CropYield)), from, credited);
@@ -121,13 +131,14 @@ namespace AgeOfJarls.Settlement
         }
 
         // Woodcutters and Miners: each worker's pace times the time away, no more than the zone holds.
-        private static void Gather(string item, int pool, List<Settler> workers, double window, float fedShare, Vector3 from,
-            Dictionary<string, int> credited)
+        private static void Gather(string item, int pool, List<Settler> workers, double fromTime, double until, WorkTotem totem,
+            FamilyConfig cfg, float fedShare, Vector3 from, Dictionary<string, int> credited)
         {
             float amount = 0f;
             foreach (Settler worker in workers)
             {
-                amount += PerSecond(worker) * (float)window * Needs.WorkPace(worker.Zdo);
+                double seconds = WorkerSeconds(worker, fromTime, until, totem.Job, cfg, !HasMeasuredRate(worker.Zdo));
+                amount += PerSecond(worker) * (float)seconds * totem.PaceBonus * Needs.WorkPace(worker.Zdo);
             }
             int produced = Mathf.Min(Mathf.FloorToInt(amount * fedShare), pool);
             if (produced > 0)
@@ -327,13 +338,23 @@ namespace AgeOfJarls.Settlement
             return amount - left;
         }
 
+        private static double WorkerSeconds(Settler worker, double from, double until, JobType job, FamilyConfig cfg, bool fallbackPace)
+        {
+            FamilyInfo family = worker.Family;
+            return FamilyRules.WorkSeconds(worker.Born, from, until, job, family.IsExpecting ? family.DueAt : 0,
+                family.LastBirthAsMother, WorldClock.DayLength, cfg, fallbackPace);
+        }
+
+        private static bool HasMeasuredRate(ZDO zdo) =>
+            zdo.GetFloat(Keys.ZdoSettlerWorkTime) >= MeasuredAfterSeconds && zdo.GetFloat(Keys.ZdoSettlerWorkOutput) > 0f;
+
         // Items per second: the settler's live pace once measured long enough, else the configured default.
         private static float PerSecond(Settler worker)
         {
             ZDO zdo = worker.Zdo;
             float time = zdo.GetFloat(Keys.ZdoSettlerWorkTime);
             float output = zdo.GetFloat(Keys.ZdoSettlerWorkOutput);
-            if (time >= MeasuredAfterSeconds && output > 0f)
+            if (HasMeasuredRate(zdo))
             {
                 // Measured live, traits and experience included.
                 return output / time;

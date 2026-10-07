@@ -57,6 +57,33 @@ W MVP: Pracowity, Leniwy, Silny, Oszczędny, Żarłok, Odważny.
 - Interakcja z osadnikiem: podążaj za mną, czekaj tutaj, wróć do pracy, idź do domu.
 - Szybkie menu: przydział zawodu, zmiana imienia.
 
+### A7. Rodziny — v1 (0.9.0)
+Zautomatyzowany cykl życia mieszkańców: pary, ciąże i dzieci. Pary śpią we dwójkę w łóżku podwójnym.
+1. **Pary:** Osadnicy dobierają się sami (szansa w nocy) albo przypisani ręcznie w oknie (zakładka Rodziny, `aoj_family couple`).
+2. **Ślub:** Po zaręczynach para „spotyka się pod oknem” na chwilę (emotki, serduszka, `aoj_family court`), po czym pojawia się komunikat o ślubie i osadnicy otrzymują bonus Uczty do morale (x1.15) na 2 dni.
+3. **Ciąża i narodziny:** Szansa każdego ranka (`Family/ConceiveChanceBase`). Czas ciąży to 3 dni, w tym czasie osadniczka odpoczywa i nie pracuje. Niemowlę (`aoj_family birth`) rodzi się rano obok matki i zajmuje wolne miejsce w limicie osady; bez miejsc zapada w stan czuwania.
+4. **Etapy życia:** Niemowlę (2 dni, leży), dziecko (5 dni, bawi się wokół stołu, siada nocą na krawędzi łóżka rodzica), młodzieniec (7 dni, pracuje jako drwal/rolnik/górnik/tragarz w 50% tempa), dorosły. Wiek ustawia skalę modelu i cechy (wymagany osobny prefab dla dzieci wg rasy).
+5. **Żałoba:** Utrata partnera daje status rozpaczy (-20% morale na 3 dni), ponowne wejście w związek resetuje licznik i wymaga upływu okresu samotności.
+
+**Konfiguracja (`Family/`):**
+
+| Opcja | Domyślnie | Opis |
+|---|---|---|
+| `Enabled` | `true` | Czy w ogóle włączać cykl rodzin w osadach |
+| `Pairing` | `Auto` | `Auto` (osadnicy dobierają się sami po nocy), `Manual` (tylko zleceni graczem w GUI) |
+| `ConceiveChanceBase` | `5` | Bazowa % szansa każdej płodnej pary na poczęcie każdego ranka |
+| `ConceiveChanceBoost` | `3` | Dodatkowy % za wysokie średnie morale pary |
+| `MaxChildrenPerCouple` | `3` | Limit dzieci żyjących jednocześnie dla jednej pary |
+| `PregnancyDays` | `3` | Czas w dniach (wliczany CatchUp) |
+| `MinDaysBetweenBirths` | `5` | Ile dni po narodzinach para nie wejdzie w ciążę |
+| `StageInfantDays` | `2` | Dni jako niemowlę |
+| `StageChildDays` | `5` | Dni jako dziecko |
+| `StageYouthDays` | `7` | Dni jako młodzieniec |
+| `YouthWorkPace` | `0.5` | Ułamek normalnego tempa pracy dla młodzieńca |
+| `GriefDays` | `3` | Dni żałoby po śmierci członka rodziny |
+| `RestDuringPregnancy`| `true` | Czy ciężarne powstrzymują się od pracy na etapie zaawansowanej ciąży |
+| `MinDaysToRepair` | `5` | Ile dni od rozstania do następnego ślubu |
+
 ## B. Rekrutacja
 
 Wszystko w tej sekcji działa także w **istniejących światach** — nic nie wymaga generowania nowego świata ani

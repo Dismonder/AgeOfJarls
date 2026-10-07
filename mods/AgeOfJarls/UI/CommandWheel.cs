@@ -408,7 +408,7 @@ namespace AgeOfJarls.UI
             RadialData.SO != null && RadialData.SO.EmoteMappings != null ? RadialData.SO.EmoteMappings.GetMapping(emote).Sprite : null;
 
         private static string Localize(string text, params string[] words) =>
-            Localization.instance != null ? Localization.instance.Localize(text, words) : text;
+            AgeOfJarls.Core.TextUtil.Localize(text, words);
 
         // ---------------------------------------------------------------- the wheel key
 

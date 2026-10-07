@@ -42,10 +42,11 @@ namespace AgeOfJarls.Commands
             CommandManager.Instance.AddConsoleCommand(new RoleCommand());
             CommandManager.Instance.AddConsoleCommand(new AlarmCommand());
             CommandManager.Instance.AddConsoleCommand(new BreachCommand());
+            CommandManager.Instance.AddConsoleCommand(new FamilyCommand());
         }
 
         internal static string Localize(string text, params string[] words) =>
-            Localization.instance != null ? Localization.instance.Localize(text, words) : text;
+            AgeOfJarls.Core.TextUtil.Localize(text, words);
 
         /// <summary>The settlement the local player stands in, or null (with a console hint).</summary>
         internal static JarlTable SettlementHere(Terminal context, out SettlementData data)

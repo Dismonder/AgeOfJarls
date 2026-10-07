@@ -17,7 +17,7 @@ server and in co-op. Works in new **and existing** worlds.
   in your sight as the attack target. The game's wheel (G) has the same squad orders under *Commands*. By default a
   settler is **knocked out, not killed**: it gets up with its gear (permanent death is an option). In **Realistic** mode
   (`General/Mode`) a knocked-out settler waits for help - you ([E]) or a settler nearby - and dies after
-  `Settlers/RescueMinutes` without it; workers then also carry a limited load per trip. Its window's
+  `Settlers/RescueMinutes` without it; workers then also carry a limited load per trip. Its window's Family tab shows parents, children, pregnancy and the next stage. The
   Equipment tab takes single items back (**Take** / **Take 1**) or the whole bag, worn gear included, straight into
   your inventory - also in co-op, whichever machine simulates the settler. A settler that follows you is your
   **guard**: it keeps to your shoulder, out of the camera, and fights the enemies that come for you - never farther
@@ -27,6 +27,7 @@ server and in co-op. Works in new **and existing** worlds.
   their own when it shortens a trip. **Areas:** press **Z** on the big map to mark a warehouse (its chests count as
   the settlement's, also behind a portal) or any named area of your settlement; the map shows the settlement circle
   and its areas.
+- **Families** - couples form, court, marry with a feast, and share a double bed. Pregnancies lead to births and infants that grow through four stages (infant, child, youth, adult). Children sleep at a parent's bed, youths may work. Grief follows loss.
 - **They fight like you do** — a settler raises its shield (or weapon) against a blow about to land, times it for a
   perfect block once it has learned the creature's wind-up, turns on the enemy striking it, fights with the weapon of
   its role (bow from afar, melee up close) and backs off when caught with only a bow in hand.
@@ -71,11 +72,11 @@ catch-up, captive camps, sieges and the alarm (`Sieges/AlarmMinThreats`, `AlarmC
 gear wear, the members' bonuses and the number of Jarls, and whether settlers bump into players and into each other
 (`Settlers/CollideWithPlayers`, `Settlers/CollideWithSettlers`; off = you walk through each other, hits land either
 way). Local: the command wheel key (`Commands/WheelKey`, default H) and reach (`Commands/LookRange`), the manual's
-key (`UI/HelpKey`, F6) and the size of the mod's windows (`UI/Scale`, default 1.3). Balance data in `BepInEx/config/AgeOfJarls/*.json`
+key (`UI/HelpKey`, F6) and the size of the mod's windows (`UI/Scale`, default 1.3). The `[Family]` section controls pairing, chances, pregnancy, spacing and limits of births, stage lengths, rest, grief and youth work pace. Balance data in `BepInEx/config/AgeOfJarls/*.json`
 (traits, tiers, names, storage kinds, siege waves, totem levels).
 
 ## Console (devcommands)
 
 `aoj_info`, `aoj_settlers`, `aoj_settlement`, `aoj_totem [upgrade]`, `aoj_debug`, `aoj_perf [seconds]`, `aoj_dump <prefab>`, `aoj_rank <rank> <player>`,
 `aoj_jarl <player>`, `aoj_spawn`, `aoj_despawn [radius]`, `aoj_catchup <hours>`, `aoj_siege`, `aoj_morale <0-100>`,
-`aoj_captive`, `aoj_reload_defs`.
+`aoj_captive`, `aoj_reload_defs`, `aoj_family`.

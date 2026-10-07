@@ -26,13 +26,17 @@ namespace AgeOfJarls.Settlement
 
         /// <summary>Owner of the table only.</summary>
         internal static void Add(ZNetView table, string text, params string[] words)
+            => Add(table, WorldClock.Now, text, words);
+
+        /// <summary>Owner only; explicit world time preserves the day of overdue family events.</summary>
+        internal static void Add(ZNetView table, double time, string text, params string[] words)
         {
             if (table == null || !table.IsValid() || !table.IsOwner())
             {
                 return;
             }
             List<Entry> entries = Read(table.GetZDO());
-            entries.Add(new Entry { Time = WorldClock.Now, Text = text, Words = words ?? new string[0] });
+            entries.Add(new Entry { Time = time, Text = text, Words = words ?? new string[0] });
             while (entries.Count > MaxEntries)
             {
                 entries.RemoveAt(0);
@@ -112,6 +116,6 @@ namespace AgeOfJarls.Settlement
         }
 
         private static string Localize(string text, params string[] words) =>
-            Localization.instance != null ? Localization.instance.Localize(text, words) : text;
+            AgeOfJarls.Core.TextUtil.Localize(text, words);
     }
 }

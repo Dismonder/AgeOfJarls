@@ -64,9 +64,8 @@ namespace AgeOfJarls.Settlement
             foreach (ZDO table in _tables)
             {
                 long owner = table.GetOwner();
-                byte[] blob = table.GetByteArray(Keys.ZdoSettlement);
                 // Without an owner nobody has the table loaded to apply the change; the next scan retries.
-                SettlementData data = owner != 0L && blob != null ? SettlementData.Deserialize(blob) : null;
+                SettlementData data = owner != 0L ? SettlementData.Read(table) : null;
                 if (data == null)
                 {
                     continue;

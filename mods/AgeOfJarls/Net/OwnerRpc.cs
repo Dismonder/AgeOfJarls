@@ -11,7 +11,8 @@ namespace AgeOfJarls.Net
     /// yet. Passing it on to owner 0 is a broadcast the game handles on this machine at once, in the same handler,
     /// without end: that closed the game (0.6.0). An ownerless object is claimed instead, as the game claims a chest
     /// a player opens; a request bouncing between two machines that each believe the other owns the object is
-    /// dropped after ten a second.
+    /// dropped after ten a second. Sender-authorized handlers use HandlesWithoutForward: forwarding changes the
+    /// network sender, so the original requester must retry after ownership settles.
     /// </summary>
     internal static class OwnerRpc
     {
@@ -28,6 +29,13 @@ namespace AgeOfJarls.Net
 
         /// <summary>True when this machine owns (or just took) the object and the handler should go on.</summary>
         internal static bool Handles(ZNetView nview, string method, params object[] args)
+            => Handles(nview, method, true, args);
+
+        /// <summary>Claims ownerless objects but never forwards requests authorized by their network sender.</summary>
+        internal static bool HandlesWithoutForward(ZNetView nview, string method)
+            => Handles(nview, method, false, null);
+
+        private static bool Handles(ZNetView nview, string method, bool forward, object[] args)
         {
             if (nview == null || !nview.IsValid())
             {
@@ -51,6 +59,14 @@ namespace AgeOfJarls.Net
                 }
                 window = new Window { End = Time.time + 1f };
                 s_forwards[id] = window;
+            }
+            if (!forward)
+            {
+                if (++window.Count == 1)
+                {
+                    Log.Warning(Module, $"{method} on {nview.name} dropped: ownership moved; requester must retry");
+                }
+                return false;
             }
             if (++window.Count > MaxForwardsPerSecond)
             {

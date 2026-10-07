@@ -4,6 +4,7 @@ using AgeOfJarls.AI.Jobs;
 using AgeOfJarls.Army;
 using AgeOfJarls.Core;
 using AgeOfJarls.Core.Defs;
+using AgeOfJarls.Family;
 using AgeOfJarls.Settlement;
 using AgeOfJarls.Settlers;
 using AgeOfJarls.Work;
@@ -15,8 +16,9 @@ namespace AgeOfJarls.AI
     /// A settler's own life at home, when nobody gives it orders. Priorities, highest first:
     /// carrying what it holds to the sorted chests (while working, only a full load), taking shelter or manning its post
     /// during an alarm, eating from the Settlement Cauldron when hungry, working at its Work Totem in working hours,
-    /// sleeping in its bed at night, standing guard (soldiers without a job), clearing loot by day, and otherwise
-    /// strolling around its home spot (<see cref="Settler.HomeAnchor"/>), walking back on its own path from afar.
+    /// visiting family in shared daytime windows, sleeping at night, resting after birth, standing guard (soldiers
+    /// without a job), clearing loot by day, and otherwise playing or strolling around its home spot
+    /// (<see cref="Settler.HomeAnchor"/>), walking back on its own path from afar.
     /// Home is the settlement and, for a worker whose totem stands outside it, the land out to that totem's zone.
     /// Runs on the ZDO owner inside <see cref="SettlerAI.UpdateAI"/> while the settler is calm and at home.
     /// </summary>
@@ -56,6 +58,8 @@ namespace AgeOfJarls.AI
         private readonly PathMover _mover;
         private readonly LootCollector _loot;
         private readonly SoldierDuty _duty;
+        private readonly ChildRoutine _child;
+        private readonly CourtshipRoutine _courtship;
         private readonly System.Func<JobType, JobBase> _jobFactory;
         private readonly Dictionary<JobType, JobBase> _jobs = new Dictionary<JobType, JobBase>();
         private readonly List<Container> _chests = new List<Container>();
@@ -69,6 +73,7 @@ namespace AgeOfJarls.AI
         private bool _homeLoaded;
         private float _radius;
         private Vector3 _anchor;
+        private Vector3 _restSpot;
         private float _returnRetryAt;
         private Bed _bed;
         private Container _chest;
@@ -78,6 +83,14 @@ namespace AgeOfJarls.AI
         private float _accessTimer;
         private float _askTimer;
         private float _bedTimer;
+        private Vector3 _minorSleepSpot;
+        private float _sleepRetryAt;
+        private long _shelterParentUid;
+        private float _parentTripUntil;
+        private float _parentRetryAt;
+        private float _nextErrorLogTime;
+        private bool _updating;
+        private SettlerActivity? _activity;
 
         private JobBase _activeJob;
         private bool _jobIdle;
@@ -95,9 +108,13 @@ namespace AgeOfJarls.AI
             _mover = mover;
             _loot = loot;
             _duty = duty;
+            _child = new ChildRoutine(ai, settler, character, mover);
+            _courtship = new CourtshipRoutine(ai, settler, character, mover);
             _jobFactory = jobFactory;
             // Settlers loaded together (world load, a player arriving) would otherwise all plan in the same frame.
             _planTimer = UnityEngine.Random.Range(0f, PlanSeconds);
+            _autoWorkTimer = Random.Range(0f, AutoWorkSeconds);
+            _sitTimer = Random.Range(0f, 30f);
             _hasChest = item => SettlementStorage.HasDestination(item, _chests, _ai.transform.position);
             _avoided = chest => _avoidUntil.TryGetValue(chest.m_nview.GetZDO().m_uid, out float until) && Time.time < until;
             _keep = item => (AssignedJob()?.Keeps(item) ?? false) || (_helpJob?.Keeps(item) ?? false) || _duty.Keeps(item);
@@ -110,14 +127,64 @@ namespace AgeOfJarls.AI
         {
             _sitRequested = false;
             _idleThisFrame = false;
-            UpdateInner(dt);
-            if (!_sitRequested)
+            _activity = null;
+            _updating = true;
+            try
             {
-                StopSitting();
+                if (_settler.IsResting)
+                {
+                    // Rest pauses storing as well as work; food and alarms still take priority.
+                    _chest = null;
+                }
+                else
+                {
+                    _resting = false;
+                }
+                UpdateInner(dt);
+                if (_settler.Stage == LifeStage.Infant && (_table == null || !_table.AlarmOn))
+                {
+                    // Meal and return trips use PathMover too, whose long trips otherwise turn into a jog.
+                    _character.SetRun(false);
+                }
+                if (!_sitRequested)
+                {
+                    StopSitting();
+                }
+                if (!_idleThisFrame)
+                {
+                    _idleTime = 0f;
+                }
+                if (_activity.HasValue)
+                {
+                    _settler.SetActivity(_activity.Value);
+                }
             }
-            if (!_idleThisFrame)
+            catch (System.Exception e)
             {
-                _idleTime = 0f;
+                // Family trips must not let a missing scene object escape into UpdateAI.
+                _ai.Halt();
+                if (Time.time >= _nextErrorLogTime)
+                {
+                    _nextErrorLogTime = Time.time + 30f;
+                    Log.Error(Module, $"{_ai.name}: home routine failed: {e}");
+                }
+            }
+            finally
+            {
+                _updating = false;
+            }
+        }
+
+        // A failed meal trip can fall through to work or play: commit only the ladder's final activity.
+        private void SetActivity(SettlerActivity activity)
+        {
+            if (_updating)
+            {
+                _activity = activity;
+            }
+            else
+            {
+                _settler.SetActivity(activity);
             }
         }
 
@@ -154,6 +221,11 @@ namespace AgeOfJarls.AI
                 return;
             }
             bool alarm = _table.AlarmOn;
+            if (!alarm)
+            {
+                _shelterParentUid = 0L;
+                _parentRetryAt = 0f;
+            }
             if (alarm && TakeCover(dt))
             {
                 return;
@@ -172,28 +244,54 @@ namespace AgeOfJarls.AI
                 return;
             }
             bool night = EnvMan.IsNight();
+            bool visiting = _courtship.ShouldVisit(_table, night);
+            if (!visiting)
+            {
+                _courtship.Stop();
+            }
             long perf = Perf.Start();
-            bool working = Work(dt);
+            // Work normally wins, but a scheduled visit pauses it even when the totem is busy.
+            bool working = !visiting && Work(dt);
             Perf.Stop(Perf.Section.Jobs, perf);
             if (working)
             {
                 return;
             }
-            if (night && _bed != null)
+            if (visiting)
+            {
+                if (!_courtship.IsVisiting)
+                {
+                    StopJob();
+                }
+                SetActivity(SettlerActivity.Courting);
+                if (_courtship.Update(dt, _table))
+                {
+                    return;
+                }
+            }
+            if (night && (_bed != null || !FamilyRules.NeedsOwnBed(_settler.Stage)))
             {
                 GoToBed(dt);
                 return;
             }
-            if (!night && _duty.Update(dt, _table, alarm: false))
+            if (_settler.IsResting)
             {
+                Rest(dt);
+                return;
+            }
+            if (!night && _settler.IsAdult && _duty.Update(dt, _table, alarm: false))
+            {
+                // SoldierDuty already committed the winning activity.
+                _activity = null;
                 return;
             }
 
             _character.GetUp();
             _bedTimer = 0f;
-            if (!night && !_character.IsLyingDown && _loot.CollectAtHome(dt, _table.transform.position, _radius, _hasChest))
+            if (!night && FamilyRules.CanWork(_settler.Stage) && !_character.IsLyingDown &&
+                _loot.CollectAtHome(dt, _table.transform.position, _radius, _hasChest))
             {
-                _settler.SetActivity(SettlerActivity.Collecting);
+                SetActivity(SettlerActivity.Collecting);
                 _collecting = true;
                 return;
             }
@@ -212,15 +310,27 @@ namespace AgeOfJarls.AI
             }
             if (ReturnHome(dt))
             {
-                _settler.SetActivity(SettlerActivity.Returning);
+                SetActivity(SettlerActivity.Returning);
                 return;
             }
             // Nothing to do: vanilla idle movement strolls around the home spot, and after a while it sits down.
+            if (!FamilyRules.NeedsOwnBed(_settler.Stage))
+            {
+                SetActivity(_starving && hungry ? SettlerActivity.NoFood : SettlerActivity.Playing);
+                _child.Update(dt, _table);
+                if (_child.Idle)
+                {
+                    _idleThisFrame = true;
+                    _idleTime += dt;
+                    IdleSit(dt);
+                }
+                return;
+            }
             _idleThisFrame = true;
             _idleTime += dt;
             IdleSit(dt);
             bool noFood = _starving && hungry;
-            _settler.SetActivity(_carrying ? SettlerActivity.NoChest : noFood ? SettlerActivity.NoFood : SettlerActivity.Idle);
+            SetActivity(_carrying ? SettlerActivity.NoChest : noFood ? SettlerActivity.NoFood : SettlerActivity.Idle);
         }
 
         /// <summary>Hungry and no cauldron with food at the last look.</summary>
@@ -263,19 +373,25 @@ namespace AgeOfJarls.AI
             return parts.Count == 0 ? "home" : string.Join(", ", parts);
         }
 
-        /// <summary>Orders, fights and journeys come first: out of bed and no half-finished trip or job step.</summary>
-        internal void Stop() => Stop(SettlerActivity.Idle);
+        /// <summary>Clears interrupted chores; a journey can preserve the activity it already set this frame.</summary>
+        internal void Stop(bool preserveActivity = false) => Stop(SettlerActivity.Idle, preserveActivity);
 
-        private void Stop(SettlerActivity activity)
+        private void Stop(SettlerActivity activity, bool preserveActivity = false)
         {
             _chest = null;
             StopSitting();
             _cauldron = null;
             _bedTimer = 0f;
+            _shelterParentUid = 0L;
             StopJob();
+            _child.Stop();
+            _courtship.Stop();
             _duty.Stop();
             _character.GetUp();
-            _settler.SetActivity(activity);
+            if (!preserveActivity)
+            {
+                SetActivity(activity);
+            }
         }
 
         /// <summary>Beyond a stroll from where vanilla idle movement takes it (the home spot, or home from afar).</summary>
@@ -301,13 +417,27 @@ namespace AgeOfJarls.AI
                 return;
             }
 
-            _bed = _settler.TryGetBed(_table, out Vector3 bedPosition) ? JarlTable.FindBedAt(bedPosition) : null;
+            bool hasBed = _settler.TryGetBed(_table, out Vector3 bedPosition);
+            _bed = hasBed ? JarlTable.FindBedAt(bedPosition) : null;
             _anchor = _settler.HomeAnchor(_table);
+            _restSpot = hasBed ? bedPosition : _anchor;
+            if (!FamilyRules.NeedsOwnBed(_settler.Stage))
+            {
+                _minorSleepSpot = _anchor;
+                if (JarlTable.TryGetParentBed(data, _settler.Uid, out Vector3 parentPosition))
+                {
+                    Bed parentBed = JarlTable.FindBedAt(parentPosition);
+                    Vector3 side = parentBed != null
+                        ? (parentBed.m_spawnPoint != null ? parentBed.m_spawnPoint.right : parentBed.transform.right)
+                        : _table.transform.right;
+                    _minorSleepSpot = parentPosition + side * ((_settler.Uid & 1L) == 0L ? 1f : -1f);
+                }
+            }
             AutoWork(data);
 
             SettlementStorage.CollectChests(_table, _chests);
             _chests.RemoveAll(_avoided);
-            if (_chest == null && ShouldStore())
+            if (_chest == null && !_settler.IsResting && ShouldStore())
             {
                 _chest = SettlementStorage.NextDestination(_character.GetInventory(), _chests, _ai.transform.position, out _carrying, _keep);
                 if (_chest != null)
@@ -369,7 +499,18 @@ namespace AgeOfJarls.AI
         // as there is work and room in its bag - storing, meals and bed wait until it is home, where it then heads.
         private bool WorkAway(float dt)
         {
+            if (!FamilyRules.CanWork(_settler.Stage) || _settler.IsResting)
+            {
+                StopJob();
+                return false;
+            }
             WorkTotem totem = _settler.JobTotem;
+            if (totem != null && !FamilyRules.CanWorkAt(_settler.Stage, totem.Job))
+            {
+                StopJob();
+                _settler.SetJobProblem("$aoj_problem_too_young");
+                return false;
+            }
             // A totem serving a settlement that is loaded here is another settlement's.
             if (totem == null || totem.Settlement != null ||
                 Utils.DistanceXZ(_ai.transform.position, totem.transform.position) > totem.Radius + WorkTotem.Overreach + HomeMargin)
@@ -391,6 +532,10 @@ namespace AgeOfJarls.AI
         // workers by id alike, so exactly the extra ones leave.
         private void AutoWork(SettlementData data)
         {
+            if (!FamilyRules.CanWork(_settler.Stage) || _settler.IsResting)
+            {
+                return;
+            }
             _autoWorkTimer -= PlanSeconds;
             if (_autoWorkTimer > 0f)
             {
@@ -414,6 +559,7 @@ namespace AgeOfJarls.AI
             }
             WorkTotem best = WorkTotem.Loaded
                 .Where(t => t != null && t.Id != 0L && t.Settlement == _table && JobInfo.IsUnlocked(t.Job, data.Tier) &&
+                            FamilyRules.CanWorkAt(_settler.Stage, t.Job) &&
                             t.WorkerCount() < t.Capacity)
                 .OrderByDescending(t => t.Priority)
                 .ThenBy(t => t.WorkerCount() / (float)Mathf.Max(1, t.Capacity))
@@ -511,7 +657,7 @@ namespace AgeOfJarls.AI
         private void CarryToChest(float dt)
         {
             _character.GetUp();
-            _settler.SetActivity(SettlerActivity.Storing);
+            SetActivity(SettlerActivity.Storing);
             if (!SettlementStorage.IsUsable(_chest))
             {
                 // Destroyed, or a player has it open: plan again.
@@ -578,15 +724,49 @@ namespace AgeOfJarls.AI
         // Soldiers man their posts; civilians hide at a Shelter banner, else in bed, else by the table.
         private bool TakeCover(float dt)
         {
-            if (_duty.Update(dt, _table, alarm: true))
+            if (_settler.IsAdult && _duty.Update(dt, _table, alarm: true))
             {
+                _activity = null;
                 return true;
             }
             StopJob();
-            _settler.SetActivity(SettlerActivity.Sheltering);
+            if (!_settler.IsAdult && Time.time >= _parentRetryAt)
+            {
+                Settler parent = ChildRoutine.FindParent(_settler, 60f, atHome: false);
+                if (parent != null)
+                {
+                    if (_shelterParentUid != parent.Uid)
+                    {
+                        _shelterParentUid = parent.Uid;
+                        _parentTripUntil = Time.time + TripSeconds;
+                        _mover.Reset();
+                    }
+                    _character.GetUp();
+                    MoveResult move = _mover.MoveTo(dt, parent.transform.position, 1.5f, 2.5f, run: true);
+                    if (move == MoveResult.Arrived)
+                    {
+                        _parentTripUntil = Time.time + TripSeconds;
+                    }
+                    if (move != MoveResult.Blocked && Time.time < _parentTripUntil)
+                    {
+                        SetActivity(SettlerActivity.Sheltering);
+                        return true;
+                    }
+                    // A loaded parent can be behind an unusable door: try the settlement shelters for a while.
+                    _parentRetryAt = Time.time + ReturnRetrySeconds;
+                    _shelterParentUid = 0L;
+                    _mover.Reset();
+                }
+                else if (_shelterParentUid != 0L)
+                {
+                    _shelterParentUid = 0L;
+                    _mover.Reset();
+                }
+            }
             WarBanner shelter = Posts.Shelter(_table, _ai.transform.position);
             if (shelter != null)
             {
+                SetActivity(SettlerActivity.Sheltering);
                 _character.GetUp();
                 if (Vector3.Distance(_ai.transform.position, shelter.transform.position) > ShelterReach)
                 {
@@ -605,6 +785,7 @@ namespace AgeOfJarls.AI
                 return true;
             }
             // No shelter and no bed: stay by the Jarl's Table, among the defenders.
+            SetActivity(SettlerActivity.Sheltering);
             _character.GetUp();
             Vector3 table = _table.transform.position;
             if (Vector3.Distance(_ai.transform.position, table) > ShelterReach + 2f)
@@ -710,7 +891,7 @@ namespace AgeOfJarls.AI
             }
 
             _character.GetUp();
-            _settler.SetActivity(SettlerActivity.Eating);
+            SetActivity(SettlerActivity.Eating);
             Vector3 target = _cauldron.transform.position;
             _mealTimer += dt;
             MoveResult move = _mover.MoveTo(dt, target, ChestStopDistance, ChestReach, run: false);
@@ -786,7 +967,7 @@ namespace AgeOfJarls.AI
             }
 
             _character.GetUp();
-            _settler.SetActivity(SettlerActivity.Eating);
+            SetActivity(SettlerActivity.Eating);
             Vector3 target = _pantry.transform.position;
             _pantryTimer += dt;
             MoveResult move = _mover.MoveTo(dt, target, ChestStopDistance, ChestReach, run: false);
@@ -846,7 +1027,7 @@ namespace AgeOfJarls.AI
                 return false;
             }
             _character.GetUp();
-            _settler.SetActivity(SettlerActivity.Eating);
+            SetActivity(SettlerActivity.Eating);
             return true;
         }
 
@@ -874,7 +1055,7 @@ namespace AgeOfJarls.AI
             if (Time.time < _forageGatherUntil)
             {
                 // Its own pick, so gathered whatever the loot setting says; eaten from the bag (see Eat).
-                _settler.SetActivity(SettlerActivity.Eating);
+                SetActivity(SettlerActivity.Eating);
                 if (_loot.CollectInZone(dt, _forageSpot, ForageGatherRadius, Needs.IsFood))
                 {
                     return true;
@@ -908,7 +1089,7 @@ namespace AgeOfJarls.AI
             }
 
             _character.GetUp();
-            _settler.SetActivity(SettlerActivity.Eating);
+            SetActivity(SettlerActivity.Eating);
             Vector3 target = _forage.transform.position;
             _forageTimer += dt;
             MoveResult move = _mover.MoveTo(dt, target, ForageReach * 0.7f, ForageReach + 1f, run: false);
@@ -954,6 +1135,11 @@ namespace AgeOfJarls.AI
 
         private bool Work(float dt)
         {
+            if (!FamilyRules.CanWork(_settler.Stage) || _settler.IsResting)
+            {
+                StopJob();
+                return false;
+            }
             WorkTotem totem = _settler.JobTotem;
             if (totem == null)
             {
@@ -962,6 +1148,12 @@ namespace AgeOfJarls.AI
                     _settler.SetJobProblem("$aoj_problem_totem_gone");
                 }
                 StopJob();
+                return false;
+            }
+            if (!FamilyRules.CanWorkAt(_settler.Stage, totem.Job))
+            {
+                StopJob();
+                _settler.SetJobProblem("$aoj_problem_too_young");
                 return false;
             }
             // A Night Owl keeps working at a day-only totem through the night.
@@ -1033,7 +1225,7 @@ namespace AgeOfJarls.AI
             busy |= _helpBusy;
             if (busy)
             {
-                _settler.SetActivity(SettlerActivity.Working);
+                SetActivity(SettlerActivity.Working);
             }
             return busy;
         }
@@ -1071,7 +1263,8 @@ namespace AgeOfJarls.AI
         // moment its own work is. True while busy elsewhere.
         private bool Help(float dt, WorkTotem own)
         {
-            if (_helpTotem != null && (_helpTotem.Settlement != _table || !_helpTotem.IsWorkTime))
+            if (_helpTotem != null && (_helpTotem.Settlement != _table || !_helpTotem.IsWorkTime ||
+                                      !FamilyRules.CanWorkAt(_settler.Stage, _helpTotem.Job)))
             {
                 StopHelping();
             }
@@ -1130,6 +1323,7 @@ namespace AgeOfJarls.AI
             {
                 if (totem == null || totem == own || totem.Id == 0L || totem.Settlement != _table || !totem.IsWorkTime ||
                     !JobInfo.IsUnlocked(totem.Job, tier) || totem.Job == own.Job ||
+                    !FamilyRules.CanWorkAt(_settler.Stage, totem.Job) ||
                     (_helpRetryAt.TryGetValue(totem.Id, out float retryAt) && Time.time < retryAt) ||
                     WorkReach(totem) > _radius + MaxHelpBeyond)
                 {
@@ -1194,7 +1388,30 @@ namespace AgeOfJarls.AI
         // One activity per frame: set twice (sleeping, then sheltering) the ZDO would be written, and sent, every frame.
         private void GoToBed(float dt, SettlerActivity activity = SettlerActivity.Sleeping)
         {
-            _settler.SetActivity(activity);
+            SetActivity(activity);
+            if (!FamilyRules.NeedsOwnBed(_settler.Stage))
+            {
+                _character.GetUp();
+                if (Time.time >= _sleepRetryAt && Utils.DistanceXZ(_ai.transform.position, _minorSleepSpot) > 1.2f)
+                {
+                    StopSitting();
+                    MoveResult trip = _mover.MoveTo(dt, _minorSleepSpot, 0.8f, 1.2f, run: false);
+                    _character.SetRun(false);
+                    if (trip == MoveResult.Moving)
+                    {
+                        return;
+                    }
+                    if (trip == MoveResult.Blocked)
+                    {
+                        _sleepRetryAt = Time.time + 30f;
+                        _mover.Reset();
+                    }
+                }
+                _ai.StopMoving();
+                _sitRequested = true;
+                _settler.SetSitting(true);
+                return;
+            }
             if (_character.IsLyingDown)
             {
                 return;
@@ -1213,8 +1430,43 @@ namespace AgeOfJarls.AI
             // close enough goes to bed anyway.
             if ((move == MoveResult.Arrived && distance <= BedReach) || (_bedTimer >= BedTripSeconds && distance <= BedShortcutRange))
             {
-                _character.LieDown(_bed);
+                _character.LieDown(_bed, JarlTable.BedSideOffset(_table.Data, _settler.Uid));
             }
+        }
+
+        private bool _resting;
+
+        /// <summary>A resting carrier stays by its bed or anchor; meals still run before this step.</summary>
+        private void Rest(float dt)
+        {
+            StopJob();
+            _character.GetUp();
+            Vector3 spot = _restSpot;
+            SetActivity(SettlerActivity.Resting);
+            if (!_resting)
+            {
+                _resting = true;
+                _sitTimer = Random.Range(0f, 6f);
+            }
+            if (Utils.DistanceXZ(_ai.transform.position, spot) > 4f)
+            {
+                StopSitting();
+                if (Time.time < _returnRetryAt)
+                {
+                    _ai.Halt();
+                }
+                else if (_mover.MoveTo(dt, spot, 2f, 4f, run: false) == MoveResult.Blocked)
+                {
+                    _returnRetryAt = Time.time + ReturnRetrySeconds;
+                    _mover.Reset();
+                    _ai.Halt();
+                }
+                return;
+            }
+            _ai.Halt();
+            _idleThisFrame = true;
+            _idleTime += dt;
+            IdleSit(dt, resting: true);
         }
 
         // Vanilla idle movement strolls around the home anchor but cannot open doors, so from farther away the settler
@@ -1260,10 +1512,10 @@ namespace AgeOfJarls.AI
         private float _idleTime;
 
         // Now and then an idle settler sits down near its home spot for a while (every machine sees the pose).
-        private void IdleSit(float dt)
+        private void IdleSit(float dt, bool resting = false)
         {
-            if (_carrying || _idleTime < SitAfterIdleSeconds ||
-                Utils.DistanceXZ(_anchor, _ai.transform.position) > AoJConfig.SettlerWanderRange.Value + 1f)
+            if (_idleTime < SitAfterIdleSeconds || (!resting && (_carrying ||
+                Utils.DistanceXZ(_anchor, _ai.transform.position) > AoJConfig.SettlerWanderRange.Value + 1f)))
             {
                 return;
             }
@@ -1294,7 +1546,7 @@ namespace AgeOfJarls.AI
             if (_sitting)
             {
                 _sitting = false;
-                _sitTimer = Random.Range(40f, 120f);
+                _sitTimer = _resting ? Random.Range(4f, 10f) : Random.Range(40f, 120f);
             }
             _settler.SetSitting(false);
         }
